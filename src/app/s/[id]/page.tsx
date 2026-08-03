@@ -115,9 +115,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       ) : null}
 
       {isAdmin ? (
-        <p className="mt-6 text-center text-sm text-[var(--muted)]">
-          Matchups and score entry arrive with the play console.
-        </p>
+        <Link href={`/s/${id}/play`} className="btn-primary mt-6 block text-center">
+          Open play console
+        </Link>
       ) : null}
     </main>
   );

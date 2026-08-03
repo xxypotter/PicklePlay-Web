@@ -1,0 +1,1 @@
+ALTER TABLE "signups" ALTER COLUMN "attended" SET DEFAULT true;

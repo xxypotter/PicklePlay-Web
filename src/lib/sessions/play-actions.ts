@@ -1,0 +1,134 @@
+"use server";
+
+import { and, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
+import { canEditAnyMatch } from "@/lib/auth/policy";
+import type { FormState } from "@/lib/auth/types";
+import { getDb } from "@/lib/db";
+import { matches, rounds, sessions } from "@/lib/db/schema";
+import { createNextRound } from "@/lib/matchmaking/service";
+import { recomputeAll } from "@/lib/rating/service";
+
+export async function generateRoundAction(sessionId: string): Promise<void> {
+  await requireAdmin();
+  await createNextRound(sessionId);
+
+  await getDb().update(sessions).set({ status: "live" }).where(eq(sessions.id, sessionId));
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+}
+
+/** Throw away a round that hasn't been played — regenerating is one tap. */
+export async function discardRoundAction(sessionId: string, roundId: string): Promise<void> {
+  await requireAdmin();
+  const db = getDb();
+
+  const played = await db
+    .select({ id: matches.id })
+    .from(matches)
+    .where(and(eq(matches.roundId, roundId), eq(matches.status, "completed")))
+    .limit(1);
+
+  if (played.length > 0) {
+    throw new Error("That round already has scores. Void the matches instead.");
+  }
+
+  await db.delete(matches).where(eq(matches.roundId, roundId));
+  await db.delete(rounds).where(eq(rounds.id, roundId));
+
+  revalidatePath(`/s/${sessionId}/play`);
+}
+
+/**
+ * Record a score.
+ *
+ * Anyone who played in the match can submit it, with no confirmation step —
+ * pending-confirmation queues just rot in a small trusted group. Admins can fix
+ * anything afterwards, and because ratings are always recomputed from the match
+ * history, a correction is never more expensive than the original entry.
+ */
+export async function saveScoreAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const me = await requireLogin();
+  const db = getDb();
+
+  const matchId = String(formData.get("matchId") ?? "");
+  const scoreA = Number(String(formData.get("scoreA") ?? ""));
+  const scoreB = Number(String(formData.get("scoreB") ?? ""));
+
+  const found = await db
+    .select({
+      id: matches.id,
+      sessionId: matches.sessionId,
+      a1: matches.a1,
+      a2: matches.a2,
+      b1: matches.b1,
+      b2: matches.b2,
+    })
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .limit(1);
+
+  const match = found[0];
+  if (!match) return { error: "That match no longer exists." };
+
+  const playedInIt = [match.a1, match.a2, match.b1, match.b2].includes(me.id);
+  if (!playedInIt && !canEditAnyMatch(me.role)) {
+    return { error: "Only players in this match can record it." };
+  }
+
+  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0) {
+    return { error: "Scores must be whole numbers." };
+  }
+  if (scoreA === scoreB) return { error: "Pickleball has no ties." };
+  if (scoreA > 99 || scoreB > 99) return { error: "That score looks wrong." };
+
+  await db
+    .update(matches)
+    .set({ scoreA, scoreB, status: "completed", enteredBy: me.id, editedAt: new Date() })
+    .where(eq(matches.id, matchId));
+
+  await recomputeIfRated(match.sessionId);
+
+  revalidatePath(`/s/${match.sessionId}/play`);
+  revalidatePath(`/s/${match.sessionId}`);
+  revalidatePath("/");
+  return {};
+}
+
+export async function voidMatchAction(matchId: string): Promise<void> {
+  await requireAdmin();
+  const db = getDb();
+
+  const found = await db
+    .select({ sessionId: matches.sessionId })
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .limit(1);
+
+  // Voided rather than deleted, so the history stays auditable (§7).
+  await db.update(matches).set({ status: "void", editedAt: new Date() }).where(eq(matches.id, matchId));
+
+  if (found[0]?.sessionId) {
+    await recomputeIfRated(found[0].sessionId);
+    revalidatePath(`/s/${found[0].sessionId}/play`);
+  }
+  revalidatePath("/");
+}
+
+/** Unrated sessions still record matches; they just don't move anyone's number. */
+async function recomputeIfRated(sessionId: string | null): Promise<void> {
+  if (!sessionId) return;
+
+  const found = await getDb()
+    .select({ rated: sessions.rated })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (found[0]?.rated) await recomputeAll();
+}

@@ -5,9 +5,9 @@
  * rewrites the derived caches. Anything that changes history (a score edit, a
  * void, a re-seed, a new registration) should call recomputeAll afterward.
  */
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { matches, playerStats, ratingEvents, ratingSeeds } from "@/lib/db/schema";
+import { matches, playerStats, ratingEvents, ratingSeeds, sessions } from "@/lib/db/schema";
 import { recompute, type TimelineEvent } from "./engine";
 
 /** neon-http sends one HTTP request per statement, so keep inserts chunked. */
@@ -29,10 +29,28 @@ export async function recomputeAll(): Promise<RecomputeSummary> {
   const db = getDb();
 
   const seedRows = await db.select().from(ratingSeeds).orderBy(asc(ratingSeeds.effectiveAt));
+
+  // Matches from an unrated session are recorded but must not move anyone's
+  // number. A match with no session at all (a one-off logged by hand) counts.
   const matchRows = await db
-    .select()
+    .select({
+      id: matches.id,
+      playedAt: matches.playedAt,
+      a1: matches.a1,
+      a2: matches.a2,
+      b1: matches.b1,
+      b2: matches.b2,
+      scoreA: matches.scoreA,
+      scoreB: matches.scoreB,
+    })
     .from(matches)
-    .where(eq(matches.status, "completed"))
+    .leftJoin(sessions, eq(sessions.id, matches.sessionId))
+    .where(
+      and(
+        eq(matches.status, "completed"),
+        or(isNull(matches.sessionId), eq(sessions.rated, true)),
+      ),
+    )
     .orderBy(asc(matches.playedAt));
 
   const events: TimelineEvent[] = [];

@@ -159,8 +159,12 @@ export const signups = pgTable(
     state: signupStateEnum("state").notNull().default("in"),
     /** Position in the waitlist queue; null when state is not 'waitlist'. */
     waitlistPos: integer("waitlist_pos"),
-    /** Set on game day — RSVP'd is not the same as showed up. */
-    attended: boolean("attended").notNull().default(false),
+    /**
+     * Set on game day — RSVP'd is not the same as showed up. Defaults to true
+     * so the organizer only has to uncheck no-shows, rather than tick twelve
+     * boxes for a group that mostly turns up.
+     */
+    attended: boolean("attended").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("signups_session_player_idx").on(t.sessionId, t.playerId)],
