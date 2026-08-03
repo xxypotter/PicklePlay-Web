@@ -6,8 +6,10 @@ import { requireAdmin, requireSuperAdmin } from "@/lib/auth/permissions";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { auditLog, players } from "@/lib/db/schema";
+import { auditLog, players, ratingSeeds } from "@/lib/db/schema";
 import { generateInviteCode, setInviteCode } from "@/lib/invite";
+import { RATING } from "@/lib/rating/constants";
+import { recomputeAll } from "@/lib/rating/service";
 
 export async function rotateInviteCodeAction(): Promise<void> {
   const me = await requireAdmin();
@@ -77,4 +79,89 @@ export async function setRoleAction(_prev: FormState, formData: FormData): Promi
 
   revalidatePath("/admin");
   return {};
+}
+
+/**
+ * Override a player's rating and reliability — SPEC.md §5.7.
+ *
+ * For when someone's self-assessment is plainly wrong: a 3.0 who is obviously a
+ * 4.2, or a beginner who typed "5.0, 100% reliable". Recorded as a dated seed
+ * event in history (source 'admin'), exactly like a signup seed or a monthly
+ * re-seed, so the recompute picks it up and it can be undone by deleting it.
+ *
+ * Not subject to the 30-day self-service cooldown — that limit exists to stop a
+ * player wiping their own bad streak, which isn't what this is for.
+ */
+export async function adjustRatingAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const me = await requireAdmin();
+
+  const targetId = String(formData.get("playerId") ?? "");
+  const rating = Number(String(formData.get("rating") ?? ""));
+  const reliability = Number(String(formData.get("reliability") ?? "0"));
+  const note = String(formData.get("note") ?? "").trim();
+
+  if (!Number.isFinite(rating) || rating < RATING.MIN || rating > RATING.MAX) {
+    return { error: `Rating must be between ${RATING.MIN} and ${RATING.MAX}.`, field: "rating" };
+  }
+  if (!Number.isFinite(reliability) || reliability < 0 || reliability > 100) {
+    return { error: "Reliability must be between 0 and 100.", field: "reliability" };
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({ id: players.id, username: players.username })
+    .from(players)
+    .where(eq(players.id, targetId))
+    .limit(1);
+
+  const target = rows[0];
+  if (!target) return { error: "That player no longer exists." };
+
+  await db.insert(ratingSeeds).values({
+    playerId: targetId,
+    rating,
+    declaredReliability: reliability,
+    source: "admin",
+    createdBy: me.id,
+    note: note || null,
+  });
+
+  await recomputeAll();
+
+  await db.insert(auditLog).values({
+    actorId: me.id,
+    action: "player.adjust_rating",
+    targetType: "player",
+    targetId,
+    detail: `${target.username} -> ${rating.toFixed(3)} @ ${reliability}%${note ? ` (${note})` : ""}`,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/");
+  return {};
+}
+
+/**
+ * Rebuild every rating from the full match history.
+ *
+ * Ratings are always derived (§5.6), so this is safe to run at any time and is
+ * the fix for any suspected drift. Also the way freshly seeded players get
+ * their stats row before they've played a match.
+ */
+export async function recomputeAction(): Promise<void> {
+  const me = await requireAdmin();
+
+  const summary = await recomputeAll();
+
+  await getDb().insert(auditLog).values({
+    actorId: me.id,
+    action: "ratings.recompute",
+    detail: `${summary.players} players, ${summary.matches} matches, ${summary.seeds} seeds`,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/");
 }

@@ -1,11 +1,23 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import Link from "next/link";
+import LocalDateTime from "@/components/LocalDateTime";
 import { logoutAction } from "@/lib/auth/actions";
 import { isAtLeast } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { playerStats } from "@/lib/db/schema";
+import { playerStats, sessions, signups } from "@/lib/db/schema";
+
+/**
+ * Sessions stay listed until a few hours after they start, so the page is still
+ * useful mid-night rather than going blank the moment play begins.
+ *
+ * Lives outside the component because reading the clock is impure, and the
+ * React Compiler is right to refuse it inside a render.
+ */
+function listingCutoff(): Date {
+  return new Date(Date.now() - 6 * 60 * 60 * 1000);
+}
 
 export default async function HomePage() {
   const me = await getCurrentPlayer();
@@ -34,9 +46,46 @@ export default async function HomePage() {
     );
   }
 
-  const stats = (
-    await getDb().select().from(playerStats).where(eq(playerStats.playerId, me.id)).limit(1)
-  )[0];
+  const db = getDb();
+
+  const cutoff = listingCutoff();
+
+  const [statsRow, upcoming] = await Promise.all([
+    db.select().from(playerStats).where(eq(playerStats.playerId, me.id)).limit(1),
+    db
+      .select({
+        id: sessions.id,
+        title: sessions.title,
+        location: sessions.location,
+        startsAt: sessions.startsAt,
+        maxPlayers: sessions.maxPlayers,
+        status: sessions.status,
+      })
+      .from(sessions)
+      .where(and(gte(sessions.startsAt, cutoff), ne(sessions.status, "closed")))
+      .orderBy(asc(sessions.startsAt))
+      .limit(10),
+  ]);
+
+  const stats = statsRow[0];
+  const ids = upcoming.map((s) => s.id);
+
+  const [counts, mine] = ids.length
+    ? await Promise.all([
+        db
+          .select({ sessionId: signups.sessionId, n: sql<number>`count(*)::int` })
+          .from(signups)
+          .where(and(inArray(signups.sessionId, ids), eq(signups.state, "in")))
+          .groupBy(signups.sessionId),
+        db
+          .select({ sessionId: signups.sessionId, state: signups.state })
+          .from(signups)
+          .where(and(inArray(signups.sessionId, ids), eq(signups.playerId, me.id))),
+      ])
+    : [[], []];
+
+  const countBy = new Map(counts.map((c) => [c.sessionId, c.n]));
+  const stateBy = new Map(mine.map((m) => [m.sessionId, m.state]));
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -81,6 +130,56 @@ export default async function HomePage() {
         ) : null}
       </section>
 
+      <section className="mt-6">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-lg font-semibold">Upcoming</h2>
+          {isAtLeast(me.role, "admin") ? (
+            <Link
+              href="/sessions/new"
+              className="text-sm font-semibold text-[var(--accent)] underline"
+            >
+              + New session
+            </Link>
+          ) : null}
+        </div>
+
+        {upcoming.length === 0 ? (
+          <p className="card text-sm text-[var(--muted)]">
+            Nothing scheduled.
+            {isAtLeast(me.role, "admin") ? " Create one to get the group going." : ""}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {upcoming.map((s) => {
+              const n = countBy.get(s.id) ?? 0;
+              const state = stateBy.get(s.id);
+              return (
+                <li key={s.id}>
+                  <Link href={`/s/${s.id}`} className="card block active:opacity-70">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="truncate font-semibold">{s.title}</span>
+                      {state ? (
+                        <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
+                          {state === "in" ? "You're in" : "Waitlist"}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      <LocalDateTime iso={s.startsAt.toISOString()} />
+                      {s.location ? ` · ${s.location}` : ""}
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--muted)]">
+                      {n}/{s.maxPlayers} in
+                      {s.status === "live" ? " · in progress" : ""}
+                    </p>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       {isAtLeast(me.role, "admin") ? (
         <Link
           href="/admin"
@@ -90,10 +189,6 @@ export default async function HomePage() {
           Admin — invite code &amp; players
         </Link>
       ) : null}
-
-      <p className="mt-6 text-sm text-[var(--muted)]">
-        Sessions, matchups, and the leaderboard land next.
-      </p>
 
       <form action={logoutAction} className="mt-8">
         <button
