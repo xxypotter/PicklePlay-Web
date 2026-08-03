@@ -102,7 +102,15 @@ export default async function HomePage() {
       </header>
 
       <section className="card">
-        <p className="text-sm font-medium text-[var(--muted)]">Your PicklePlay Rating</p>
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm font-medium text-[var(--muted)]">Your PicklePlay Rating</p>
+          <Link
+            href={`/p/${me.username}`}
+            className="text-xs font-semibold text-[var(--accent)] underline"
+          >
+            Your profile
+          </Link>
+        </div>
         <p className="mt-1 font-mono text-4xl font-bold tabular-nums">
           {stats ? stats.rating.toFixed(3) : "—"}
         </p>
@@ -179,6 +187,14 @@ export default async function HomePage() {
           </ul>
         )}
       </section>
+
+      <Link
+        href="/leaderboard"
+        className="mt-6 block w-full rounded-xl border border-[var(--border)] px-4 py-3.5
+          text-center text-base font-semibold"
+      >
+        Leaderboard
+      </Link>
 
       {isAtLeast(me.role, "admin") ? (
         <Link

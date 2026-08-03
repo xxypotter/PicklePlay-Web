@@ -2,7 +2,7 @@
 
 import { useActionState, useTransition } from "react";
 import { ROLE_LABELS, type FormState, type Role } from "@/lib/auth/types";
-import { adjustRatingAction, recomputeAction, setRoleAction } from "./actions";
+import { adjustRatingAction, recomputeAction, resetPinAction, setRoleAction } from "./actions";
 
 export interface RosterEntry {
   id: string;
@@ -18,17 +18,23 @@ export interface RosterEntry {
 export default function RosterCard({
   roster,
   canManageRoles,
+  meRole,
   meId,
 }: {
   roster: RosterEntry[];
   canManageRoles: boolean;
+  meRole: Role;
   meId: string;
 }) {
+  /** Mirrors resetPinAction's rule; the server is what actually enforces it. */
+  const canResetPin = (role: Role) =>
+    role !== "superadmin" && (role !== "admin" || meRole === "superadmin");
   const [roleState, roleAction, rolePending] = useActionState(setRoleAction, {} as FormState);
   const [adjustState, adjustAction, adjustPending] = useActionState(
     adjustRatingAction,
     {} as FormState,
   );
+  const [pinState, pinAction, pinPending] = useActionState(resetPinAction, {} as FormState);
   const [recomputing, startRecompute] = useTransition();
 
   return (
@@ -45,9 +51,9 @@ export default function RosterCard({
         </button>
       </div>
 
-      {roleState.error || adjustState.error ? (
+      {roleState.error || adjustState.error || pinState.error ? (
         <p role="alert" className="mt-3 text-sm font-medium text-[var(--danger)]">
-          {roleState.error ?? adjustState.error}
+          {roleState.error ?? adjustState.error ?? pinState.error}
         </p>
       ) : null}
 
@@ -148,6 +154,36 @@ export default function RosterCard({
                   </p>
                 </form>
               </details>
+
+              {canResetPin(p.role) ? (
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
+                    Reset PIN
+                  </summary>
+                  <form action={pinAction} className="mt-3 flex gap-2">
+                    <input type="hidden" name="playerId" value={p.id} />
+                    <input
+                      name="pin"
+                      className="field py-2 text-sm"
+                      inputMode="numeric"
+                      pattern="\d{4,6}"
+                      placeholder="New 4–6 digit PIN"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={pinPending}
+                      className="shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs
+                        font-semibold disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </form>
+                  <p className="mt-1.5 text-xs text-[var(--muted)]">
+                    Signs them out everywhere. Tell them the new PIN in person.
+                  </p>
+                </details>
+              ) : null}
             </li>
           );
         })}

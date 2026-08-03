@@ -3,6 +3,7 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth/permissions";
+import { hashPin, validatePin } from "@/lib/auth/pin";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
@@ -141,6 +142,62 @@ export async function adjustRatingAction(
 
   revalidatePath("/admin");
   revalidatePath("/");
+  return {};
+}
+
+/**
+ * Reset a player's PIN — there is no email, so this is the only recovery path.
+ *
+ * Resetting a PIN is equivalent to taking over an account, so it follows the
+ * role hierarchy strictly: an admin can reset a *player*, but only the super
+ * admin can reset another admin. Without that rule any admin could reset a
+ * peer's PIN, log in as them, and there would be no meaningful separation
+ * between admin and super admin at all.
+ *
+ * Nobody can reset the super admin here — that would be a direct path to
+ * owning the group. If Jason ever loses his PIN, recovery is a deliberate
+ * database operation, not a button.
+ */
+export async function resetPinAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const me = await requireAdmin();
+
+  const targetId = String(formData.get("playerId") ?? "");
+  const pin = String(formData.get("pin") ?? "").trim();
+
+  const valid = validatePin(pin);
+  if (!valid.ok) return { error: valid.error, field: "pin" };
+
+  const db = getDb();
+  const rows = await db
+    .select({ id: players.id, username: players.username, role: players.role })
+    .from(players)
+    .where(eq(players.id, targetId))
+    .limit(1);
+
+  const target = rows[0];
+  if (!target) return { error: "That player no longer exists." };
+
+  if (target.role === "superadmin") {
+    return { error: "The super admin's PIN can't be reset here." };
+  }
+  if (target.role === "admin" && me.role !== "superadmin") {
+    return { error: "Only the super admin can reset another admin's PIN." };
+  }
+
+  await db.update(players).set({ pinHash: await hashPin(pin) }).where(eq(players.id, targetId));
+
+  // Whoever was signed in as them is signed out.
+  await revokeAllSessions(targetId);
+
+  await db.insert(auditLog).values({
+    actorId: me.id,
+    action: "player.reset_pin",
+    targetType: "player",
+    targetId,
+    detail: target.username,
+  });
+
+  revalidatePath("/admin");
   return {};
 }
 

@@ -57,6 +57,7 @@ export default async function AdminPage() {
       <RosterCard
         roster={roster.map((p) => ({ ...p, role: p.role as Role }))}
         canManageRoles={canManageRoles(me.role)}
+        meRole={me.role}
         meId={me.id}
       />
     </main>

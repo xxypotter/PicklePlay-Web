@@ -78,6 +78,14 @@ export const RATING = {
   DEFAULT_RATING: 3.5,
 } as const;
 
+/**
+ * How long a player must wait between self-service re-seeds (§5.8).
+ *
+ * Lives here rather than beside reseedAction because a "use server" module may
+ * only export async functions.
+ */
+export const RESEED_COOLDOWN_DAYS = 30;
+
 /** Starting ratings for players who don't have a real DUPR to enter (§5.7). */
 export const SKILL_PICKER = [
   { key: "new", label: "Brand new / first time", rating: 2.5 },

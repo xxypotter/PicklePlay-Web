@@ -146,12 +146,12 @@ describe("other formats", () => {
   });
 
   it("social ignores rating balance", () => {
-    const players = makePlayers(8, [4.8, 4.6, 4.4, 4.2, 3.0, 2.9, 2.8, 2.6]);
-    const rating = new Map(players.map((p) => [p.id, p.rating]));
+    const social = makePlayers(8, [4.8, 4.6, 4.4, 4.2, 3.0, 2.9, 2.8, 2.6]);
+    const rating = new Map(social.map((p) => [p.id, p.rating]));
 
     let sawLopsided = false;
     for (let seed = 1; seed <= 12; seed++) {
-      const round = generateRound(players, 2, emptyHistory(), {
+      const round = generateRound(social, 2, emptyHistory(), {
         format: "social",
         random: seeded(seed),
       });
@@ -182,7 +182,6 @@ describe("other formats", () => {
 
 describe("history bookkeeping", () => {
   it("records partners, opponents, games, and sit-outs", () => {
-    const players = makePlayers(5);
     const round: Round = {
       courts: [{ courtNo: 1, teamA: ["p1", "p2"], teamB: ["p3", "p4"] }],
       sittingOut: ["p5"],
