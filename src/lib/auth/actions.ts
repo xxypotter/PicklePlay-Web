@@ -102,7 +102,9 @@ export async function registerAction(
         username: nameResult.username,
         usernameLower: nameResult.normalized,
         pinHash: await hashPin(pin),
-        role: count === 0 ? "admin" : "player",
+        // The first account ever created owns the group and is the only one who
+        // can grant admin. Everyone after it starts as a plain player.
+        role: count === 0 ? "superadmin" : "player",
       })
       .returning({ id: players.id });
 

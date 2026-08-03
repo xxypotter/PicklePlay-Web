@@ -15,6 +15,13 @@
       "when": 1785795589099,
       "tag": "0001_quiet_toxin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785797963174,
+      "tag": "0002_easy_stone_men",
+      "breakpoints": true
     }
   ]
 }

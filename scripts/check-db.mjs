@@ -30,5 +30,5 @@ const enums = await sql`
 `;
 console.log(`enums  (${enums.length}):`, enums.map((e) => e.typname).join(", "));
 
-const players = await sql`select count(*)::int as n from players`;
-console.log("players registered:", players[0].n);
+const roster = await sql`select username, role from players order by created_at`;
+console.log(`players (${roster.length}):`, roster.map((p) => `${p.username}=${p.role}`).join(", ") || "(none)");

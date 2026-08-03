@@ -21,7 +21,16 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export const roleEnum = pgEnum("role", ["player", "organizer", "admin"]);
+/**
+ * Role hierarchy (SPEC.md §3):
+ *   superadmin — exactly one (Jason). Sole authority to promote/demote admins.
+ *   admin      — creates sessions, manages the invite code, edits matches.
+ *   player     — RSVPs and records their own matches.
+ *
+ * "organizer" was folded into "admin": the group is small enough that a second
+ * tier of session-runner earned nothing and just made permission checks lie.
+ */
+export const roleEnum = pgEnum("role", ["player", "admin", "superadmin"]);
 export const signupStateEnum = pgEnum("signup_state", ["in", "waitlist", "out"]);
 export const sessionStatusEnum = pgEnum("session_status", ["draft", "open", "live", "closed"]);
 export const roundStateEnum = pgEnum("round_state", ["pending", "active", "done"]);

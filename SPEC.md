@@ -127,10 +127,30 @@ a single script.
 | Role | Can do |
 |---|---|
 | **Player** | Register, RSVP to sessions, join waitlist, view roster, submit scores for matches they played in, view all profiles and the leaderboard |
-| **Organizer** | Everything a player can, plus: create/edit sessions, generate and regenerate rounds, override any matchup, mark players present/absent, enter scores for any match |
-| **Admin** | Everything, plus: edit/void any match, reset a player's PIN, rename/merge/deactivate players, seed starting ratings, tune rating constants, trigger a full rating recompute |
+| **Admin** | Everything a player can, plus: create/edit sessions, generate and regenerate rounds, override any matchup, mark players present/absent, enter scores for any match, share and rotate the invite code, edit/void any match, reset a player's PIN, seed starting ratings, trigger a recompute |
+| **Super admin** | Everything, plus the **sole** authority to grant or remove admin |
 
-Roles are flags on the player record. First registered account is auto-admin.
+**There is exactly one super admin** — the first account ever registered. No UI
+creates a second, so the group always has one unambiguous owner.
+
+Admins deliberately **cannot** grant admin. If they could, the first person you
+promote could promote everyone else, and "one person decides who runs the group"
+would stop being true after a single hop.
+
+Two guardrails on role changes:
+- You can't change your own role, so the last super admin can't demote themselves
+  and orphan the group.
+- Demoting an admin **revokes all their sessions immediately**, rather than
+  leaving admin powers live on an open phone until a 90-day cookie expires.
+
+> "Organizer" was folded into Admin. In a group of 8–16 a separate session-runner
+> tier earned nothing and made permission checks harder to reason about.
+
+**Enforcement:** the pure policy lives in `lib/auth/policy.ts` (importable from
+client components and unit tests); `lib/auth/permissions.ts` holds the
+`requireRole` helpers that read the session. Every server action calls one as its
+first statement — a hidden button is not a permission check, because a server
+action is a public HTTP endpoint.
 
 ---
 

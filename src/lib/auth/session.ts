@@ -11,6 +11,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb } from "@/lib/db";
 import { authTokens, players } from "@/lib/db/schema";
+import type { Role } from "./types";
 
 const COOKIE_NAME = "pp_session";
 const TTL_DAYS = 90;
@@ -25,7 +26,7 @@ export interface CurrentPlayer {
   id: string;
   username: string;
   displayName: string | null;
-  role: "player" | "organizer" | "admin";
+  role: Role;
 }
 
 export async function createSession(playerId: string): Promise<void> {

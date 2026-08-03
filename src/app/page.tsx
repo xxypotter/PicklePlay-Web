@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { logoutAction } from "@/lib/auth/actions";
+import { isAtLeast } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
+import { ROLE_LABELS } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { playerStats } from "@/lib/db/schema";
 
@@ -45,7 +47,7 @@ export default async function HomePage() {
         </div>
         {me.role !== "player" ? (
           <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold uppercase text-[var(--accent)]">
-            {me.role}
+            {ROLE_LABELS[me.role]}
           </span>
         ) : null}
       </header>
@@ -79,7 +81,7 @@ export default async function HomePage() {
         ) : null}
       </section>
 
-      {me.role === "admin" ? (
+      {isAtLeast(me.role, "admin") ? (
         <Link
           href="/admin"
           className="mt-5 block w-full rounded-xl border border-[var(--border)] px-4 py-3.5
