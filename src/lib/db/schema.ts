@@ -251,6 +251,18 @@ export const playerStats = pgTable("player_stats", {
   recomputedAt: timestamp("recomputed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Small key/value store for things an admin changes at runtime — currently the
+ * group invite code. Lives in the database rather than an env var so rotating
+ * it doesn't need a redeploy.
+ */
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => players.id, { onDelete: "set null" }),
+});
+
 /** Every admin edit, void, PIN reset, and recompute trigger (§7). */
 export const auditLog = pgTable(
   "audit_log",

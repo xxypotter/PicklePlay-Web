@@ -79,6 +79,16 @@ export default async function HomePage() {
         ) : null}
       </section>
 
+      {me.role === "admin" ? (
+        <Link
+          href="/admin"
+          className="mt-5 block w-full rounded-xl border border-[var(--border)] px-4 py-3.5
+            text-center text-base font-semibold"
+        >
+          Admin — invite code &amp; players
+        </Link>
+      ) : null}
+
       <p className="mt-6 text-sm text-[var(--muted)]">
         Sessions, matchups, and the leaderboard land next.
       </p>

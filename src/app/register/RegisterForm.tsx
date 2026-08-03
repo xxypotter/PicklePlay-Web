@@ -8,12 +8,38 @@ import { RATING, SKILL_PICKER } from "@/lib/rating/constants";
 
 const initial: FormState = {};
 
-export default function RegisterForm() {
+export default function RegisterForm({
+  needsCode,
+  codePrefill,
+}: {
+  needsCode: boolean;
+  codePrefill: string;
+}) {
   const [state, action, pending] = useActionState(registerAction, initial);
   const [hasDupr, setHasDupr] = useState(true);
 
   return (
     <form action={action} className="flex flex-col gap-5">
+      {needsCode ? (
+        <div>
+          <label className="label" htmlFor="inviteCode">
+            Invite code
+          </label>
+          <input
+            id="inviteCode"
+            name="inviteCode"
+            className="field font-mono tracking-[0.2em] uppercase"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            defaultValue={codePrefill}
+            placeholder="K7P2WM"
+            required
+          />
+          <p className="hint">From whoever runs your group.</p>
+        </div>
+      ) : null}
+
       <div>
         <label className="label" htmlFor="username">
           Pick a name

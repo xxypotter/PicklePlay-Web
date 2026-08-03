@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { players, ratingSeeds } from "@/lib/db/schema";
+import { getInviteCode, normalizeCode } from "@/lib/invite";
 import { RATING, SKILL_PICKER } from "@/lib/rating/constants";
 import { recomputeAll } from "@/lib/rating/service";
 import { hashPin, validatePin, verifyPin } from "./pin";
@@ -40,6 +41,25 @@ export async function registerAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const db = getDb();
+
+  // First account through the door runs the show and needs no code — that's
+  // the bootstrap. Everyone after it must present the group invite code.
+  const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(players);
+
+  if (count > 0) {
+    const expected = await getInviteCode();
+    if (!expected) {
+      return {
+        error: "Registration is closed. Ask your organizer for an invite code.",
+        field: "inviteCode",
+      };
+    }
+    if (normalizeCode(str(formData, "inviteCode")) !== normalizeCode(expected)) {
+      return { error: "That invite code isn't right.", field: "inviteCode" };
+    }
+  }
+
   const nameResult = validateUsername(str(formData, "username"));
   if (!nameResult.ok) return { error: nameResult.error, field: "username" };
 
@@ -73,13 +93,9 @@ export async function registerAction(
     rating = choice.rating;
   }
 
-  const db = getDb();
   let playerId: string;
 
   try {
-    // First account through the door runs the show (§3).
-    const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(players);
-
     const inserted = await db
       .insert(players)
       .values({
