@@ -148,8 +148,34 @@ no console trip and gives the isolation that actually mattered.
 | Role | Can do |
 |---|---|
 | **Player** | Register, RSVP to sessions, join waitlist, view roster, submit scores for matches they played in, view all profiles and the leaderboard |
-| **Admin** | Everything a player can, plus: create/edit sessions, generate and regenerate rounds, override any matchup, mark players present/absent, enter scores for any match, share and rotate the invite code, edit/void any match, reset a player's PIN, seed starting ratings, trigger a recompute |
-| **Super admin** | Everything, plus the **sole** authority to grant or remove admin |
+| **Admin** | Everything a player can, plus: create sessions, run **their own** sessions end to end (details, roster, rounds, start/end, delete), enter scores for any match in a session that is still running, share and rotate the invite code, reset a player's PIN, seed starting ratings, trigger a recompute |
+| **Super admin** | Everything, on **anyone's** session, plus the **sole** authority to grant or remove admin |
+
+### 3.1 Session ownership
+
+Being an admin says nothing about *whose* night you may touch. Creating a
+session makes you its **organizer**, and organizing is what grants control over
+it:
+
+| Action | Who |
+|---|---|
+| Edit details, add/remove players, start, generate rounds, end, delete | Organizer, or super admin |
+| Enter or change a score, **session still running** | Anyone who played in the match, or any admin on hand |
+| Enter or change a score, **session closed** | Organizer, or super admin |
+| Void a match | Any admin while running; organizer once closed |
+
+With two admins a blanket "admins manage sessions" rule was merely untidy. With
+ten it means anyone can restart someone else's night, rebuild their schedule, or
+delete it out from under them — so control is scoped to the person actually
+running the game.
+
+Scoring is deliberately the loose one *while the night is live*: whoever is on
+court needs to enter the number, and waiting for the organizer to walk over is
+how scores get lost. Once the session closes the result stops being a scoreboard
+and becomes a record, so amending it narrows back to the organizer.
+
+A session whose creator was deleted (`created_by` goes null) falls to the super
+admin rather than to everyone.
 
 **There is exactly one super admin** — the first account ever registered. No UI
 creates a second, so the group always has one unambiguous owner.
@@ -169,9 +195,11 @@ Two guardrails on role changes:
 
 **Enforcement:** the pure policy lives in `lib/auth/policy.ts` (importable from
 client components and unit tests); `lib/auth/permissions.ts` holds the
-`requireRole` helpers that read the session. Every server action calls one as its
-first statement — a hidden button is not a permission check, because a server
-action is a public HTTP endpoint.
+`requireRole` helpers that read the session, and `lib/sessions/guards.ts` holds
+the session-scoped `requireOrganizer` / `requireScorer`. Every server action
+calls one as its first statement — a hidden button is not a permission check,
+because a server action is a public HTTP endpoint. Verified by replaying a
+captured score submission as a non-owner admin: rejected, and nothing written.
 
 ---
 

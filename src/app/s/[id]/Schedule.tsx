@@ -9,17 +9,25 @@ import MatchCard from "./MatchCard";
  * of sequence — so there's no "your next match" to pin. You find the match you
  * played and put the score in. Matches you were in open with steppers; the rest
  * are read-only, which also makes your own stand out in a long list.
+ *
+ * Both permissions are passed in rather than inferred from "is this mine",
+ * because being in a match stops being enough once the session closes — a
+ * finished night is a record, and only its organizer may still amend it.
  */
 export default function Schedule({
   rounds,
   meId,
   courtCount,
   canScoreAny = false,
+  canScoreMine = false,
 }: {
   rounds: CurrentRound[];
   meId?: string;
   courtCount: number;
+  /** May score a match you weren't in — an admin on the night, or the organizer. */
   canScoreAny?: boolean;
+  /** May score a match you played in. False once the session is closed. */
+  canScoreMine?: boolean;
 }) {
   if (rounds.length === 0) {
     return (
@@ -44,7 +52,7 @@ export default function Schedule({
             {round.matches.map((m) => {
               const mine = [...m.teamA, ...m.teamB].some((p) => p.id === meId);
 
-              if (mine || canScoreAny) {
+              if (canScoreAny || (mine && canScoreMine)) {
                 return (
                   <MatchCard
                     key={m.id}

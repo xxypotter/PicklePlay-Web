@@ -7,6 +7,7 @@ import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { sessions, signups } from "@/lib/db/schema";
+import { requireOrganizer } from "./guards";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const num = (fd: FormData, key: string) => Number(str(fd, key));
@@ -205,7 +206,7 @@ async function resequenceWaitlist(sessionId: string): Promise<void> {
  * rule as a self-RSVP, so an admin can't silently overfill the courts.
  */
 export async function addPlayerAction(sessionId: string, playerId: string): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   const db = getDb();
 
   const found = await db
@@ -233,7 +234,7 @@ export async function addPlayerAction(sessionId: string, playerId: string): Prom
 }
 
 export async function removePlayerAction(sessionId: string, playerId: string): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   const db = getDb();
 
   const found = await db
@@ -257,7 +258,7 @@ export async function setAttendanceAction(
   playerId: string,
   attended: boolean,
 ): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   await getDb()
     .update(signups)
     .set({ attended })
@@ -269,7 +270,7 @@ export async function setSessionStatusAction(
   sessionId: string,
   status: "open" | "live" | "closed",
 ): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   await getDb().update(sessions).set({ status }).where(eq(sessions.id, sessionId));
   revalidatePath(`/s/${sessionId}`);
   revalidatePath("/");

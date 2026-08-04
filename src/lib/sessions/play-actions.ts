@@ -3,12 +3,12 @@
 import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
-import { canEditAnyMatch } from "@/lib/auth/policy";
+import type { Actor } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
 import { createNextRound } from "@/lib/matchmaking/service";
+import { requireOrganizer, requireScorer } from "./guards";
 import { recomputeAll } from "@/lib/rating/service";
 
 /**
@@ -22,7 +22,7 @@ import { recomputeAll } from "@/lib/rating/service";
  * Starting is the line: before it the details can change, after it they can't.
  */
 export async function startSessionAction(sessionId: string): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
 
   await getDb()
     .update(sessions)
@@ -42,7 +42,7 @@ export async function startSessionAction(sessionId: string): Promise<void> {
  * night in progress.
  */
 export async function reopenSessionAction(sessionId: string): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   const db = getDb();
 
   const existing = await db
@@ -79,7 +79,7 @@ async function requireLive(sessionId: string): Promise<void> {
 }
 
 export async function generateRoundAction(sessionId: string): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   await requireLive(sessionId);
   await createNextRound(sessionId);
 
@@ -102,7 +102,7 @@ export async function generateAllRoundsAction(
   sessionId: string,
   roundCount: number,
 ): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   await requireLive(sessionId);
 
   const wanted = Math.max(1, Math.min(MAX_ROUNDS, Math.floor(roundCount)));
@@ -122,7 +122,7 @@ export async function generateAllRoundsAction(
  * someone asks why a match can no longer be scored.
  */
 export async function endSessionAction(sessionId: string): Promise<void> {
-  const me = await requireAdmin();
+  const { me } = await requireOrganizer(sessionId);
   const db = getDb();
 
   await db
@@ -153,21 +153,19 @@ export async function endSessionAction(sessionId: string): Promise<void> {
  * puts every player back where they'd be if the session had never happened.
  */
 export async function deleteSessionAction(sessionId: string): Promise<void> {
-  const me = await requireAdmin();
+  const { me } = await requireOrganizer(sessionId);
   const db = getDb();
 
+  // Ownership is already settled by requireOrganizer; all we still need is
+  // whether deleting this session has to roll ratings back.
   const found = await db
-    .select({ createdBy: sessions.createdBy, rated: sessions.rated })
+    .select({ rated: sessions.rated })
     .from(sessions)
     .where(eq(sessions.id, sessionId))
     .limit(1);
 
   const session = found[0];
   if (!session) return;
-
-  if (me.role !== "superadmin" && session.createdBy !== me.id) {
-    throw new Error("You can only delete sessions you created.");
-  }
 
   await db.delete(sessions).where(eq(sessions.id, sessionId));
 
@@ -188,7 +186,7 @@ export async function deleteSessionAction(sessionId: string): Promise<void> {
 
 /** Throw away a round that hasn't been played — regenerating is one tap. */
 export async function discardRoundAction(sessionId: string, roundId: string): Promise<void> {
-  await requireAdmin();
+  await requireOrganizer(sessionId);
   const db = getDb();
 
   const played = await db
@@ -219,32 +217,21 @@ export async function saveScoreAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const me = await requireLogin();
   const db = getDb();
 
   const matchId = String(formData.get("matchId") ?? "");
   const scoreA = Number(String(formData.get("scoreA") ?? ""));
   const scoreB = Number(String(formData.get("scoreB") ?? ""));
 
-  const found = await db
-    .select({
-      id: matches.id,
-      sessionId: matches.sessionId,
-      a1: matches.a1,
-      a2: matches.a2,
-      b1: matches.b1,
-      b2: matches.b2,
-    })
-    .from(matches)
-    .where(eq(matches.id, matchId))
-    .limit(1);
-
-  const match = found[0];
-  if (!match) return { error: "That match no longer exists." };
-
-  const playedInIt = [match.a1, match.a2, match.b1, match.b2].includes(me.id);
-  if (!playedInIt && !canEditAnyMatch(me.role)) {
-    return { error: "Only players in this match can record it." };
+  // Who may score depends on the match *and* the state of its session, so the
+  // guard resolves both. Returned as a form error rather than a throw, since
+  // this one is reachable from a form a player is looking at.
+  let me: Actor;
+  let sessionId: string | null;
+  try {
+    ({ me, sessionId } = await requireScorer(matchId));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Not authorized." };
   }
 
   if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0) {
@@ -258,30 +245,26 @@ export async function saveScoreAction(
     .set({ scoreA, scoreB, status: "completed", enteredBy: me.id, editedAt: new Date() })
     .where(eq(matches.id, matchId));
 
-  await recomputeIfRated(match.sessionId);
+  await recomputeIfRated(sessionId);
 
-  revalidatePath(`/s/${match.sessionId}/play`);
-  revalidatePath(`/s/${match.sessionId}`);
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
   revalidatePath("/");
   return {};
 }
 
 export async function voidMatchAction(matchId: string): Promise<void> {
-  await requireAdmin();
+  // Participation doesn't grant a void — see requireScorer.
+  const { sessionId } = await requireScorer(matchId, { allowParticipant: false });
   const db = getDb();
-
-  const found = await db
-    .select({ sessionId: matches.sessionId })
-    .from(matches)
-    .where(eq(matches.id, matchId))
-    .limit(1);
 
   // Voided rather than deleted, so the history stays auditable (§7).
   await db.update(matches).set({ status: "void", editedAt: new Date() }).where(eq(matches.id, matchId));
 
-  if (found[0]?.sessionId) {
-    await recomputeIfRated(found[0].sessionId);
-    revalidatePath(`/s/${found[0].sessionId}/play`);
+  if (sessionId) {
+    await recomputeIfRated(sessionId);
+    revalidatePath(`/s/${sessionId}/play`);
+    revalidatePath(`/s/${sessionId}`);
   }
   revalidatePath("/");
 }

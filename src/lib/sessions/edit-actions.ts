@@ -3,10 +3,11 @@
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/permissions";
+
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { sessions, signups } from "@/lib/db/schema";
+import { requireOrganizer } from "./guards";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
@@ -27,10 +28,10 @@ export async function updateSessionAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const db = getDb();
 
   const sessionId = str(formData, "sessionId");
+  await requireOrganizer(sessionId);
 
   const found = await db
     .select({ status: sessions.status })

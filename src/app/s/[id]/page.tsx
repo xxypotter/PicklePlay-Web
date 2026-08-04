@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
 import Tabs from "@/components/Tabs";
 import TopBar, { safeFrom } from "@/components/TopBar";
-import { canManageSessions } from "@/lib/auth/policy";
+import { canOrganizeSession, canScoreMatch } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats, sessions, signups } from "@/lib/db/schema";
@@ -85,9 +85,15 @@ export default async function SessionPage({
   const proto =
     headerList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
 
-  const isAdmin = !!me && canManageSessions(me.role);
-  const canDelete =
-    !!me && (me.role === "superadmin" || (isAdmin && session.createdBy === me.id));
+  /*
+   * Running a session belongs to whoever organized it, not to the admin role
+   * in general (§3). Scoring is deliberately wider while the night is live —
+   * anyone on court, plus any admin on hand — and narrows to the organizer
+   * once the session closes and the result becomes a record.
+   */
+  const organizer = !!me && canOrganizeSession(me, session);
+  const canScoreAny = !!me && canScoreMatch(me, session, false);
+  const canScoreMine = !!me && canScoreMatch(me, session, true);
   const spotsLeft = Math.max(0, session.maxPlayers - confirmed.length);
 
   const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed).length;
@@ -133,7 +139,8 @@ export default async function SessionPage({
             rounds={allRounds}
             meId={me?.id}
             courtCount={session.courtNames.length}
-            canScoreAny={isAdmin}
+            canScoreAny={canScoreAny}
+            canScoreMine={canScoreMine}
           />
         ) : (
           <>
@@ -240,7 +247,7 @@ export default async function SessionPage({
               started, so the play console moves to a secondary link and the
               headline action becomes the one that's actually left to do.
             */}
-            {isAdmin ? (
+            {organizer ? (
               <div className="mt-4 flex flex-col gap-2">
                 {session.status === "open" ? (
                   <>
@@ -270,7 +277,7 @@ export default async function SessionPage({
               </div>
             ) : null}
 
-            {canDelete ? <DeleteSessionButton sessionId={id} /> : null}
+            {organizer ? <DeleteSessionButton sessionId={id} /> : null}
           </>
         )}
       </main>

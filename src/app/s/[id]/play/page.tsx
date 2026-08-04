@@ -2,7 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import TopBar, { safeFrom } from "@/components/TopBar";
-import { canManageSessions } from "@/lib/auth/policy";
+import { canOrganizeSession } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
@@ -34,12 +34,17 @@ export default async function PlayPage({
   const { from } = await searchParams;
 
   const me = await getCurrentPlayer();
-  if (!me || !canManageSessions(me.role)) notFound();
+  if (!me) notFound();
 
   const db = getDb();
   const found = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const session = found[0];
   if (!session) notFound();
+
+  // Another organizer's console is not yours to open, whatever your role.
+  // Ownership can only be judged once the session is loaded, so this check
+  // comes after the lookup rather than before it.
+  if (!canOrganizeSession(me, session)) notFound();
 
   const [roster, allRounds, standings, attending] = await Promise.all([
     db
@@ -72,7 +77,6 @@ export default async function PlayPage({
   const here = from ? `/s/${id}/play?from=${encodeURIComponent(backTo)}` : `/s/${id}/play`;
 
   const attendingCount = attending.length;
-  const canDelete = me.role === "superadmin" || session.createdBy === me.id;
   const unscored = allRounds
     .flatMap((r) => r.matches)
     .filter((m) => !m.completed).length;
@@ -189,7 +193,7 @@ export default async function PlayPage({
       {session.status === "live" ? (
         <EndSessionButton sessionId={id} unscored={unscored} />
       ) : null}
-      {canDelete ? <DeleteSessionButton sessionId={id} /> : null}
+      <DeleteSessionButton sessionId={id} />
       </main>
     </>
   );
