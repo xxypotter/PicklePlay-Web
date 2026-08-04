@@ -51,14 +51,26 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
   const [courts, setCourts] = useState("1, 2");
   const [format, setFormat] = useState("regular");
   const [invited, setInvited] = useState<string[]>([]);
-  const [maxPlayers, setMaxPlayers] = useState(9);
+  /*
+   * Held as text, not a number.
+   *
+   * Coercing on every keystroke meant clearing the box snapped it to 1, and
+   * from there you could never select-and-replace it — you'd be typing "15"
+   * onto a stubborn "1". The field now accepts anything you type, including
+   * empty, and validity is reported separately.
+   */
+  const [maxPlayersText, setMaxPlayersText] = useState("9");
 
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
   const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
 
-  // The roster can't exceed the session cap — silently queueing extras onto a
-  // waitlist the organizer never asked for would be a surprise.
-  const cap = Math.min(maxPlayers, seatCap);
+  const maxPlayers = Number.parseInt(maxPlayersText, 10);
+  const maxPlayersValid =
+    Number.isInteger(maxPlayers) && maxPlayers >= 4 && maxPlayers <= seatCap;
+
+  // While the number is half-typed, let the picker use the full court capacity
+  // rather than collapsing to zero and disabling everyone.
+  const cap = maxPlayersValid ? Math.min(maxPlayers, seatCap) : seatCap;
   const atCap = invited.length >= cap;
 
   const toggle = (id: string) =>
@@ -147,19 +159,24 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
           id="maxPlayers"
           name="maxPlayers"
           className="field"
-          type="number"
+          type="text"
           inputMode="numeric"
-          min={4}
-          max={seatCap}
-          value={maxPlayers}
-          onChange={(e) => setMaxPlayers(Math.max(1, Number(e.target.value) || 1))}
+          autoComplete="off"
+          value={maxPlayersText}
+          onChange={(e) => setMaxPlayersText(e.target.value.replace(/\D/g, "").slice(0, 2))}
           required
         />
-        <p className="hint">
-          Up to {PLAYERS_PER_COURT} per court, so {seatCap} for{" "}
-          {Math.min(MAX_COURTS, Math.max(1, courtCount))} court
-          {courtCount === 1 ? "" : "s"}. Anyone after that joins the waitlist.
-        </p>
+        {maxPlayersText !== "" && !maxPlayersValid ? (
+          <p className="mt-1.5 text-sm font-medium text-[var(--danger)]">
+            Pick a number between 4 and {seatCap}.
+          </p>
+        ) : (
+          <p className="hint">
+            Up to {PLAYERS_PER_COURT} per court, so {seatCap} for{" "}
+            {Math.min(MAX_COURTS, Math.max(1, courtCount))} court
+            {courtCount === 1 ? "" : "s"}. Anyone after that joins the waitlist.
+          </p>
+        )}
       </div>
 
       {/* Format cards rather than a dropdown: the descriptions are the whole

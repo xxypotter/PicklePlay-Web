@@ -32,9 +32,15 @@ export function GenerateRoundButton({
   // without the organizer doing arithmetic. They can change it.
   const seats = Math.min(courtCount, Math.floor(attendingCount / 4)) * 4;
   const suggested = Math.max(3, Math.min(12, Math.round((attendingCount / Math.max(1, seats)) * 6)));
-  const [rounds, setRounds] = useState(suggested);
 
-  const gamesEach = seats > 0 ? ((rounds * seats) / attendingCount).toFixed(1) : "0";
+  // Text, not a number: coercing every keystroke made the box impossible to
+  // clear and retype.
+  const [roundsText, setRoundsText] = useState(String(suggested));
+  const rounds = Number.parseInt(roundsText, 10);
+  const roundsValid = Number.isInteger(rounds) && rounds >= 1 && rounds <= 20;
+
+  const gamesEach =
+    seats > 0 && roundsValid ? ((rounds * seats) / attendingCount).toFixed(1) : null;
 
   if (tooFew) {
     return (
@@ -51,24 +57,27 @@ export function GenerateRoundButton({
         <div className="flex items-center gap-3">
           <input
             id="roundCount"
-            type="number"
+            type="text"
             inputMode="numeric"
-            min={1}
-            max={20}
-            value={rounds}
-            onChange={(e) => setRounds(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+            autoComplete="off"
+            value={roundsText}
+            onChange={(e) => setRoundsText(e.target.value.replace(/\D/g, "").slice(0, 2))}
             className="field w-24"
           />
           <button
             type="button"
-            disabled={pending}
+            disabled={pending || !roundsValid}
             onClick={() => start(() => void generateAllRoundsAction(sessionId, rounds))}
             className="btn-primary flex-1 disabled:opacity-40"
           >
             {pending ? "Building…" : "Create all matches"}
           </button>
         </div>
-        <p className="hint">About {gamesEach} games each. You can add more rounds later.</p>
+        <p className={`hint ${roundsValid ? "" : "text-[var(--danger)]"}`}>
+          {roundsValid
+            ? `About ${gamesEach} games each. You can add more rounds later.`
+            : "Enter a number of rounds between 1 and 20."}
+        </p>
       </div>
     );
   }
