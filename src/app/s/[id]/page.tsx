@@ -31,6 +31,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         state: signups.state,
         waitlistPos: signups.waitlistPos,
         attended: signups.attended,
+        addedByOrganizer: signups.addedByOrganizer,
         rating: playerStats.rating,
         provisional: playerStats.provisional,
       })
@@ -163,7 +164,12 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
             session.status === "closed" ? (
               <p className="text-sm text-[var(--muted)]">This session is closed.</p>
             ) : (
-              <RsvpButtons sessionId={id} state={myState} full={spotsLeft === 0} />
+              <RsvpButtons
+                sessionId={id}
+                state={myState}
+                full={spotsLeft === 0}
+                addedByOrganizer={mine?.addedByOrganizer ?? false}
+              />
             )
           ) : (
             <Link href="/login" className="btn-primary block text-center">

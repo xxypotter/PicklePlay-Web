@@ -40,10 +40,20 @@ function defaultStart(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function SessionForm() {
+export interface PickablePlayer {
+  id: string;
+  username: string;
+  rating: number | null;
+}
+
+export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
   const [state, action, pending] = useActionState(createSessionAction, {} as FormState);
   const [courts, setCourts] = useState("1, 2");
   const [format, setFormat] = useState("regular");
+  const [invited, setInvited] = useState<string[]>([]);
+
+  const toggle = (id: string) =>
+    setInvited((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
   const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
@@ -177,6 +187,60 @@ export default function SessionForm() {
           placeholder="Bring a yellow ball, gate code 1234…"
         />
       </div>
+
+      {roster.length > 0 ? (
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <span className="label mb-0">Who&apos;s playing</span>
+            <button
+              type="button"
+              onClick={() =>
+                setInvited((prev) =>
+                  prev.length === roster.length ? [] : roster.map((r) => r.id),
+                )
+              }
+              className="text-xs font-semibold text-[var(--accent)] underline"
+            >
+              {invited.length === roster.length ? "Clear all" : "Select all"}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {roster.map((p) => {
+              const on = invited.includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => toggle(p.id)}
+                  aria-pressed={on}
+                  className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5
+                    text-left text-sm transition ${
+                      on
+                        ? "border-[var(--accent)] bg-[var(--accent)]/10 font-medium"
+                        : "border-[var(--border)] text-[var(--muted)]"
+                    }`}
+                >
+                  <span className="truncate">{p.username}</span>
+                  <span className="shrink-0 font-mono text-xs tabular-nums">
+                    {p.rating === null ? "—" : p.rating.toFixed(2)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {invited.map((id) => (
+            <input key={id} type="hidden" name="invite" value={id} />
+          ))}
+
+          <p className="hint">
+            {invited.length === 0
+              ? "Optional — leave empty and people RSVP themselves."
+              : `${invited.length} added and marked in. They can opt out themselves from the session page.`}
+          </p>
+        </div>
+      ) : null}
 
       <label className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-4">
         <input type="checkbox" name="rated" defaultChecked className="size-5 accent-[var(--accent)]" />

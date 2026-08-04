@@ -9,10 +9,12 @@ export default function RsvpButtons({
   sessionId,
   state,
   full,
+  addedByOrganizer = false,
 }: {
   sessionId: string;
   state: MyState;
   full: boolean;
+  addedByOrganizer?: boolean;
 }) {
   const [pending, start] = useTransition();
   const go = (going: boolean) => start(() => void rsvpAction(sessionId, going));
@@ -39,8 +41,18 @@ export default function RsvpButtons({
             : "border border-[var(--border)]"
         }`}
       >
-        {state === "in" ? "You're in" : "You're on the waitlist"}
+        {state === "in"
+          ? addedByOrganizer
+            ? "You've been added"
+            : "You're in"
+          : "You're on the waitlist"}
       </div>
+      {/* Someone who never signed up needs telling that opting out is on them. */}
+      {addedByOrganizer && state === "in" ? (
+        <p className="hint -mt-1 text-center">
+          The organizer put you on this one. Can&apos;t make it? Tap below.
+        </p>
+      ) : null}
       <button
         type="button"
         onClick={() => go(false)}

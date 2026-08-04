@@ -50,6 +50,13 @@
       "when": 1785814379413,
       "tag": "0006_unusual_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785815266416,
+      "tag": "0007_charming_shiver_man",
+      "breakpoints": true
     }
   ]
 }

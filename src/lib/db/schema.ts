@@ -173,6 +173,12 @@ export const signups = pgTable(
     /** Position in the waitlist queue; null when state is not 'waitlist'. */
     waitlistPos: integer("waitlist_pos"),
     /**
+     * True when an organizer put them on the roster rather than them RSVPing.
+     * Drives a clearer prompt — "you've been added, tap here if you can't make
+     * it" reads very differently from "you're in" when you never signed up.
+     */
+    addedByOrganizer: boolean("added_by_organizer").notNull().default(false),
+    /**
      * Set on game day — RSVP'd is not the same as showed up. Defaults to true
      * so the organizer only has to uncheck no-shows, rather than tick twelve
      * boxes for a group that mostly turns up.

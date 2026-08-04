@@ -71,7 +71,9 @@ export async function createSessionAction(
   const format = str(formData, "format") as Format;
   if (!FORMATS.includes(format)) return { error: "Pick a format.", field: "format" };
 
-  const inserted = await getDb()
+  const db = getDb();
+
+  const inserted = await db
     .insert(sessions)
     .values({
       title,
@@ -88,7 +90,34 @@ export async function createSessionAction(
     })
     .returning({ id: sessions.id });
 
-  redirect(`/s/${inserted[0].id}`);
+  const sessionId = inserted[0].id;
+
+  /*
+   * Players the organizer picked up front are marked in, not merely invited.
+   * For a standing group the organizer already knows who's coming, and making
+   * twelve people each tap "I'm in" to confirm what's already true is friction
+   * for its own sake. Anyone can still opt out themselves from the session page.
+   */
+  const invited = formData
+    .getAll("invite")
+    .map((v) => String(v))
+    .filter(Boolean)
+    .slice(0, 64);
+
+  if (invited.length > 0) {
+    await db.insert(signups).values(
+      invited.map((playerId, i) => ({
+        sessionId,
+        playerId,
+        // Beyond capacity they queue, exactly as a self-RSVP would.
+        state: (i < maxPlayers ? "in" : "waitlist") as "in" | "waitlist",
+        waitlistPos: i < maxPlayers ? null : i - maxPlayers + 1,
+        addedByOrganizer: true,
+      })),
+    );
+  }
+
+  redirect(`/s/${sessionId}`);
 }
 
 /**
@@ -188,12 +217,13 @@ export async function addPlayerAction(sessionId: string, playerId: string): Prom
   if (!found[0]) throw new Error("That session no longer exists.");
 
   await db.execute(sql`
-    insert into ${signups} (session_id, player_id, state)
+    insert into ${signups} (session_id, player_id, state, added_by_organizer)
     select ${sessionId}::uuid, ${playerId}::uuid,
       case when (
         select count(*) from ${signups}
         where session_id = ${sessionId}::uuid and state = 'in'
-      ) < ${found[0].maxPlayers} then 'in'::signup_state else 'waitlist'::signup_state end
+      ) < ${found[0].maxPlayers} then 'in'::signup_state else 'waitlist'::signup_state end,
+      true
     on conflict (session_id, player_id) do nothing
   `);
 
