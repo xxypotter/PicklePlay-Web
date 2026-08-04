@@ -30,12 +30,21 @@ const FORMAT_LABEL: Record<string, string> = {
  * The event card from the home screen: title, then icon-led rows for when,
  * where and how, with a diagonal ribbon in the corner once it's over.
  */
-export default function SessionCard({ session: s }: { session: SessionCardData }) {
+export default function SessionCard({
+  session: s,
+  /** Where back should return to — the list and tab this card was tapped from. */
+  from,
+}: {
+  session: SessionCardData;
+  from?: string;
+}) {
   const ribbon =
     s.status === "closed" ? "Finished" : s.status === "live" ? "Playing" : null;
 
+  const href = from ? `/s/${s.id}?from=${encodeURIComponent(from)}` : `/s/${s.id}`;
+
   return (
-    <Link href={`/s/${s.id}`} className="relative block overflow-hidden card active:opacity-70">
+    <Link href={href} className="relative block overflow-hidden card active:opacity-70">
       {ribbon ? (
         <span
           className="ribbon"

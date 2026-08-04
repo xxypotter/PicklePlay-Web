@@ -108,6 +108,10 @@ export default async function HomePage({
   const myCards = cards.filter((c) => c.myState);
   const otherCards = cards.filter((c) => !c.myState);
 
+  // Home has tabs, so "back to home" isn't one place. Tapping a finished
+  // session from History and coming back to Upcoming loses your place.
+  const backHere = active === "upcoming" ? "/" : "/?tab=history";
+
   return (
     <>
       <TopBar />
@@ -127,7 +131,10 @@ export default async function HomePage({
               ? `session${cards.length === 1 ? "" : "s"} coming up`
               : `finished session${cards.length === 1 ? "" : "s"}`}
           </h2>
-          <Link href="/leaderboard" className="text-sm text-[var(--muted)]">
+          <Link
+            href={`/leaderboard?from=${encodeURIComponent(backHere)}`}
+            className="text-sm text-[var(--muted)]"
+          >
             Rankings ›
           </Link>
         </div>
@@ -159,7 +166,7 @@ export default async function HomePage({
                 </h3>
                 <div className="flex flex-col gap-3">
                   {myCards.map((s) => (
-                    <SessionCard key={s.id} session={s} />
+                    <SessionCard key={s.id} session={s} from={backHere} />
                   ))}
                 </div>
               </section>
@@ -176,7 +183,7 @@ export default async function HomePage({
                 </h3>
                 <div className="flex flex-col gap-3">
                   {otherCards.map((s) => (
-                    <SessionCard key={s.id} session={s} />
+                    <SessionCard key={s.id} session={s} from={backHere} />
                   ))}
                 </div>
               </section>
