@@ -266,12 +266,3 @@ export async function setAttendanceAction(
   revalidatePath(`/s/${sessionId}`);
 }
 
-export async function setSessionStatusAction(
-  sessionId: string,
-  status: "open" | "live" | "closed",
-): Promise<void> {
-  await requireOrganizer(sessionId);
-  await getDb().update(sessions).set({ status }).where(eq(sessions.id, sessionId));
-  revalidatePath(`/s/${sessionId}`);
-  revalidatePath("/");
-}

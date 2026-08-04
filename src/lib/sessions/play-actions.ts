@@ -117,9 +117,9 @@ export async function generateAllRoundsAction(
 /**
  * End a session.
  *
- * Separate from setSessionStatusAction so the intent is explicit at the call
- * site, and so the audit log records who ended a night and when — useful when
- * someone asks why a match can no longer be scored.
+ * A named action rather than a generic status setter, so the intent is explicit
+ * at the call site and the audit log records who ended a night and when —
+ * useful when someone asks why a match can no longer be scored.
  */
 export async function endSessionAction(sessionId: string): Promise<void> {
   const { me } = await requireOrganizer(sessionId);
