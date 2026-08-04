@@ -92,6 +92,8 @@ export default async function SessionPage({
 
   const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed).length;
   const base = `/s/${id}`;
+  // Tapping a name and coming back should land on the tab you left.
+  const backHere = active === "info" ? base : `${base}?tab=${active}`;
 
   return (
     <>
@@ -112,7 +114,7 @@ export default async function SessionPage({
           live only on Matchups, where you find the match you actually played.
         */}
         {active === "standings" ? (
-          <Standings rows={standings} meId={me?.id} />
+          <Standings rows={standings} meId={me?.id} backHere={backHere} />
         ) : active === "schedule" ? (
           <Schedule
             rounds={allRounds}
@@ -207,12 +209,14 @@ export default async function SessionPage({
               title={`Playing (${confirmed.length})`}
               rows={confirmed}
               empty="Nobody yet — be first."
+              backHere={backHere}
             />
             {waiting.length > 0 ? (
               <Roster
                 title={`Waitlist (${waiting.length})`}
                 rows={waiting}
                 empty=""
+                backHere={backHere}
                 showPosition
               />
             ) : null}
@@ -291,11 +295,13 @@ function Roster({
   title,
   rows,
   empty,
+  backHere,
   showPosition = false,
 }: {
   title: string;
   rows: Row[];
   empty: string;
+  backHere: string;
   showPosition?: boolean;
 }) {
   return (
@@ -317,7 +323,10 @@ function Roster({
                   {r.waitlistPos}
                 </span>
               ) : null}
-              <Link href={`/p/${r.username}`} className="min-w-0 flex-1 truncate font-medium">
+              <Link
+                href={`/p/${r.username}?from=${encodeURIComponent(backHere)}`}
+                className="min-w-0 flex-1 truncate font-medium"
+              >
                 {r.username}
               </Link>
               <span className="shrink-0 font-mono text-sm tabular-nums text-[var(--muted)]">

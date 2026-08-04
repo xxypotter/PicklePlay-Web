@@ -88,7 +88,7 @@ export default async function MePage() {
         {/* Shortcut grid, as in the mini-program's profile tab. */}
         <section className="card mt-3">
           <div className="grid grid-cols-3 gap-y-5">
-            <Shortcut href={`/p/${me.username}`} icon="📈" label="My record" />
+            <Shortcut href={`/p/${me.username}?from=/me`} icon="📈" label="My record" />
             <Shortcut href="/sessions" icon="📅" label="My sessions" />
             <Shortcut href="/leaderboard" icon="🏆" label="Rankings" />
           </div>
@@ -96,7 +96,7 @@ export default async function MePage() {
 
         <section className="card-tight mt-3 overflow-hidden">
           <RowLink
-            href={`/p/${me.username}`}
+            href={`/p/${me.username}?from=/me`}
             icon="⭐"
             label="Update my DUPR"
             last={!isAtLeast(me.role, "admin")}

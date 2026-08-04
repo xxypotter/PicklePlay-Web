@@ -59,6 +59,8 @@ export default async function LeaderboardPage({
   const provisional = rows.filter((r) => r.provisional);
 
   const base = "/leaderboard";
+  // Return to the tab they were actually on, not just the default list.
+  const backHere = active === "all" ? base : `${base}?tab=${active}`;
 
   return (
     <>
@@ -90,7 +92,7 @@ export default async function LeaderboardPage({
           </div>
         ) : (
           <>
-            <Table rows={ranked} meId={me?.id} startRank={1} />
+            <Table rows={ranked} meId={me?.id} startRank={1} backHere={backHere} />
 
             {provisional.length > 0 ? (
               <>
@@ -98,7 +100,7 @@ export default async function LeaderboardPage({
                 <p className="mb-2 px-1 text-xs text-[var(--muted)]">
                   Not enough recent matches here for a reliable number yet.
                 </p>
-                <Table rows={provisional} meId={me?.id} />
+                <Table rows={provisional} meId={me?.id} backHere={backHere} />
               </>
             ) : null}
           </>
@@ -124,7 +126,17 @@ interface Row {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-function Table({ rows, meId, startRank }: { rows: Row[]; meId?: string; startRank?: number }) {
+function Table({
+  rows,
+  meId,
+  startRank,
+  backHere,
+}: {
+  rows: Row[];
+  meId?: string;
+  startRank?: number;
+  backHere: string;
+}) {
   if (rows.length === 0) {
     return (
       <div className="card py-8 text-center text-sm text-[var(--muted)]">Nobody here yet.</div>
@@ -154,7 +166,10 @@ function Table({ rows, meId, startRank }: { rows: Row[]; meId?: string; startRan
             <Avatar username={r.username} avatar={r.avatar} size={36} />
 
             <div className="min-w-0 flex-1">
-              <Link href={`/p/${r.username}`} className="block truncate font-medium">
+              <Link
+                href={`/p/${r.username}?from=${encodeURIComponent(backHere)}`}
+                className="block truncate font-medium"
+              >
                 {r.username}
               </Link>
               <p className="text-xs text-[var(--muted)]">

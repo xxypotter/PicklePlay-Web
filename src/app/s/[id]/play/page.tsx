@@ -168,7 +168,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </section>
       )}
 
-      <Standings rows={standings} meId={me.id} />
+      <Standings rows={standings} meId={me.id} backHere={`/s/${id}/play`} />
 
       {session.status === "live" ? (
         <EndSessionButton sessionId={id} unscored={unscored} />

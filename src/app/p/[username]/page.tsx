@@ -2,7 +2,7 @@ import { asc, desc, eq, inArray, or } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
 import RatingChart from "@/components/RatingChart";
-import TopBar from "@/components/TopBar";
+import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { ROLE_LABELS, type Role } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
@@ -24,10 +24,17 @@ function reseedDaysRemaining(lastSelfSeedAt: Date | undefined): number {
 
 export default async function ProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ username: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { username } = await params;
+  // Profiles are reachable from Me, the rankings and any session, so the
+  // linking page says where back should go. Rankings is the sane default for a
+  // link opened cold.
+  const { from } = await searchParams;
+  const backTo = safeFrom(from, "/leaderboard");
   const db = getDb();
 
   const found = await db
@@ -140,7 +147,7 @@ export default async function ProfilePage({
 
   return (
     <>
-      <TopBar title={player.displayName ?? player.username} back="/leaderboard" />
+      <TopBar title={player.displayName ?? player.username} back={backTo} />
       <main className="screen pt-4">
       <section className="card">
         <p className="text-sm font-medium text-[var(--muted)]">PicklePlay Rating</p>

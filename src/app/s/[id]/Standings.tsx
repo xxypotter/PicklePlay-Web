@@ -9,7 +9,15 @@ const MEDALS = ["🥇", "🥈", "🥉"];
  * in orange, point difference, and rating movement. Top three get a medal
  * instead of a number, and your own row is tinted.
  */
-export default function Standings({ rows, meId }: { rows: StandingRow[]; meId?: string }) {
+export default function Standings({
+  rows,
+  meId,
+  backHere,
+}: {
+  rows: StandingRow[];
+  meId?: string;
+  backHere: string;
+}) {
   if (rows.length === 0) {
     return (
       <div className="card py-12 text-center">
@@ -47,7 +55,10 @@ export default function Standings({ rows, meId }: { rows: StandingRow[]; meId?: 
 
               <Avatar username={r.username} avatar={r.avatar} size={28} />
 
-              <Link href={`/p/${r.username}`} className="min-w-0 flex-1 truncate font-medium">
+              <Link
+                href={`/p/${r.username}?from=${encodeURIComponent(backHere)}`}
+                className="min-w-0 flex-1 truncate font-medium"
+              >
                 {r.username}
                 {r.playerId === meId ? (
                   <span className="ml-1.5 rounded bg-[var(--accent)] px-1 py-0.5 text-[10px] font-semibold text-white">

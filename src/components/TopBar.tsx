@@ -1,8 +1,21 @@
 import Link from "next/link";
 
+/** Only same-site paths; a `from` value off a URL is otherwise a redirect hole. */
+export function safeFrom(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  return /^\/(?!\/)[\w\-./?=&%]*$/.test(value) ? value : fallback;
+}
+
 /**
  * The app-name header from the mini-program: title dead centre, optional back
  * chevron on the left, nothing else competing with it.
+ *
+ * `back` is a real destination rather than a call to history.back(). Pages like
+ * the profile are reachable from several places, so the linking page passes
+ * `?from=` and the target reads it — see safeFrom. Using browser history looked
+ * tempting but sends someone off the site entirely when the page was opened
+ * from a shared link, which is exactly the entry point most likely to be
+ * someone's first visit.
  */
 export default function TopBar({
   title = "PicklePlay",
@@ -20,7 +33,8 @@ export default function TopBar({
           <Link
             href={back}
             aria-label="Back"
-            className="absolute left-2 flex size-9 items-center justify-center text-xl"
+            className="absolute left-2 flex size-9 items-center justify-center text-xl
+              active:opacity-60"
           >
             ‹
           </Link>
