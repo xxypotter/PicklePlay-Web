@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import Link from "next/link";
 import SessionCard, { type SessionCardData } from "@/components/SessionCard";
 import Tabs from "@/components/Tabs";
@@ -9,11 +9,14 @@ import { players, sessions, signups } from "@/lib/db/schema";
 import { getAllRounds } from "@/lib/sessions/queries";
 
 /**
- * Matches are sessions that count toward ratings; Events are the casual ones.
- * That split already exists in the data as the `rated` flag, so the two tabs
- * are a view of something real rather than a new concept to explain.
+ * Split by time, not by kind.
+ *
+ * The tabs used to be Matches and Events, meaning rated and casual. That's a
+ * real distinction in the data but not the question anyone opens the app with —
+ * which is "what's next" and occasionally "what happened". Casual sessions now
+ * appear in both lists, marked on the card.
  */
-type TabKey = "matches" | "events";
+type TabKey = "upcoming" | "history";
 
 export default async function HomePage({
   searchParams,
@@ -46,11 +49,11 @@ export default async function HomePage({
   }
 
   const { tab } = await searchParams;
-  const active: TabKey = tab === "events" ? "events" : "matches";
-  const wantRated = active === "matches";
+  const active: TabKey = tab === "history" ? "history" : "upcoming";
 
   const db = getDb();
 
+  // Upcoming reads soonest-first; history reads most-recent-first.
   const rows = await db
     .select({
       id: sessions.id,
@@ -66,9 +69,13 @@ export default async function HomePage({
     })
     .from(sessions)
     .leftJoin(players, eq(players.id, sessions.createdBy))
-    .where(eq(sessions.rated, wantRated))
-    .orderBy(desc(sessions.startsAt))
-    .limit(30);
+    .where(
+      active === "history"
+        ? eq(sessions.status, "closed")
+        : ne(sessions.status, "closed"),
+    )
+    .orderBy(active === "history" ? desc(sessions.startsAt) : asc(sessions.startsAt))
+    .limit(40);
 
   const ids = rows.map((r) => r.id);
 
@@ -95,11 +102,8 @@ export default async function HomePage({
     myState: stateBy.get(r.id),
   }));
 
-  const liveOrOpen = cards.filter((c) => c.status !== "closed");
-  const finished = cards.filter((c) => c.status === "closed");
-
   // Mid-session the only thing anyone wants is which court they're on.
-  const playingNow = liveOrOpen.find((c) => c.status === "live" && c.myState === "in");
+  const playingNow = cards.find((c) => c.status === "live" && c.myState === "in");
   const liveRounds = playingNow ? await getAllRounds(playingNow.id, playingNow.courtNames) : [];
   const mineInRounds = liveRounds
     .map((r) => ({
@@ -115,8 +119,8 @@ export default async function HomePage({
       <Tabs
         active={active}
         items={[
-          { key: "matches", label: "Matches", href: "/?tab=matches" },
-          { key: "events", label: "Events", href: "/?tab=events" },
+          { key: "upcoming", label: "Upcoming", href: "/" },
+          { key: "history", label: "History", href: "/?tab=history" },
         ]}
       />
 
@@ -143,7 +147,10 @@ export default async function HomePage({
 
         <div className="mb-2 flex items-baseline justify-between px-1">
           <h2 className="text-sm text-[var(--muted)]">
-            {active === "matches" ? "Rated sessions" : "Casual sessions"}
+            {cards.length}{" "}
+            {active === "upcoming"
+              ? `session${cards.length === 1 ? "" : "s"} coming up`
+              : `finished session${cards.length === 1 ? "" : "s"}`}
           </h2>
           <Link href="/leaderboard" className="text-sm text-[var(--muted)]">
             Rankings ›
@@ -152,27 +159,26 @@ export default async function HomePage({
 
         {cards.length === 0 ? (
           <div className="card py-14 text-center">
-            <p className="text-[var(--muted)]">
-              No {active === "matches" ? "matches" : "events"} yet.
-            </p>
-            <p className="hint">Tap + below to set one up.</p>
+            {active === "upcoming" ? (
+              <>
+                <p className="text-[var(--muted)]">Nothing scheduled.</p>
+                <p className="hint">Tap + below to set one up.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[var(--muted)]">No finished sessions yet.</p>
+                <p className="hint">
+                  Sessions move here once the organizer closes them, with their
+                  results kept.
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {liveOrOpen.map((s) => (
+            {cards.map((s) => (
               <SessionCard key={s.id} session={s} />
             ))}
-
-            {finished.length > 0 ? (
-              <>
-                <h3 className="mt-4 px-1 text-sm text-[var(--muted)]">
-                  Finished ({finished.length})
-                </h3>
-                {finished.map((s) => (
-                  <SessionCard key={s.id} session={s} />
-                ))}
-              </>
-            ) : null}
           </div>
         )}
       </main>
