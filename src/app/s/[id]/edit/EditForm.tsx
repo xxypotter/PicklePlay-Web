@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import type { FormState } from "@/lib/auth/types";
 import { updateSessionAction } from "@/lib/sessions/edit-actions";
 import DateTimeField from "@/components/DateTimeField";
+import LocationField, { noteForVenue } from "@/components/LocationField";
 
 const FORMATS = [
   { key: "regular", label: "Regular round robin", hint: "Partner with everyone once before anyone repeats." },
@@ -33,6 +34,16 @@ export default function EditForm({ session }: { session: EditableSession }) {
   const [courts, setCourts] = useState(session.courtNames.join(", "));
   const [format, setFormat] = useState(session.format);
   const [maxPlayersText, setMaxPlayersText] = useState(String(session.maxPlayers));
+  const [location, setLocation] = useState(session.location ?? "");
+  const [notes, setNotes] = useState(session.notes ?? "");
+
+  /* Picking Katy fills in its booking note; leaving Katy takes it back out.
+     noteForVenue never touches anything the organizer typed themselves. */
+  const changeLocation = (next: string) => {
+    setLocation(next);
+    setNotes((current) => noteForVenue(next, current));
+  };
+
 
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
   const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
@@ -72,13 +83,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
         <label className="label" htmlFor="location">
           Location
         </label>
-        <input
-          id="location"
-          name="location"
-          className="field"
-          placeholder="Club name"
-          defaultValue={session.location ?? ""}
-        />
+        <LocationField name="location" value={location} onChange={changeLocation} />
       </div>
 
       <div>
@@ -172,7 +177,8 @@ export default function EditForm({ session }: { session: EditableSession }) {
           name="notes"
           className="field"
           rows={2}
-          defaultValue={session.notes ?? ""}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
         />
       </div>
 

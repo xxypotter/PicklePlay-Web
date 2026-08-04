@@ -1,23 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-
-/** `datetime-local` wants a wall-clock string built from local parts. */
-function toLocalInput(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
-}
-
-/** The usual slot, and it saves a lot of tapping. */
-function nextSevenPm(): Date {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  if (d.getHours() >= 19) d.setDate(d.getDate() + 1);
-  d.setHours(19);
-  return d;
-}
+import { comingSaturday, toLocalInput } from "@/lib/dates";
 
 /**
  * A date-and-time field showing the *viewer's* wall clock.
@@ -37,7 +21,7 @@ function nextSevenPm(): Date {
 export default function DateTimeField({
   id,
   name,
-  /** ISO instant to show, or null to default to the next 7pm. */
+  /** ISO instant to show, or null to default to the coming Saturday at 6pm. */
   initialIso = null,
   required = true,
 }: {
@@ -51,7 +35,7 @@ export default function DateTimeField({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.value = toLocalInput(initialIso ? new Date(initialIso) : nextSevenPm());
+    el.value = toLocalInput(initialIso ? new Date(initialIso) : comingSaturday());
   }, [initialIso]);
 
   return (

@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { createSessionAction } from "@/lib/sessions/actions";
 import type { FormState } from "@/lib/auth/types";
 import DateTimeField from "@/components/DateTimeField";
+import LocationField, { noteForVenue } from "@/components/LocationField";
 
 const FORMATS = [
   {
@@ -42,6 +43,16 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
   const [courts, setCourts] = useState("1, 2");
   const [format, setFormat] = useState("regular");
   const [invited, setInvited] = useState<string[]>([]);
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+
+  /* Picking Katy fills in its booking note; leaving Katy takes it back out.
+     noteForVenue never touches anything the organizer typed themselves. */
+  const changeLocation = (next: string) => {
+    setLocation(next);
+    setNotes((current) => noteForVenue(next, current));
+  };
+
   /*
    * Held as text, not a number.
    *
@@ -90,7 +101,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
           name="title"
           className="field"
           maxLength={80}
-          defaultValue="PicklePlay Game"
+          defaultValue="Saturday Round Robin"
           required
           autoFocus
         />
@@ -100,7 +111,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
         <label className="label" htmlFor="location">
           Location
         </label>
-        <input id="location" name="location" className="field" placeholder="Club name" />
+        <LocationField name="location" value={location} onChange={changeLocation} />
       </div>
 
       <div>
@@ -205,6 +216,8 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
           className="field"
           rows={2}
           placeholder="Bring a yellow ball, gate code 1234…"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
         />
       </div>
 
