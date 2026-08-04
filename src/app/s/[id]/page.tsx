@@ -10,12 +10,13 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats, sessions, signups } from "@/lib/db/schema";
 import { getInviteCode } from "@/lib/invite";
+import { closeStaleSessions } from "@/lib/sessions/auto-close";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import Schedule from "./Schedule";
 import ShareLink from "./ShareLink";
 import Standings from "./Standings";
-import { DeleteSessionButton } from "./play/PlayControls";
+import { DeleteSessionButton, EndSessionButton } from "./play/PlayControls";
 
 export const metadata = { title: "Session · PicklePlay" };
 
@@ -44,6 +45,10 @@ export default async function SessionPage({
     tab === "standings" ? "standings" : tab === "schedule" ? "schedule" : "info";
 
   const db = getDb();
+
+  // Sweep before reading, so a night nobody ended shows as finished.
+  await closeStaleSessions();
+
   const found = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const session = found[0];
   if (!session) notFound();
@@ -85,6 +90,7 @@ export default async function SessionPage({
     !!me && (me.role === "superadmin" || (isAdmin && session.createdBy === me.id));
   const spotsLeft = Math.max(0, session.maxPlayers - confirmed.length);
 
+  const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed).length;
   const base = `/s/${id}`;
 
   return (
@@ -211,21 +217,39 @@ export default async function SessionPage({
               />
             ) : null}
 
+            {/*
+              The primary action follows the lifecycle: set up, then end. Once
+              a session is under way "Run the session" reads like it hasn't
+              started, so the play console moves to a secondary link and the
+              headline action becomes the one that's actually left to do.
+            */}
             {isAdmin ? (
               <div className="mt-4 flex flex-col gap-2">
-                <Link href={`${base}/play`} className="btn-accent block text-center">
-                  {session.status === "closed"
-                    ? "Manage session"
-                    : session.status === "open"
-                      ? "Set up & start"
-                      : "Run the session"}
-                </Link>
-                {/* Details are only editable before play begins. */}
                 {session.status === "open" ? (
-                  <Link href={`${base}/edit`} className="btn-ghost block text-center">
-                    Edit details
+                  <>
+                    <Link href={`${base}/play`} className="btn-accent block text-center">
+                      Set up &amp; start
+                    </Link>
+                    <Link href={`${base}/edit`} className="btn-ghost block text-center">
+                      Edit details
+                    </Link>
+                  </>
+                ) : session.status === "live" ? (
+                  <>
+                    <EndSessionButton
+                      sessionId={id}
+                      unscored={unscored}
+                      className="w-full"
+                    />
+                    <Link href={`${base}/play`} className="btn-ghost block text-center">
+                      Manage matches &amp; players
+                    </Link>
+                  </>
+                ) : (
+                  <Link href={`${base}/play`} className="btn-ghost block text-center">
+                    Manage session
                   </Link>
-                ) : null}
+                )}
               </div>
             ) : null}
 

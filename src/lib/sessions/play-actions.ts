@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
@@ -112,6 +112,34 @@ export async function generateAllRoundsAction(
 
   revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);
+}
+
+/**
+ * End a session.
+ *
+ * Separate from setSessionStatusAction so the intent is explicit at the call
+ * site, and so the audit log records who ended a night and when — useful when
+ * someone asks why a match can no longer be scored.
+ */
+export async function endSessionAction(sessionId: string): Promise<void> {
+  const me = await requireAdmin();
+  const db = getDb();
+
+  await db
+    .update(sessions)
+    .set({ status: "closed" })
+    .where(and(eq(sessions.id, sessionId), ne(sessions.status, "closed")));
+
+  await db.insert(auditLog).values({
+    actorId: me.id,
+    action: "session.end",
+    targetType: "session",
+    targetId: sessionId,
+  });
+
+  revalidatePath(`/s/${sessionId}`);
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath("/");
 }
 
 /**

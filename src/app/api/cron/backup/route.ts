@@ -21,6 +21,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { isAtLeast } from "@/lib/auth/policy";
 import { getDb } from "@/lib/db";
 import { matches, players, ratingSeeds, sessions, signups } from "@/lib/db/schema";
+import { closeStaleSessions } from "@/lib/sessions/auto-close";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -48,6 +49,10 @@ export async function GET(request: Request) {
 
   const db = getDb();
 
+  // Backstop for the lazy sweep on page loads: if nobody opens the app for a
+  // few days, stale sessions still get closed.
+  const autoClosed = await closeStaleSessions();
+
   const [playerRows, seedRows, matchRows, sessionRows, signupRows] = await Promise.all([
     db
       .select({
@@ -68,6 +73,7 @@ export async function GET(request: Request) {
 
   const payload = {
     schema: 1,
+    autoClosedSessions: autoClosed,
     takenAt: new Date().toISOString(),
     note: "PIN hashes intentionally excluded; restore requires admins to reset PINs.",
     counts: {

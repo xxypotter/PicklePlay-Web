@@ -5,11 +5,11 @@ import {
   addPlayerAction,
   removePlayerAction,
   setAttendanceAction,
-  setSessionStatusAction,
 } from "@/lib/sessions/actions";
 import {
   deleteSessionAction,
   discardRoundAction,
+  endSessionAction,
   generateAllRoundsAction,
   generateRoundAction,
   reopenSessionAction,
@@ -301,17 +301,71 @@ export function ReopenSessionButton({ sessionId }: { sessionId: string }) {
   );
 }
 
-export function CloseSessionButton({ sessionId }: { sessionId: string }) {
+/**
+ * Ending is the last thing that happens, and it can't be undone from the UI —
+ * so it asks, and it says what's about to be lost. Unscored matches are the
+ * thing people actually forget: a court finishes, nobody taps the score in, and
+ * ending the session strands the result.
+ */
+export function EndSessionButton({
+  sessionId,
+  unscored,
+  className = "mt-8",
+}: {
+  sessionId: string;
+  unscored: number;
+  className?: string;
+}) {
   const [pending, start] = useTransition();
+  const [armed, setArmed] = useState(false);
+
+  if (!armed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setArmed(true)}
+        className={`btn-accent ${className}`}
+      >
+        End session
+      </button>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => start(() => void setSessionStatusAction(sessionId, "closed"))}
-      className="mt-8 w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm
-        font-medium text-[var(--muted)] disabled:opacity-50"
-    >
-      {pending ? "…" : "Close this session"}
-    </button>
+    <div className={`card ${className}`}>
+      <p className="font-semibold">End this session?</p>
+      {unscored > 0 ? (
+        <p className="mt-1 text-sm font-medium text-[var(--danger)]">
+          {unscored} match{unscored === 1 ? " has" : "es have"} no score yet. Ending now
+          leaves {unscored === 1 ? "it" : "them"}{" "}
+          unrecorded and out of everyone&apos;s rating.
+        </p>
+      ) : (
+        <p className="hint">
+          Every match is scored. Results and ratings stay exactly as they are.
+        </p>
+      )}
+      <p className="hint">No more scores can be entered afterwards.</p>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setArmed(false)}
+          className="btn-ghost flex-1"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => start(() => void endSessionAction(sessionId))}
+          className="flex-1 rounded-full bg-[var(--danger)] px-4 py-3 text-base font-semibold
+            text-white disabled:opacity-50"
+        >
+          {pending ? "Ending…" : "End it"}
+        </button>
+      </div>
+    </div>
   );
 }

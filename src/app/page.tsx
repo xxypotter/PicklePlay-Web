@@ -6,6 +6,7 @@ import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
+import { closeStaleSessions } from "@/lib/sessions/auto-close";
 
 /**
  * Split by time, not by kind.
@@ -51,6 +52,9 @@ export default async function HomePage({
   const active: TabKey = tab === "history" ? "history" : "upcoming";
 
   const db = getDb();
+
+  // Sessions nobody remembered to end shouldn't linger in Upcoming.
+  await closeStaleSessions();
 
   // Upcoming reads soonest-first; history reads most-recent-first.
   const rows = await db

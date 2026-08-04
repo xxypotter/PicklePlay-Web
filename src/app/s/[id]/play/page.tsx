@@ -13,9 +13,9 @@ import Standings from "../Standings";
 import {
   AddPlayers,
   AttendanceToggle,
-  CloseSessionButton,
   DeleteSessionButton,
   DiscardRoundButton,
+  EndSessionButton,
   GenerateRoundButton,
   ReopenSessionButton,
   StartSessionButton,
@@ -61,6 +61,9 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
 
   const attendingCount = attending.length;
   const canDelete = me.role === "superadmin" || session.createdBy === me.id;
+  const unscored = allRounds
+    .flatMap((r) => r.matches)
+    .filter((m) => !m.completed).length;
 
   return (
     <>
@@ -167,7 +170,9 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
 
       <Standings rows={standings} meId={me.id} />
 
-      {session.status !== "closed" ? <CloseSessionButton sessionId={id} /> : null}
+      {session.status === "live" ? (
+        <EndSessionButton sessionId={id} unscored={unscored} />
+      ) : null}
       {canDelete ? <DeleteSessionButton sessionId={id} /> : null}
       </main>
     </>
