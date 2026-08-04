@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { KATY_NOTE, noteForVenue } from "./LocationField";
+import { KATY_NOTE, noteForVenue, VENUES } from "./LocationField";
 
 describe("the Katy booking note", () => {
   it("fills an empty notes box when Katy is picked", () => {
@@ -26,5 +26,11 @@ describe("the Katy booking note", () => {
 
   it("doesn't duplicate the note when Katy is re-picked", () => {
     expect(noteForVenue("Pickleball Katy", KATY_NOTE)).toBe(KATY_NOTE);
+  });
+
+  it("belongs to Katy alone, not to every venue on the list", () => {
+    for (const venue of VENUES.filter((v) => v !== "Pickleball Katy")) {
+      expect(noteForVenue(venue, ""), venue).toBe("");
+    }
   });
 });

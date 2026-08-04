@@ -2,18 +2,25 @@
 
 import { useState } from "react";
 
-/** The two courts this group actually plays at. Anything else is typed in. */
-export const VENUES = ["Pickleball Katy", "ERA"] as const;
+/** The courts this group actually plays at. Anything else is typed in. */
+export const VENUES = [
+  "Pickleball Katy",
+  "ERA",
+  "Pace",
+  "Pickleball Village",
+] as const;
 
 /** Katy takes bookings through its own app, so every session there says so. */
 export const KATY_NOTE = "Please register in Playbypoint App";
+
+const OTHER = "__other";
 
 /**
  * Adds the Katy booking note, or takes it away again, without ever touching
  * something the organizer wrote themselves.
  *
  * Exported so both forms apply the same rule: the note appears when you pick
- * Katy and an empty notes box, and disappears when you move away from Katy
+ * Katy with an empty notes box, and disappears when you move away from Katy
  * *only* if the box still contains exactly that note and nothing else.
  */
 export function noteForVenue(venue: string, currentNotes: string): string {
@@ -24,11 +31,12 @@ export function noteForVenue(venue: string, currentNotes: string): string {
 }
 
 /**
- * Location as a short list plus an escape hatch.
+ * Location as a dropdown, plus an escape hatch.
  *
- * Typing "Pickleball Katy" correctly every week is the kind of small friction
- * that produces three spellings of the same venue in the history, so the usual
- * two are buttons. Other keeps the free-text field for anywhere else.
+ * Buttons in a row were the first attempt and they don't survive a phone —
+ * "Pickleball Katy" and "Pickleball Village" both truncate at a third of a
+ * 375px screen, which defeats the point of offering them. A native select
+ * renders as a full-height picker on iOS and has room for every name.
  */
 export default function LocationField({
   name,
@@ -39,13 +47,22 @@ export default function LocationField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const matchesVenue = (VENUES as readonly string[]).includes(value);
+  const isVenue = (VENUES as readonly string[]).includes(value);
   // An existing session with a one-off location opens on Other, already filled.
-  const [other, setOther] = useState(!matchesVenue && value.trim() !== "");
+  const [other, setOther] = useState(!isVenue && value.trim() !== "");
 
-  const pick = (venue: string) => {
+  const selected = isVenue ? value : other ? OTHER : "";
+
+  const choose = (next: string) => {
+    if (next === OTHER) {
+      setOther(true);
+      // Clear a venue name so the free-text box starts empty rather than
+      // inviting them to edit "ERA" into something else.
+      if (isVenue) onChange("");
+      return;
+    }
     setOther(false);
-    onChange(venue);
+    onChange(next);
   };
 
   return (
@@ -53,19 +70,20 @@ export default function LocationField({
       {/* The submitted value is always this, whichever control produced it. */}
       <input type="hidden" name={name} value={value} />
 
-      <div className="grid grid-cols-3 gap-2">
+      <select
+        className="field"
+        value={selected}
+        onChange={(e) => choose(e.target.value)}
+        aria-label="Location"
+      >
+        <option value="">Choose a location…</option>
         {VENUES.map((v) => (
-          <Choice key={v} label={v} active={!other && value === v} onSelect={() => pick(v)} />
+          <option key={v} value={v}>
+            {v}
+          </option>
         ))}
-        <Choice
-          label="Other"
-          active={other}
-          onSelect={() => {
-            setOther(true);
-            if (matchesVenue) onChange("");
-          }}
-        />
-      </div>
+        <option value={OTHER}>Other</option>
+      </select>
 
       {other ? (
         <input
@@ -78,30 +96,5 @@ export default function LocationField({
         />
       ) : null}
     </div>
-  );
-}
-
-function Choice({
-  label,
-  active,
-  onSelect,
-}: {
-  label: string;
-  active: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={active}
-      className={`truncate rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
-        active
-          ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-          : "border-[var(--border)] bg-[var(--surface)]"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
