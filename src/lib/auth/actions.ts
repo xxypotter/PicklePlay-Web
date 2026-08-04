@@ -16,6 +16,19 @@ import { NAME_TAKEN_MESSAGE, normalizeUsername, validateUsername } from "./usern
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
 /**
+ * Where to land after signing in.
+ *
+ * Someone arriving from a shared session link wants that session, not the home
+ * page. Only same-site absolute paths are honoured — anything else, including
+ * a protocol-relative "//example.com" that a browser would treat as external,
+ * falls back to home. A redirect target taken from a URL is an open-redirect
+ * hole if it isn't checked.
+ */
+function safeNext(value: string): string {
+  return /^\/(?!\/)[\w\-./?=&%]*$/.test(value) ? value : "/";
+}
+
+/**
  * Postgres unique-violation. The race we care about is two people claiming the
  * same name at once, where the database index is the only real arbiter.
  *
@@ -132,7 +145,7 @@ export async function registerAction(
   await recomputeAll();
   await createSession(playerId);
 
-  redirect("/");
+  redirect(safeNext(str(formData, "next")));
 }
 
 export async function loginAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -173,7 +186,7 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   if (!player.active) return { error: "That account is inactive. Ask an admin.", field: "username" };
 
   await createSession(player.id);
-  redirect("/");
+  redirect(safeNext(str(formData, "next")));
 }
 
 export async function logoutAction(): Promise<void> {

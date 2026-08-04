@@ -11,9 +11,11 @@ const initial: FormState = {};
 export default function RegisterForm({
   needsCode,
   codePrefill,
+  next = "",
 }: {
   needsCode: boolean;
   codePrefill: string;
+  next?: string;
 }) {
   const [state, action, pending] = useActionState(registerAction, initial);
   const [hasDupr, setHasDupr] = useState(true);
@@ -21,6 +23,7 @@ export default function RegisterForm({
 
   return (
     <form action={action} className="flex flex-col gap-5">
+      <input type="hidden" name="next" value={next} />
       {needsCode ? (
         <div>
           <label className="label" htmlFor="inviteCode">
@@ -212,7 +215,10 @@ export default function RegisterForm({
 
       <p className="text-center text-sm text-[var(--muted)]">
         Already have a name?{" "}
-        <Link href="/login" className="font-medium text-[var(--accent)] underline">
+        <Link
+          href={`/login${next ? `?next=${encodeURIComponent(next)}` : ""}`}
+          className="font-medium text-[var(--accent)] underline"
+        >
           Log in
         </Link>
       </p>

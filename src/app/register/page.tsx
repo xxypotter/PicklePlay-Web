@@ -10,11 +10,11 @@ export const metadata = { title: "Create account · PicklePlay" };
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string }>;
+  searchParams: Promise<{ code?: string; next?: string }>;
 }) {
-  if (await getCurrentPlayer()) redirect("/");
+  const { code, next } = await searchParams;
+  if (await getCurrentPlayer()) redirect(next?.startsWith("/") ? next : "/");
 
-  const { code } = await searchParams;
   const [{ count }] = await getDb()
     .select({ count: sql<number>`count(*)::int` })
     .from(players);
@@ -25,7 +25,11 @@ export default async function RegisterPage({
       <p className="mt-2 mb-8 text-[var(--muted)]">
         No email, no password, no DUPR login. Just a name and a PIN.
       </p>
-      <RegisterForm needsCode={count > 0} codePrefill={code ?? ""} />
+      <RegisterForm
+        needsCode={count > 0}
+        codePrefill={code ?? ""}
+        next={next ?? ""}
+      />
     </main>
   );
 }

@@ -7,11 +7,12 @@ import type { FormState } from "@/lib/auth/types";
 
 const initial: FormState = {};
 
-export default function LoginForm() {
+export default function LoginForm({ next = "" }: { next?: string }) {
   const [state, action, pending] = useActionState(loginAction, initial);
 
   return (
     <form action={action} className="flex flex-col gap-5">
+      <input type="hidden" name="next" value={next} />
       <div>
         <label className="label" htmlFor="username">
           Your name
@@ -59,7 +60,10 @@ export default function LoginForm() {
 
       <p className="text-center text-sm text-[var(--muted)]">
         New here?{" "}
-        <Link href="/register" className="font-medium text-[var(--accent)] underline">
+        <Link
+          href={`/register${next ? `?next=${encodeURIComponent(next)}` : ""}`}
+          className="font-medium text-[var(--accent)] underline"
+        >
           Create an account
         </Link>
       </p>

@@ -9,6 +9,7 @@ import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats, sessions, signups } from "@/lib/db/schema";
+import { getInviteCode } from "@/lib/invite";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import MatchCard from "./MatchCard";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
@@ -48,7 +49,7 @@ export default async function SessionPage({
   const session = found[0];
   if (!session) notFound();
 
-  const [me, roster, allRounds, standings, headerList] = await Promise.all([
+  const [me, roster, allRounds, standings, headerList, inviteCode] = await Promise.all([
     getCurrentPlayer(),
     db
       .select({
@@ -68,6 +69,7 @@ export default async function SessionPage({
     getAllRounds(id, session.courtNames),
     getSessionStandings(id),
     headers(),
+    getInviteCode(),
   ]);
 
   const confirmed = roster.filter((r) => r.state === "in");
@@ -177,9 +179,29 @@ export default async function SessionPage({
                   />
                 )
               ) : (
-                <Link href="/login" className="btn-primary block text-center">
-                  Log in to RSVP
-                </Link>
+                /*
+                 * Someone opening a shared link may not have an account yet.
+                 * Offering only "log in" strands them at a registration form
+                 * demanding a code they were never given, so the sign-up link
+                 * carries the current code and both routes come back here
+                 * afterwards rather than dumping them on the home page.
+                 */
+                <div className="flex flex-col gap-2">
+                  <Link
+                    href={`/register?next=${encodeURIComponent(`/s/${id}`)}${
+                      inviteCode ? `&code=${inviteCode}` : ""
+                    }`}
+                    className="btn-primary block text-center"
+                  >
+                    Create an account to join
+                  </Link>
+                  <Link
+                    href={`/login?next=${encodeURIComponent(`/s/${id}`)}`}
+                    className="btn-ghost block text-center"
+                  >
+                    I already have an account
+                  </Link>
+                </div>
               )}
             </div>
 
