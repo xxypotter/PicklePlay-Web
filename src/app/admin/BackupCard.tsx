@@ -9,6 +9,7 @@ interface BackupResult {
   repo?: string;
   warning?: string;
   hint?: string;
+  checkOnly?: boolean;
   detail?: string;
   status?: number;
   counts?: Record<string, number>;
@@ -26,11 +27,13 @@ export default function BackupCard({ configured }: { configured: boolean }) {
   const [result, setResult] = useState<BackupResult | null>(null);
   const [running, setRunning] = useState(false);
 
-  async function run() {
+  async function run(checkOnly = false) {
     setRunning(true);
     setResult(null);
     try {
-      const res = await fetch("/api/cron/backup", { cache: "no-store" });
+      const res = await fetch(`/api/cron/backup${checkOnly ? "?check=1" : ""}`, {
+        cache: "no-store",
+      });
       setResult((await res.json()) as BackupResult);
     } catch (e) {
       setResult({ error: e instanceof Error ? e.message : "Request failed." });
@@ -49,21 +52,37 @@ export default function BackupCard({ configured }: { configured: boolean }) {
           : "Not switched on yet. Add BACKUP_GITHUB_REPO and BACKUP_GITHUB_TOKEN in Vercel, then redeploy."}
       </p>
 
-      <button
-        type="button"
-        onClick={run}
-        disabled={running}
-        className="mt-3 w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm
-          font-semibold disabled:opacity-50"
-      >
-        {running ? "Backing up…" : "Back up now"}
-      </button>
+      <div className="mt-3 flex gap-2">
+        {/* Check first: confirms the repo and token without writing a commit. */}
+        <button
+          type="button"
+          onClick={() => run(true)}
+          disabled={running}
+          className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-sm
+            font-semibold disabled:opacity-50"
+        >
+          {running ? "…" : "Check setup"}
+        </button>
+        <button
+          type="button"
+          onClick={() => run(false)}
+          disabled={running}
+          className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-sm
+            font-semibold disabled:opacity-50"
+        >
+          {running ? "…" : "Back up now"}
+        </button>
+      </div>
 
       {result ? (
         <div className="mt-3 text-sm">
           {result.stored ? (
             <p className="font-medium text-[var(--success)]">
               Saved to {result.repo} · {result.path}
+            </p>
+          ) : result.checkOnly ? (
+            <p className="font-medium text-[var(--success)]">
+              {result.repo} is reachable and private. Nothing was written.
             </p>
           ) : (
             <>

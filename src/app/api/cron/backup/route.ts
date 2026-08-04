@@ -105,12 +105,79 @@ export async function GET(request: Request) {
     });
   }
 
-  const api = `https://api.github.com/repos/${repo}/contents/${path}`;
   const headers = {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
   };
+
+  /*
+   * Look the repository up before writing anything.
+   *
+   * Two reasons. It separates a wrong repo name from a token that can't see the
+   * repo — GitHub returns 404 for both on the contents API, which makes the
+   * failure impossible to diagnose. And it reveals whether the destination is
+   * public.
+   *
+   * A backup carries every player's name and full match history. Committing it
+   * to a public repository would publish that permanently, since deleting the
+   * file later doesn't remove it from git history. So a public destination is
+   * refused outright rather than assumed to be deliberate.
+   */
+  const meta = await fetch(`https://api.github.com/repos/${repo}`, {
+    headers,
+    cache: "no-store",
+  });
+
+  if (!meta.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        stored: false,
+        repo,
+        status: meta.status,
+        hint:
+          meta.status === 404
+            ? `The token can't see ${repo}. Either the name is wrong or the token's ` +
+              `repository access doesn't list it — GitHub returns 404 for both.`
+            : `GitHub refused to read ${repo} (${meta.status}).`,
+      },
+      { status: 502 },
+    );
+  }
+
+  const info = (await meta.json()) as { private?: boolean; full_name?: string };
+  const fullName = info.full_name ?? repo;
+
+  if (!info.private) {
+    return NextResponse.json(
+      {
+        ok: false,
+        stored: false,
+        repo: fullName,
+        hint:
+          `${fullName} is a PUBLIC repository. Backups contain every player's name ` +
+          `and match history, so nothing was uploaded. Point BACKUP_GITHUB_REPO at ` +
+          `a private repo.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  // Read-only probe: confirms the setup without producing a commit.
+  if (new URL(request.url).searchParams.get("check")) {
+    return NextResponse.json({
+      ok: true,
+      stored: false,
+      checkOnly: true,
+      repo: fullName,
+      private: true,
+      wouldWrite: path,
+      counts: payload.counts,
+    });
+  }
+
+  const api = `https://api.github.com/repos/${repo}/contents/${path}`;
 
   // Overwriting an existing same-day file needs its blob sha.
   let sha: string | undefined;
