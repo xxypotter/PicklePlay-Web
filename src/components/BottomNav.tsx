@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import PaddleIcon from "@/components/PaddleIcon";
 
 /**
  * Three-slot bottom bar with an elevated centre button, lifted straight from
@@ -48,7 +49,10 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
       >
         <div className="mx-auto grid h-16 w-full max-w-md grid-cols-3 items-center">
           <Link href="/" className="flex flex-col items-center gap-0.5">
-            <Glyph active={onHome}>🏓</Glyph>
+            <PaddleIcon
+              size={22}
+              className={onHome ? "text-[var(--accent)]" : "text-[var(--muted)]"}
+            />
             <span className={`text-[11px] ${onHome ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>
               Home
             </span>
@@ -70,7 +74,9 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
           </div>
 
           <Link href="/me" className="flex flex-col items-center gap-0.5">
-            <Glyph active={onMe}>👤</Glyph>
+            <span className={`text-[19px] leading-none ${onMe ? "" : "opacity-40 grayscale"}`}>
+              👤
+            </span>
             <span className={`text-[11px] ${onMe ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>
               Me
             </span>
@@ -78,13 +84,5 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
         </div>
       </nav>
     </>
-  );
-}
-
-function Glyph({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return (
-    <span className={`text-xl leading-none ${active ? "" : "opacity-40 grayscale"}`}>
-      {children}
-    </span>
   );
 }

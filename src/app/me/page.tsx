@@ -1,13 +1,15 @@
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import Avatar from "@/components/Avatar";
 import TopBar from "@/components/TopBar";
 import { logoutAction } from "@/lib/auth/actions";
 import { isAtLeast } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { playerStats } from "@/lib/db/schema";
+import { players, playerStats } from "@/lib/db/schema";
+import { AvatarCard, GenderCard, ImportRecordCard } from "./ProfileCards";
 
 export const metadata = { title: "Me · PicklePlay" };
 
@@ -15,12 +17,31 @@ export default async function MePage() {
   const me = await getCurrentPlayer();
   if (!me) redirect("/login");
 
-  const stats = (
-    await getDb().select().from(playerStats).where(eq(playerStats.playerId, me.id)).limit(1)
-  )[0];
+  const db = getDb();
+  const [statsRow, profileRow] = await Promise.all([
+    db.select().from(playerStats).where(eq(playerStats.playerId, me.id)).limit(1),
+    db
+      .select({
+        avatar: players.avatar,
+        gender: players.gender,
+        importedMatches: players.importedMatches,
+        importedWins: players.importedWins,
+        importedAt: players.importedAt,
+      })
+      .from(players)
+      .where(eq(players.id, me.id))
+      .limit(1),
+  ]);
 
-  const decided = (stats?.wins ?? 0) + (stats?.losses ?? 0);
-  const winRate = decided > 0 ? Math.round(((stats?.wins ?? 0) / decided) * 100) : 0;
+  const stats = statsRow[0];
+  const profile = profileRow[0];
+
+  // Career = what they brought with them plus what they've done here.
+  const localWins = stats?.wins ?? 0;
+  const localDecided = localWins + (stats?.losses ?? 0);
+  const careerMatches = (profile?.importedMatches ?? 0) + localDecided;
+  const careerWins = (profile?.importedWins ?? 0) + localWins;
+  const winRate = careerMatches > 0 ? Math.round((careerWins / careerMatches) * 100) : 0;
 
   return (
     <>
@@ -30,9 +51,7 @@ export default async function MePage() {
         {/* Profile header: name, role, then the numbers in orange. */}
         <section className="card">
           <div className="flex items-center gap-3">
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-2xl">
-              🏓
-            </span>
+            <Avatar username={me.username} avatar={profile?.avatar} size={56} />
             <div className="min-w-0">
               <p className="truncate text-lg font-bold">{me.displayName ?? me.username}</p>
               {me.role !== "player" ? (
@@ -45,10 +64,16 @@ export default async function MePage() {
 
           <div className="mt-4 grid grid-cols-4 gap-2 border-t border-[var(--border)] pt-4 text-center">
             <Stat label="Rating" value={stats ? stats.rating.toFixed(3) : "—"} />
-            <Stat label="Played" value={String(stats?.localMatches ?? 0)} />
-            <Stat label="Won" value={String(stats?.wins ?? 0)} />
-            <Stat label="Win rate" value={decided > 0 ? `${winRate}%` : "—"} />
+            <Stat label="Played" value={String(careerMatches)} />
+            <Stat label="Won" value={String(careerWins)} />
+            <Stat label="Win rate" value={careerMatches > 0 ? `${winRate}%` : "—"} />
           </div>
+
+          {profile && profile.importedMatches > 0 ? (
+            <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
+              Includes {profile.importedMatches} imported · {stats?.localMatches ?? 0} played here
+            </p>
+          ) : null}
 
           {stats ? (
             <p className="mt-3 text-center text-xs text-[var(--muted)]">
@@ -76,6 +101,15 @@ export default async function MePage() {
           ) : null}
           <RowLink href="/sessions" icon="🗂" label="All sessions" last />
         </section>
+
+        <AvatarCard username={me.username} avatar={profile?.avatar ?? null} />
+        <GenderCard gender={profile?.gender ?? "unspecified"} />
+        <ImportRecordCard
+          importedMatches={profile?.importedMatches ?? 0}
+          importedWins={profile?.importedWins ?? 0}
+          locked={!!profile?.importedAt}
+          playedHere={stats?.localMatches ?? 0}
+        />
 
         <form action={logoutAction} className="mt-6">
           <button type="submit" className="btn-ghost text-[var(--muted)]">

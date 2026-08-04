@@ -63,6 +63,12 @@ export async function registerAction(
   const nameResult = validateUsername(str(formData, "username"));
   if (!nameResult.ok) return { error: nameResult.error, field: "username" };
 
+  // Play is always mixed; this only decides which ranking table they land in.
+  const gender = str(formData, "gender");
+  if (gender !== "male" && gender !== "female" && gender !== "unspecified") {
+    return { error: "Pick which rankings list you belong in.", field: "gender" };
+  }
+
   const pin = str(formData, "pin");
   const pinResult = validatePin(pin);
   if (!pinResult.ok) return { error: pinResult.error, field: "pin" };
@@ -102,6 +108,7 @@ export async function registerAction(
         username: nameResult.username,
         usernameLower: nameResult.normalized,
         pinHash: await hashPin(pin),
+        gender,
         // The first account ever created owns the group and is the only one who
         // can grant admin. Everyone after it starts as a plain player.
         role: count === 0 ? "superadmin" : "player",

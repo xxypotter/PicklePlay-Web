@@ -30,6 +30,12 @@ import {
  * "organizer" was folded into "admin": the group is small enough that a second
  * tier of session-runner earned nothing and just made permission checks lie.
  */
+/**
+ * Play is always mixed — gender exists only so the rankings can be split into
+ * a men's and a women's table, which is how this group reads results.
+ */
+export const genderEnum = pgEnum("gender", ["male", "female", "unspecified"]);
+
 export const roleEnum = pgEnum("role", ["player", "admin", "superadmin"]);
 export const signupStateEnum = pgEnum("signup_state", ["in", "waitlist", "out"]);
 export const sessionStatusEnum = pgEnum("session_status", ["draft", "open", "live", "closed"]);
@@ -67,6 +73,22 @@ export const players = pgTable(
     /** scrypt hash, see lib/auth/pin.ts. Never leaves the server. */
     pinHash: text("pin_hash").notNull(),
     role: roleEnum("role").notNull().default("player"),
+    gender: genderEnum("gender").notNull().default("unspecified"),
+    /**
+     * Either `preset:N` for one of the built-in tiles or a small data URL from
+     * an upload. Null means fall back to a colour derived from the username, so
+     * everyone has a distinct avatar without anyone having to choose one.
+     */
+    avatar: text("avatar"),
+    /**
+     * Record carried over from wherever they played before. Display only — it
+     * never touches the rating engine, which knows about matches played here
+     * and nothing else. Losses are derived as matches minus wins.
+     */
+    importedMatches: integer("imported_matches").notNull().default(0),
+    importedWins: integer("imported_wins").notNull().default(0),
+    /** Set the first time a record is imported; its presence closes the door. */
+    importedAt: timestamp("imported_at", { withTimezone: true }),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

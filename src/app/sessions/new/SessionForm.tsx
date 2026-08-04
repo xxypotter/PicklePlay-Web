@@ -51,7 +51,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
   const [courts, setCourts] = useState("1, 2");
   const [format, setFormat] = useState("regular");
   const [invited, setInvited] = useState<string[]>([]);
-  const [maxPlayers, setMaxPlayers] = useState(12);
+  const [maxPlayers, setMaxPlayers] = useState(9);
 
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
   const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;

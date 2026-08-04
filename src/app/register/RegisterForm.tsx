@@ -17,6 +17,7 @@ export default function RegisterForm({
 }) {
   const [state, action, pending] = useActionState(registerAction, initial);
   const [hasDupr, setHasDupr] = useState(true);
+  const [gender, setGender] = useState("male");
 
   return (
     <form action={action} className="flex flex-col gap-5">
@@ -102,6 +103,28 @@ export default function RegisterForm({
         4–6 digits. There&apos;s no email here, so if you forget it an admin resets it
         for you.
       </p>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="label">Which rankings list?</legend>
+        <input type="hidden" name="gender" value={gender} />
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { key: "male", label: "Men's" },
+            { key: "female", label: "Women's" },
+            { key: "unspecified", label: "Not listed" },
+          ].map((o) => (
+            <Choice
+              key={o.key}
+              checked={gender === o.key}
+              onSelect={() => setGender(o.key)}
+              label={o.label}
+            />
+          ))}
+        </div>
+        <p className="hint">
+          Games are always mixed — this only splits the rankings table.
+        </p>
+      </fieldset>
 
       <fieldset className="flex flex-col gap-3">
         <legend className="label">Do you have a DUPR rating?</legend>
