@@ -7,10 +7,11 @@ import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats, sessions, signups } from "@/lib/db/schema";
-import { getCurrentRound } from "@/lib/sessions/queries";
+import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import MatchCard from "./MatchCard";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import ShareLink from "./ShareLink";
+import Standings from "./Standings";
 
 export const metadata = { title: "Session · PicklePlay" };
 
@@ -22,7 +23,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const session = found[0];
   if (!session) notFound();
 
-  const [me, roster, round, headerList] = await Promise.all([
+  const [me, roster, allRounds, standings, headerList] = await Promise.all([
     getCurrentPlayer(),
     db
       .select({
@@ -40,7 +41,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       .leftJoin(playerStats, eq(playerStats.playerId, signups.playerId))
       .where(eq(signups.sessionId, id))
       .orderBy(asc(signups.createdAt)),
-    getCurrentRound(id, session.courtNames),
+    getAllRounds(id, session.courtNames),
+    getSessionStandings(id),
     headers(),
   ]);
 
@@ -56,18 +58,16 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const isAdmin = !!me && canManageSessions(me.role);
   const spotsLeft = Math.max(0, session.maxPlayers - confirmed.length);
 
-  const myMatch = me
-    ? round?.matches.find((m) =>
-        [...m.teamA, ...m.teamB].some((p) => p.id === me.id),
-      )
-    : undefined;
+  const isMine = (m: { teamA: { id: string }[]; teamB: { id: string }[] }) =>
+    !!me && [...m.teamA, ...m.teamB].some((p) => p.id === me.id);
 
-  const otherMatches = round?.matches.filter((m) => m.id !== myMatch?.id) ?? [];
+  // Every match this player has in the whole schedule, so they can see what's
+  // coming as well as what's on right now.
+  const myMatches = allRounds
+    .map((r) => ({ round: r.index, match: r.matches.find(isMine) }))
+    .filter((x): x is { round: number; match: NonNullable<typeof x.match> } => !!x.match);
 
-  const playingIds = new Set(round?.matches.flatMap((m) => [...m.teamA, ...m.teamB].map((p) => p.id)) ?? []);
-  const sittingOut = round
-    ? confirmed.filter((r) => r.attended && !playingIds.has(r.playerId))
-    : [];
+  const nextUnplayed = myMatches.find((x) => !x.match.completed) ?? myMatches[myMatches.length - 1];
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -78,63 +78,91 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </Link>
       </div>
 
-      {/* During play, your own court is the only thing you're looking for. */}
-      {myMatch ? (
+      {/* Your next court is the only thing anyone is looking for mid-session. */}
+      {nextUnplayed ? (
         <section className="mb-6">
           <h2 className="mb-2 text-sm font-semibold text-[var(--accent)]">
-            Your match · Round {round!.index}
+            {nextUnplayed.match.completed ? "Your last match" : "Your match"} · Round{" "}
+            {nextUnplayed.round}
           </h2>
-          <MatchCard match={myMatch} meId={me!.id} canEnterScore highlight />
+          <MatchCard match={nextUnplayed.match} meId={me!.id} canEnterScore highlight />
         </section>
       ) : null}
 
-      {round && !myMatch && sittingOut.some((s) => s.playerId === me?.id) ? (
-        <p className="card mb-6 text-center text-sm">
-          You&apos;re sitting out round {round.index}. You&apos;re up next.
-        </p>
-      ) : null}
-
-      {round && otherMatches.length > 0 ? (
+      {myMatches.length > 1 ? (
         <section className="mb-6">
           <h2 className="mb-2 text-sm font-medium text-[var(--muted)]">
-            {myMatch ? "Other courts" : `Round ${round.index}`}
+            All your matches ({myMatches.length})
           </h2>
-          <div className="flex flex-col gap-3">
-            {otherMatches.map((m) => (
-              <MatchCard
-                key={m.id}
-                match={m}
-                meId={me?.id}
-                canEnterScore={isAdmin && !myMatch}
-              />
-            ))}
-          </div>
-          {sittingOut.length > 0 ? (
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Sitting out: {sittingOut.map((s) => s.username).join(", ")}
-            </p>
-          ) : null}
+          <ul className="card flex flex-col gap-2 text-sm">
+            {myMatches.map(({ round, match }) => {
+              const onA = match.teamA.some((p) => p.id === me!.id);
+              const partner = (onA ? match.teamA : match.teamB).find((p) => p.id !== me!.id);
+              const opponents = onA ? match.teamB : match.teamA;
+              const mineScore = onA ? match.scoreA : match.scoreB;
+              const theirScore = onA ? match.scoreB : match.scoreA;
+              return (
+                <li key={match.id} className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 truncate">
+                    <span className="text-[var(--muted)]">R{round} · {match.courtLabel}: </span>
+                    with {partner?.username ?? "?"} v{" "}
+                    {opponents.map((o) => o.username).join(" & ")}
+                  </span>
+                  <span className="shrink-0 font-mono tabular-nums">
+                    {match.completed ? `${mineScore}–${theirScore}` : "—"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </section>
       ) : null}
 
-      <div className="mb-6 flex gap-3">
+      {allRounds.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="mb-2 text-sm font-medium text-[var(--muted)]">
+            Full schedule ({allRounds.length} round{allRounds.length === 1 ? "" : "s"})
+          </h2>
+          <div className="flex flex-col gap-3">
+            {allRounds.map((r) => (
+              <div key={r.id} className="card">
+                <h3 className="text-sm font-semibold text-[var(--muted)]">Round {r.index}</h3>
+                <ul className="mt-2 flex flex-col gap-1.5 text-sm">
+                  {r.matches.map((m) => (
+                    <li
+                      key={m.id}
+                      className={`flex items-baseline justify-between gap-2 ${
+                        isMine(m) ? "font-semibold" : ""
+                      }`}
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="text-[var(--muted)]">{m.courtLabel}: </span>
+                        {m.teamA.map((p) => p.username).join(" & ")} v{" "}
+                        {m.teamB.map((p) => p.username).join(" & ")}
+                      </span>
+                      <span className="shrink-0 font-mono tabular-nums">
+                        {m.completed ? `${m.scoreA}–${m.scoreB}` : "—"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <Standings rows={standings} meId={me?.id} />
+
+      {isAdmin ? (
         <Link
-          href="/leaderboard"
-          className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-center
-            text-sm font-semibold"
+          href={`/s/${id}/play`}
+          className="mt-6 block rounded-xl bg-[var(--accent)] px-4 py-3.5 text-center text-base
+            font-semibold text-[var(--accent-fg)]"
         >
-          Rankings
+          Run the session
         </Link>
-        {isAdmin ? (
-          <Link
-            href={`/s/${id}/play`}
-            className="flex-1 rounded-xl bg-[var(--accent)] px-4 py-3 text-center text-sm
-              font-semibold text-[var(--accent-fg)]"
-          >
-            Run the session
-          </Link>
-        ) : null}
-      </div>
+      ) : null}
 
       <section className="card">
         <p className="font-semibold">

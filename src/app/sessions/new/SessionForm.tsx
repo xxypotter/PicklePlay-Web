@@ -51,12 +51,20 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
   const [courts, setCourts] = useState("1, 2");
   const [format, setFormat] = useState("regular");
   const [invited, setInvited] = useState<string[]>([]);
-
-  const toggle = (id: string) =>
-    setInvited((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const [maxPlayers, setMaxPlayers] = useState(12);
 
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
   const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
+
+  // The roster can't exceed the session cap — silently queueing extras onto a
+  // waitlist the organizer never asked for would be a surprise.
+  const cap = Math.min(maxPlayers, seatCap);
+  const atCap = invited.length >= cap;
+
+  const toggle = (id: string) =>
+    setInvited((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= cap ? prev : [...prev, id],
+    );
 
   return (
     <form
@@ -143,7 +151,8 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
           inputMode="numeric"
           min={4}
           max={seatCap}
-          defaultValue={12}
+          value={maxPlayers}
+          onChange={(e) => setMaxPlayers(Math.max(1, Number(e.target.value) || 1))}
           required
         />
         <p className="hint">
@@ -191,17 +200,19 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
       {roster.length > 0 ? (
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="label mb-0">Who&apos;s playing</span>
+            <span className="label mb-0">
+              Who&apos;s playing ({invited.length}/{cap})
+            </span>
             <button
               type="button"
               onClick={() =>
                 setInvited((prev) =>
-                  prev.length === roster.length ? [] : roster.map((r) => r.id),
+                  prev.length > 0 ? [] : roster.slice(0, cap).map((r) => r.id),
                 )
               }
               className="text-xs font-semibold text-[var(--accent)] underline"
             >
-              {invited.length === roster.length ? "Clear all" : "Select all"}
+              {invited.length > 0 ? "Clear all" : "Select all"}
             </button>
           </div>
 
@@ -214,8 +225,9 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
                   type="button"
                   onClick={() => toggle(p.id)}
                   aria-pressed={on}
+                  disabled={!on && atCap}
                   className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5
-                    text-left text-sm transition ${
+                    text-left text-sm transition disabled:opacity-40 ${
                       on
                         ? "border-[var(--accent)] bg-[var(--accent)]/10 font-medium"
                         : "border-[var(--border)] text-[var(--muted)]"
@@ -237,7 +249,9 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
           <p className="hint">
             {invited.length === 0
               ? "Optional — leave empty and people RSVP themselves."
-              : `${invited.length} added and marked in. They can opt out themselves from the session page.`}
+              : atCap
+                ? `Full at ${cap}. Raise max players to add more.`
+                : `${invited.length} added and marked in. They can opt out themselves from the session page.`}
           </p>
         </div>
       ) : null}

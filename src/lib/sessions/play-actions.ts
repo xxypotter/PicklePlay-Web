@@ -2,11 +2,12 @@
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
 import { canEditAnyMatch } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { matches, rounds, sessions } from "@/lib/db/schema";
+import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
 import { createNextRound } from "@/lib/matchmaking/service";
 import { recomputeAll } from "@/lib/rating/service";
 
@@ -18,6 +19,78 @@ export async function generateRoundAction(sessionId: string): Promise<void> {
 
   revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);
+}
+
+/** Hard cap; beyond this a "session" is really several nights. */
+const MAX_ROUNDS = 20;
+
+/**
+ * Build the whole night's schedule in one go.
+ *
+ * Generating round by round meant the organizer had to be on their phone
+ * between every game, and nobody could see who they were playing later. Rounds
+ * are still produced sequentially — each one reads the history the previous
+ * ones created, so partner and sit-out fairness still hold across the set.
+ */
+export async function generateAllRoundsAction(
+  sessionId: string,
+  roundCount: number,
+): Promise<void> {
+  await requireAdmin();
+
+  const wanted = Math.max(1, Math.min(MAX_ROUNDS, Math.floor(roundCount)));
+  for (let i = 0; i < wanted; i++) {
+    await createNextRound(sessionId);
+  }
+
+  await getDb().update(sessions).set({ status: "live" }).where(eq(sessions.id, sessionId));
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+}
+
+/**
+ * Delete a session and everything under it.
+ *
+ * An admin may delete sessions they created; the super admin may delete any.
+ * Scoping it this way means one organizer can't wipe another's night, while the
+ * owner still has a way to clean up.
+ *
+ * Matches cascade, so any ratings they moved have to be rebuilt — the recompute
+ * puts every player back where they'd be if the session had never happened.
+ */
+export async function deleteSessionAction(sessionId: string): Promise<void> {
+  const me = await requireAdmin();
+  const db = getDb();
+
+  const found = await db
+    .select({ createdBy: sessions.createdBy, rated: sessions.rated })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  const session = found[0];
+  if (!session) return;
+
+  if (me.role !== "superadmin" && session.createdBy !== me.id) {
+    throw new Error("You can only delete sessions you created.");
+  }
+
+  await db.delete(sessions).where(eq(sessions.id, sessionId));
+
+  await db.insert(auditLog).values({
+    actorId: me.id,
+    action: "session.delete",
+    targetType: "session",
+    targetId: sessionId,
+  });
+
+  if (session.rated) await recomputeAll();
+
+  revalidatePath("/sessions");
+  revalidatePath("/leaderboard");
+  revalidatePath("/");
+  redirect("/sessions");
 }
 
 /** Throw away a round that hasn't been played — regenerating is one tap. */

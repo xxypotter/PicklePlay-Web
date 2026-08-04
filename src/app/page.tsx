@@ -7,7 +7,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { playerStats, sessions, signups } from "@/lib/db/schema";
-import { getCurrentRound } from "@/lib/sessions/queries";
+import { getAllRounds } from "@/lib/sessions/queries";
 
 /**
  * Sessions stay listed until a few hours after they start, so the page is still
@@ -92,10 +92,18 @@ export default async function HomePage() {
   // Mid-session, the only thing anyone wants is which court they're on. Surface
   // it on the home screen rather than making them navigate to find it.
   const live = upcoming.find((s) => s.status === "live" && stateBy.has(s.id));
-  const liveRound = live ? await getCurrentRound(live.id, live.courtNames) : null;
-  const liveMatch = liveRound?.matches.find((m) =>
-    [...m.teamA, ...m.teamB].some((p) => p.id === me.id),
-  );
+  const liveRounds = live ? await getAllRounds(live.id, live.courtNames) : [];
+
+  // Their next unplayed match, or the most recent one if the night is done.
+  const mineInRound = liveRounds
+    .map((r) => ({
+      index: r.index,
+      match: r.matches.find((m) => [...m.teamA, ...m.teamB].some((p) => p.id === me.id)),
+    }))
+    .filter((x): x is { index: number; match: NonNullable<typeof x.match> } => !!x.match);
+
+  const upNext = mineInRound.find((x) => !x.match.completed) ?? mineInRound[mineInRound.length - 1];
+  const liveMatch = upNext?.match;
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -118,7 +126,7 @@ export default async function HomePage() {
             active:opacity-70"
         >
           <p className="text-sm font-semibold text-[var(--accent)]">
-            You&apos;re on now · Round {liveRound!.index}
+            {liveMatch.completed ? "Tonight · last match" : "You're up"} · Round {upNext!.index}
           </p>
           <p className="mt-1 text-2xl font-bold">{liveMatch.courtLabel}</p>
           <p className="mt-1 text-sm text-[var(--muted)]">
