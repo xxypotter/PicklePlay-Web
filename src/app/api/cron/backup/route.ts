@@ -129,8 +129,33 @@ export async function GET(request: Request) {
 
   if (!upload.ok) {
     const detail = await upload.text();
+
+    /*
+     * GitHub answers 404 rather than 403 when a token can't see a repository,
+     * so "Not Found" can't be told apart from "no access" by the status alone.
+     * Echo the repo and path we tried — a typo in BACKUP_GITHUB_REPO looks
+     * identical to a permissions problem until you can see the string.
+     * The token itself is never included.
+     */
+    const hint =
+      upload.status === 404
+        ? `Could not reach ${repo}. Either the name is wrong, or the token has no ` +
+          `access to it — check the token lists this repository and has ` +
+          `Contents: Read and write.`
+        : upload.status === 403
+          ? `${repo} refused the write. The token likely has Contents: Read-only.`
+          : undefined;
+
     return NextResponse.json(
-      { ok: false, stored: false, status: upload.status, detail: detail.slice(0, 400) },
+      {
+        ok: false,
+        stored: false,
+        status: upload.status,
+        repo,
+        path,
+        hint,
+        detail: detail.slice(0, 300),
+      },
       { status: 502 },
     );
   }

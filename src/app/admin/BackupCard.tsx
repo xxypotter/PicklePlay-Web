@@ -6,7 +6,9 @@ interface BackupResult {
   ok?: boolean;
   stored?: boolean;
   path?: string;
+  repo?: string;
   warning?: string;
+  hint?: string;
   detail?: string;
   status?: number;
   counts?: Record<string, number>;
@@ -60,13 +62,18 @@ export default function BackupCard({ configured }: { configured: boolean }) {
       {result ? (
         <div className="mt-3 text-sm">
           {result.stored ? (
-            <p className="font-medium text-[var(--accent)]">
-              Saved to {result.path}
+            <p className="font-medium text-[var(--success)]">
+              Saved to {result.repo} · {result.path}
             </p>
           ) : (
-            <p className="font-medium text-[var(--danger)]">
-              {result.warning ?? result.error ?? result.detail ?? "Nothing was uploaded."}
-            </p>
+            <>
+              <p className="font-medium text-[var(--danger)]">
+                {result.hint ?? result.warning ?? result.error ?? "Nothing was uploaded."}
+              </p>
+              {result.detail ? (
+                <p className="hint break-all">GitHub said: {result.detail}</p>
+              ) : null}
+            </>
           )}
           {result.counts ? (
             <p className="hint">
