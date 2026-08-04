@@ -164,16 +164,18 @@ export function GenderCard({ gender }: { gender: string }) {
   const [value, setValue] = useState(gender);
 
   const options = [
-    { key: "male", label: "Men's" },
-    { key: "female", label: "Women's" },
+    { key: "male", label: "Men" },
+    { key: "female", label: "Women" },
     { key: "unspecified", label: "Not listed" },
   ];
 
   return (
     <form action={action} className="card mt-3">
-      <h2 className="text-sm text-[var(--muted)]">Rankings list</h2>
+      <h2 className="text-sm text-[var(--muted)]">Gender</h2>
       <p className="hint">
-        Play is always mixed. This only decides which ranking table you appear in.
+        Play is mostly coed mix. This only decides which ranking table you appear in.
+        Choose <span className="font-medium">Not listed</span> to stay out of the
+        rankings entirely.
       </p>
 
       <input type="hidden" name="gender" value={value} />

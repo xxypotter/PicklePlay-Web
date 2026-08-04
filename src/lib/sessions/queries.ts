@@ -8,12 +8,18 @@ export function courtLabel(courtNames: string[], courtNo: number | null): string
   return `Court ${courtNames[courtNo - 1] ?? courtNo}`;
 }
 
+export interface RoundPlayer {
+  id: string;
+  username: string;
+  avatar: string | null;
+}
+
 export interface RoundMatch {
   id: string;
   courtNo: number | null;
   courtLabel: string;
-  teamA: { id: string; username: string }[];
-  teamB: { id: string; username: string }[];
+  teamA: RoundPlayer[];
+  teamB: RoundPlayer[];
   scoreA: number | null;
   scoreB: number | null;
   completed: boolean;
@@ -68,12 +74,16 @@ export async function getAllRounds(
 
   const nameRows = ids.size
     ? await db
-        .select({ id: players.id, username: players.username })
+        .select({ id: players.id, username: players.username, avatar: players.avatar })
         .from(players)
         .where(inArray(players.id, [...ids]))
     : [];
-  const nameOf = new Map(nameRows.map((n) => [n.id, n.username]));
-  const person = (id: string) => ({ id, username: nameOf.get(id) ?? "?" });
+  const byId = new Map(nameRows.map((n) => [n.id, n]));
+  const person = (id: string): RoundPlayer => ({
+    id,
+    username: byId.get(id)?.username ?? "?",
+    avatar: byId.get(id)?.avatar ?? null,
+  });
 
   return roundRows.map((round) => ({
     id: round.id,
@@ -96,6 +106,7 @@ export async function getAllRounds(
 export interface StandingRow {
   playerId: string;
   username: string;
+  avatar: string | null;
   wins: number;
   losses: number;
   pointsFor: number;
@@ -145,7 +156,7 @@ export async function getSessionStandings(sessionId: string): Promise<StandingRo
     deltaBy.set(d.playerId, (deltaBy.get(d.playerId) ?? 0) + d.delta);
   }
 
-  const table = new Map<string, Omit<StandingRow, "username">>();
+  const table = new Map<string, Omit<StandingRow, "username" | "avatar">>();
   const bump = (id: string) => {
     let row = table.get(id);
     if (!row) {
@@ -173,15 +184,16 @@ export async function getSessionStandings(sessionId: string): Promise<StandingRo
   }
 
   const nameRows = await db
-    .select({ id: players.id, username: players.username })
+    .select({ id: players.id, username: players.username, avatar: players.avatar })
     .from(players)
     .where(inArray(players.id, [...table.keys()]));
-  const nameOf = new Map(nameRows.map((n) => [n.id, n.username]));
+  const byId = new Map(nameRows.map((n) => [n.id, n]));
 
   return [...table.values()]
     .map((r) => ({
       ...r,
-      username: nameOf.get(r.playerId) ?? "?",
+      username: byId.get(r.playerId)?.username ?? "?",
+      avatar: byId.get(r.playerId)?.avatar ?? null,
       ratingDelta: deltaBy.get(r.playerId) ?? null,
     }))
     .sort(

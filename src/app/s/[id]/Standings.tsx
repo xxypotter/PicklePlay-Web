@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Avatar from "@/components/Avatar";
 import type { StandingRow } from "@/lib/sessions/queries";
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -43,6 +44,8 @@ export default function Standings({ rows, meId }: { rows: StandingRow[]; meId?: 
               <span className="w-7 shrink-0 text-center text-sm tabular-nums">
                 {MEDALS[i] ?? i + 1}
               </span>
+
+              <Avatar username={r.username} avatar={r.avatar} size={28} />
 
               <Link href={`/p/${r.username}`} className="min-w-0 flex-1 truncate font-medium">
                 {r.username}

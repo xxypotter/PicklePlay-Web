@@ -1,4 +1,5 @@
-import type { CurrentRound } from "@/lib/sessions/queries";
+import Avatar from "@/components/Avatar";
+import type { CurrentRound, RoundPlayer } from "@/lib/sessions/queries";
 
 /**
  * The matchups screen: an amber lozenge separating each round, then one card
@@ -75,24 +76,37 @@ export default function Schedule({
   );
 }
 
+/**
+ * Avatars sit next to the names so you can spot your court at a glance rather
+ * than reading four usernames. The right-hand team mirrors so both avatars hug
+ * the centre "vs" and the names stay on the outside.
+ */
 function Team({
   players,
   meId,
   align = "left",
 }: {
-  players: { id: string; username: string }[];
+  players: RoundPlayer[];
   meId?: string;
   align?: "left" | "right";
 }) {
+  const mirrored = align === "right";
   return (
-    <div className={`min-w-0 text-sm ${align === "right" ? "text-right" : ""}`}>
+    <div className="flex min-w-0 flex-col gap-1">
       {players.map((p) => (
-        <p
+        <div
           key={p.id}
-          className={`truncate ${p.id === meId ? "font-bold text-[var(--accent)]" : ""}`}
+          className={`flex min-w-0 items-center gap-1.5 ${mirrored ? "flex-row-reverse" : ""}`}
         >
-          {p.id === meId ? "You" : p.username}
-        </p>
+          <Avatar username={p.username} avatar={p.avatar} size={20} />
+          <span
+            className={`truncate text-sm ${
+              p.id === meId ? "font-bold text-[var(--accent)]" : ""
+            }`}
+          >
+            {p.id === meId ? "You" : p.username}
+          </span>
+        </div>
       ))}
     </div>
   );

@@ -44,7 +44,14 @@ export default async function LeaderboardPage({
       .limit(300),
   ]);
 
-  const rows = active === "all" ? all : all.filter((r) => r.gender === active);
+  /*
+   * "Not listed" means exactly that — including on the All tab. Anyone who
+   * picked it stays out of every ranking table, which is the promise the
+   * signup and profile copy makes.
+   */
+  const listed = all.filter((r) => r.gender !== "unspecified");
+  const rows = active === "all" ? listed : listed.filter((r) => r.gender === active);
+  const meOptedOut = !!me && all.some((r) => r.id === me.id && r.gender === "unspecified");
 
   // Established players rank first. A provisional 4.8 hasn't earned a spot
   // above someone who has actually played here, so they're listed separately.
@@ -66,6 +73,14 @@ export default async function LeaderboardPage({
       />
 
       <main className="screen pt-4">
+        {/* Explain the absence rather than letting them wonder where they went. */}
+        {meOptedOut ? (
+          <p className="card mb-3 text-sm text-[var(--muted)]">
+            You&apos;ve chosen <span className="font-medium">Not listed</span>, so you
+            don&apos;t appear in these tables. Change it under Me.
+          </p>
+        ) : null}
+
         {rows.length === 0 ? (
           <div className="card py-12 text-center">
             <p className="text-[var(--muted)]">Nobody in this list yet.</p>

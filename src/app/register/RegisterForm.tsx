@@ -105,12 +105,12 @@ export default function RegisterForm({
       </p>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="label">Which rankings list?</legend>
+        <legend className="label">Gender</legend>
         <input type="hidden" name="gender" value={gender} />
         <div className="grid grid-cols-3 gap-2">
           {[
-            { key: "male", label: "Men's" },
-            { key: "female", label: "Women's" },
+            { key: "male", label: "Men" },
+            { key: "female", label: "Women" },
             { key: "unspecified", label: "Not listed" },
           ].map((o) => (
             <Choice
@@ -122,7 +122,9 @@ export default function RegisterForm({
           ))}
         </div>
         <p className="hint">
-          Games are always mixed — this only splits the rankings table.
+          Play is mostly coed mix. This only decides which ranking table you appear
+          in. Choose <span className="font-medium">Not listed</span> to stay out of
+          the rankings entirely.
         </p>
       </fieldset>
 
