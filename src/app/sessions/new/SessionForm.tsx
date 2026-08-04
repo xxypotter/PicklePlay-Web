@@ -162,26 +162,36 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
         </p>
       </div>
 
+      {/* Format cards rather than a dropdown: the descriptions are the whole
+          point, and a <select> hides them behind a tap. */}
       <div>
-        <label className="label" htmlFor="format">
-          Format
-        </label>
-        <select
-          id="format"
-          name="format"
-          className="field"
-          value={format}
-          onChange={(e) => setFormat(e.target.value)}
-        >
-          {FORMATS.map((f) => (
-            <option key={f.key} value={f.key}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <p className="hint">
-          {FORMATS.find((f) => f.key === format)?.hint} You can override any matchup.
-        </p>
+        <span className="label">Format</span>
+        <input type="hidden" name="format" value={format} />
+        <div className="flex flex-col gap-2">
+          {FORMATS.map((f) => {
+            const on = f.key === format;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFormat(f.key)}
+                aria-pressed={on}
+                className={`rounded-xl border p-3 text-left transition ${
+                  on
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)]"
+                    : "border-[var(--border)] bg-[var(--surface)]"
+                }`}
+              >
+                <span
+                  className={`block text-sm font-semibold ${on ? "text-[var(--accent)]" : ""}`}
+                >
+                  {f.label}
+                </span>
+                <span className="mt-0.5 block text-xs text-[var(--muted)]">{f.hint}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div>

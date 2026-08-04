@@ -1,66 +1,83 @@
 import Link from "next/link";
 import type { StandingRow } from "@/lib/sessions/queries";
 
+const MEDALS = ["🥇", "🥈", "🥉"];
+
 /**
- * Tonight's table, not the all-time one.
- *
- * Mid-session nobody cares about their career rating — they care who's winning
- * right now. The global leaderboard stays one tap away for afterwards.
+ * The session table from the rankings screen: rank, player, W–L with the wins
+ * in orange, point difference, and rating movement. Top three get a medal
+ * instead of a number, and your own row is tinted.
  */
 export default function Standings({ rows, meId }: { rows: StandingRow[]; meId?: string }) {
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return (
+      <div className="card py-12 text-center">
+        <p className="text-[var(--muted)]">No results yet.</p>
+        <p className="hint">Standings appear as scores come in.</p>
+      </div>
+    );
+  }
+
+  const showRating = rows.some((r) => r.ratingDelta !== null);
 
   return (
-    <section className="card mt-6">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-[var(--muted)]">Session standings</h2>
-        <Link href="/leaderboard" className="text-xs font-semibold text-[var(--accent)] underline">
-          All-time
-        </Link>
+    <section className="card-tight overflow-hidden">
+      <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 text-xs text-[var(--muted)]">
+        <span className="w-7 shrink-0">Rank</span>
+        <span className="flex-1">Player</span>
+        <span className="w-12 text-center">W–L</span>
+        <span className="w-10 text-right">Diff</span>
+        {showRating ? <span className="w-14 text-right">Rating</span> : null}
       </div>
 
-      <ul className="mt-2 divide-y divide-[var(--border)]">
+      <ul>
         {rows.map((r, i) => {
           const diff = r.pointsFor - r.pointsAgainst;
           return (
             <li
               key={r.playerId}
-              className={`flex items-center gap-3 py-2.5 ${
-                r.playerId === meId ? "-mx-2 rounded-lg bg-[var(--accent)]/5 px-2" : ""
+              className={`flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 last:border-0 ${
+                r.playerId === meId ? "bg-[var(--accent-soft)]" : ""
               }`}
             >
-              <span className="w-4 shrink-0 text-sm text-[var(--muted)] tabular-nums">
-                {i + 1}
+              <span className="w-7 shrink-0 text-center text-sm tabular-nums">
+                {MEDALS[i] ?? i + 1}
               </span>
+
               <Link href={`/p/${r.username}`} className="min-w-0 flex-1 truncate font-medium">
                 {r.username}
+                {r.playerId === meId ? (
+                  <span className="ml-1.5 rounded bg-[var(--accent)] px-1 py-0.5 text-[10px] font-semibold text-white">
+                    me
+                  </span>
+                ) : null}
               </Link>
-              <span className="shrink-0 text-sm tabular-nums">
-                {r.wins}–{r.losses}
+
+              <span className="w-12 shrink-0 text-center text-sm tabular-nums">
+                <span className="font-semibold text-[var(--accent)]">{r.wins}</span>
+                <span className="text-[var(--muted)]">–{r.losses}</span>
               </span>
-              <span className="w-10 shrink-0 text-right text-sm text-[var(--muted)] tabular-nums">
+
+              <span className="w-10 shrink-0 text-right text-sm tabular-nums text-[var(--muted)]">
                 {diff >= 0 ? "+" : ""}
                 {diff}
               </span>
-              {r.ratingDelta !== null ? (
+
+              {showRating ? (
                 <span
                   className={`w-14 shrink-0 text-right font-mono text-xs tabular-nums ${
-                    r.ratingDelta >= 0 ? "text-[var(--accent)]" : "text-[var(--danger)]"
+                    (r.ratingDelta ?? 0) >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
                   }`}
                 >
-                  {r.ratingDelta >= 0 ? "+" : ""}
-                  {r.ratingDelta.toFixed(3)}
+                  {r.ratingDelta === null
+                    ? "—"
+                    : `${r.ratingDelta >= 0 ? "+" : ""}${r.ratingDelta.toFixed(3)}`}
                 </span>
               ) : null}
             </li>
           );
         })}
       </ul>
-      {/* An unrated session has no rating column, so don't promise one. */}
-      <p className="hint mt-3">
-        Won–lost and point difference
-        {rows.some((r) => r.ratingDelta !== null) ? ", plus rating change from this session" : ""}.
-      </p>
     </section>
   );
 }

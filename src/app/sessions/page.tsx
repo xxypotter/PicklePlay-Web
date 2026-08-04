@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
-import { isAtLeast } from "@/lib/auth/policy";
+import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { matches, sessions, signups } from "@/lib/db/schema";
@@ -52,30 +52,17 @@ export default async function SessionsPage() {
   const current = all.filter((s) => s.status !== "closed");
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-8">
-      <div className="mb-5 flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Sessions</h1>
-        <Link href="/" className="text-sm font-medium text-[var(--accent)] underline">
-          Home
-        </Link>
-      </div>
-
-      {isAtLeast(me.role, "admin") ? (
-        <Link href="/sessions/new" className="btn-primary mb-6 block text-center">
-          New session
-        </Link>
-      ) : null}
-
-      <h2 className="mb-2 text-sm font-medium text-[var(--muted)]">
-        Upcoming &amp; in progress
-      </h2>
+    <>
+      <TopBar title="Sessions" back="/" />
+      <main className="screen pt-4">
+      <h2 className="mb-2 px-1 text-sm text-[var(--muted)]">Upcoming &amp; in progress</h2>
       {current.length === 0 ? (
         <p className="card text-sm text-[var(--muted)]">Nothing scheduled.</p>
       ) : (
         <List rows={current} matchesBy={matchesBy} mineBy={mineBy} />
       )}
 
-      <h2 className="mt-8 mb-2 text-sm font-medium text-[var(--muted)]">Past sessions</h2>
+      <h2 className="mt-8 mb-2 px-1 text-sm text-[var(--muted)]">Past sessions</h2>
       {past.length === 0 ? (
         <p className="card text-sm text-[var(--muted)]">
           Nothing finished yet. Closed sessions stay here with their full results.
@@ -83,7 +70,8 @@ export default async function SessionsPage() {
       ) : (
         <List rows={past} matchesBy={matchesBy} mineBy={mineBy} />
       )}
-    </main>
+      </main>
+    </>
   );
 }
 

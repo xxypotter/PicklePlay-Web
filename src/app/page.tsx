@@ -1,45 +1,43 @@
-import { and, asc, eq, gte, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import Link from "next/link";
-import LocalDateTime from "@/components/LocalDateTime";
-import { logoutAction } from "@/lib/auth/actions";
-import { isAtLeast } from "@/lib/auth/policy";
+import SessionCard, { type SessionCardData } from "@/components/SessionCard";
+import Tabs from "@/components/Tabs";
+import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
-import { ROLE_LABELS } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { playerStats, sessions, signups } from "@/lib/db/schema";
+import { players, sessions, signups } from "@/lib/db/schema";
 import { getAllRounds } from "@/lib/sessions/queries";
 
 /**
- * Sessions stay listed until a few hours after they start, so the page is still
- * useful mid-night rather than going blank the moment play begins.
- *
- * Lives outside the component because reading the clock is impure, and the
- * React Compiler is right to refuse it inside a render.
+ * Matches are sessions that count toward ratings; Events are the casual ones.
+ * That split already exists in the data as the `rated` flag, so the two tabs
+ * are a view of something real rather than a new concept to explain.
  */
-function listingCutoff(): Date {
-  return new Date(Date.now() - 6 * 60 * 60 * 1000);
-}
+type TabKey = "matches" | "events";
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const me = await getCurrentPlayer();
 
   if (!me) {
     return (
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-10">
-        <h1 className="text-3xl font-bold">PicklePlay</h1>
-        <p className="mt-3 text-[var(--muted)]">
-          Organize your sessions, auto-build the matchups, and track everyone&apos;s
-          rating. No email, no App Store.
-        </p>
-        <div className="mt-8 flex flex-col gap-3">
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-10">
+        <div className="mb-10 text-center">
+          <p className="text-5xl">🏓</p>
+          <h1 className="mt-4 text-3xl font-bold">PicklePlay</h1>
+          <p className="mt-2 text-[var(--muted)]">
+            Organize your sessions, auto-build the matchups, and track everyone&apos;s
+            rating.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3">
           <Link href="/register" className="btn-primary text-center">
             Create an account
           </Link>
-          <Link
-            href="/login"
-            className="w-full rounded-xl border border-[var(--border)] px-4 py-3.5 text-center
-              text-base font-semibold"
-          >
+          <Link href="/login" className="btn-ghost text-center">
             Log in
           </Link>
         </div>
@@ -47,30 +45,32 @@ export default async function HomePage() {
     );
   }
 
+  const { tab } = await searchParams;
+  const active: TabKey = tab === "events" ? "events" : "matches";
+  const wantRated = active === "matches";
+
   const db = getDb();
 
-  const cutoff = listingCutoff();
+  const rows = await db
+    .select({
+      id: sessions.id,
+      title: sessions.title,
+      location: sessions.location,
+      startsAt: sessions.startsAt,
+      status: sessions.status,
+      rated: sessions.rated,
+      courtNames: sessions.courtNames,
+      maxPlayers: sessions.maxPlayers,
+      format: sessions.format,
+      organizer: players.username,
+    })
+    .from(sessions)
+    .leftJoin(players, eq(players.id, sessions.createdBy))
+    .where(eq(sessions.rated, wantRated))
+    .orderBy(desc(sessions.startsAt))
+    .limit(30);
 
-  const [statsRow, upcoming] = await Promise.all([
-    db.select().from(playerStats).where(eq(playerStats.playerId, me.id)).limit(1),
-    db
-      .select({
-        id: sessions.id,
-        title: sessions.title,
-        location: sessions.location,
-        startsAt: sessions.startsAt,
-        maxPlayers: sessions.maxPlayers,
-        status: sessions.status,
-        courtNames: sessions.courtNames,
-      })
-      .from(sessions)
-      .where(and(gte(sessions.startsAt, cutoff), ne(sessions.status, "closed")))
-      .orderBy(asc(sessions.startsAt))
-      .limit(10),
-  ]);
-
-  const stats = statsRow[0];
-  const ids = upcoming.map((s) => s.id);
+  const ids = rows.map((r) => r.id);
 
   const [counts, mine] = ids.length
     ? await Promise.all([
@@ -89,189 +89,93 @@ export default async function HomePage() {
   const countBy = new Map(counts.map((c) => [c.sessionId, c.n]));
   const stateBy = new Map(mine.map((m) => [m.sessionId, m.state]));
 
-  // Mid-session, the only thing anyone wants is which court they're on. Surface
-  // it on the home screen rather than making them navigate to find it.
-  const live = upcoming.find((s) => s.status === "live" && stateBy.has(s.id));
-  const liveRounds = live ? await getAllRounds(live.id, live.courtNames) : [];
+  const cards: SessionCardData[] = rows.map((r) => ({
+    ...r,
+    signedUp: countBy.get(r.id) ?? 0,
+    myState: stateBy.get(r.id),
+  }));
 
-  // Their next unplayed match, or the most recent one if the night is done.
-  const mineInRound = liveRounds
+  const liveOrOpen = cards.filter((c) => c.status !== "closed");
+  const finished = cards.filter((c) => c.status === "closed");
+
+  // Mid-session the only thing anyone wants is which court they're on.
+  const playingNow = liveOrOpen.find((c) => c.status === "live" && c.myState === "in");
+  const liveRounds = playingNow ? await getAllRounds(playingNow.id, playingNow.courtNames) : [];
+  const mineInRounds = liveRounds
     .map((r) => ({
       index: r.index,
       match: r.matches.find((m) => [...m.teamA, ...m.teamB].some((p) => p.id === me.id)),
     }))
     .filter((x): x is { index: number; match: NonNullable<typeof x.match> } => !!x.match);
-
-  const upNext = mineInRound.find((x) => !x.match.completed) ?? mineInRound[mineInRound.length - 1];
-  const liveMatch = upNext?.match;
+  const upNext = mineInRounds.find((x) => !x.match.completed) ?? mineInRounds.at(-1);
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-8">
-      <header className="mb-6 flex items-baseline justify-between">
-        <div>
-          <p className="text-sm text-[var(--muted)]">Signed in as</p>
-          <h1 className="text-2xl font-bold">{me.displayName ?? me.username}</h1>
-        </div>
-        {me.role !== "player" ? (
-          <span className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-semibold uppercase text-[var(--accent)]">
-            {ROLE_LABELS[me.role]}
-          </span>
-        ) : null}
-      </header>
+    <>
+      <TopBar />
+      <Tabs
+        active={active}
+        items={[
+          { key: "matches", label: "Matches", href: "/?tab=matches" },
+          { key: "events", label: "Events", href: "/?tab=events" },
+        ]}
+      />
 
-      {liveMatch && live ? (
-        <Link
-          href={`/s/${live.id}`}
-          className="mb-6 block rounded-2xl border-2 border-[var(--accent)] bg-[var(--accent)]/5 p-5
-            active:opacity-70"
-        >
-          <p className="text-sm font-semibold text-[var(--accent)]">
-            {liveMatch.completed ? "Tonight · last match" : "You're up"} · Round {upNext!.index}
-          </p>
-          <p className="mt-1 text-2xl font-bold">{liveMatch.courtLabel}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {[...liveMatch.teamA, ...liveMatch.teamB]
-              .map((p) => (p.id === me.id ? "you" : p.username))
-              .join(", ")}
-          </p>
-          <p className="mt-3 text-sm font-semibold text-[var(--accent)]">
-            {liveMatch.completed ? "Score recorded — tap to change" : "Tap to enter the score"}
-          </p>
-        </Link>
-      ) : null}
-
-      <section className="card">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-medium text-[var(--muted)]">Your PicklePlay Rating</p>
+      <main className="screen pt-4">
+        {upNext && playingNow ? (
           <Link
-            href={`/p/${me.username}`}
-            className="text-xs font-semibold text-[var(--accent)] underline"
+            href={`/s/${playingNow.id}`}
+            className="mb-4 block rounded-2xl bg-[var(--accent)] p-5 text-white active:opacity-80"
           >
-            Your profile
-          </Link>
-        </div>
-        <p className="mt-1 font-mono text-4xl font-bold tabular-nums">
-          {stats ? stats.rating.toFixed(3) : "—"}
-        </p>
-
-        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-          {!stats ? (
-            <Badge>Not rated yet</Badge>
-          ) : stats.provisional ? (
-            <Badge>Provisional</Badge>
-          ) : (
-            <Badge>{Math.round(stats.reliability * 100)}% reliable</Badge>
-          )}
-          {stats?.selfDeclared ? <Badge>Self-declared</Badge> : null}
-        </div>
-
-        <dl className="mt-5 grid grid-cols-3 gap-3 text-center">
-          <Stat label="Matches" value={stats?.localMatches ?? 0} />
-          <Stat label="Won" value={stats?.wins ?? 0} />
-          <Stat label="Lost" value={stats?.losses ?? 0} />
-        </dl>
-
-        {stats && stats.localMatches === 0 ? (
-          <p className="hint mt-4">
-            That&apos;s your starting number. It moves fastest over your first five games
-            here, then settles.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="mt-6">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-lg font-semibold">Upcoming</h2>
-          <Link href="/sessions" className="text-sm font-semibold text-[var(--accent)] underline">
-            All sessions
-          </Link>
-        </div>
-
-        {isAtLeast(me.role, "admin") ? (
-          <Link href="/sessions/new" className="btn-primary mb-3 block text-center">
-            + New session
+            <p className="text-sm font-semibold opacity-90">
+              You&apos;re up · Round {upNext.index}
+            </p>
+            <p className="mt-1 text-2xl font-bold">{upNext.match.courtLabel}</p>
+            <p className="mt-1 text-sm opacity-90">
+              {[...upNext.match.teamA, ...upNext.match.teamB]
+                .map((p) => (p.id === me.id ? "you" : p.username))
+                .join(", ")}
+            </p>
+            <p className="mt-3 text-sm font-semibold">
+              {upNext.match.completed ? "Score recorded — tap to change" : "Tap to enter the score"}
+            </p>
           </Link>
         ) : null}
 
-        {upcoming.length === 0 ? (
-          <p className="card text-sm text-[var(--muted)]">
-            Nothing scheduled.
-            {isAtLeast(me.role, "admin") ? " Create one to get the group going." : ""}
-          </p>
+        <div className="mb-2 flex items-baseline justify-between px-1">
+          <h2 className="text-sm text-[var(--muted)]">
+            {active === "matches" ? "Rated sessions" : "Casual sessions"}
+          </h2>
+          <Link href="/leaderboard" className="text-sm text-[var(--muted)]">
+            Rankings ›
+          </Link>
+        </div>
+
+        {cards.length === 0 ? (
+          <div className="card py-14 text-center">
+            <p className="text-[var(--muted)]">
+              No {active === "matches" ? "matches" : "events"} yet.
+            </p>
+            <p className="hint">Tap + below to set one up.</p>
+          </div>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {upcoming.map((s) => {
-              const n = countBy.get(s.id) ?? 0;
-              const state = stateBy.get(s.id);
-              return (
-                <li key={s.id}>
-                  <Link href={`/s/${s.id}`} className="card block active:opacity-70">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="truncate font-semibold">{s.title}</span>
-                      {state ? (
-                        <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
-                          {state === "in" ? "You're in" : "Waitlist"}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      <LocalDateTime iso={s.startsAt.toISOString()} />
-                      {s.location ? ` · ${s.location}` : ""}
-                    </p>
-                    <p className="mt-1 text-sm text-[var(--muted)]">
-                      {n}/{s.maxPlayers} in
-                      {s.status === "live" ? " · in progress" : ""}
-                    </p>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="flex flex-col gap-3">
+            {liveOrOpen.map((s) => (
+              <SessionCard key={s.id} session={s} />
+            ))}
+
+            {finished.length > 0 ? (
+              <>
+                <h3 className="mt-4 px-1 text-sm text-[var(--muted)]">
+                  Finished ({finished.length})
+                </h3>
+                {finished.map((s) => (
+                  <SessionCard key={s.id} session={s} />
+                ))}
+              </>
+            ) : null}
+          </div>
         )}
-      </section>
-
-      <Link
-        href="/leaderboard"
-        className="mt-6 block w-full rounded-xl border border-[var(--border)] px-4 py-3.5
-          text-center text-base font-semibold"
-      >
-        Leaderboard
-      </Link>
-
-      {isAtLeast(me.role, "admin") ? (
-        <Link
-          href="/admin"
-          className="mt-5 block w-full rounded-xl border border-[var(--border)] px-4 py-3.5
-            text-center text-base font-semibold"
-        >
-          Admin — invite code &amp; players
-        </Link>
-      ) : null}
-
-      <form action={logoutAction} className="mt-8">
-        <button
-          type="submit"
-          className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-medium
-            text-[var(--muted)]"
-        >
-          Log out
-        </button>
-      </form>
-    </main>
-  );
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full border border-[var(--border)] px-2.5 py-1">{children}</span>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl border border-[var(--border)] py-3">
-      <dd className="font-mono text-xl font-semibold tabular-nums">{value}</dd>
-      <dt className="mt-0.5 text-xs text-[var(--muted)]">{label}</dt>
-    </div>
+      </main>
+    </>
   );
 }

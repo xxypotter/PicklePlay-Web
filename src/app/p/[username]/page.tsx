@@ -1,8 +1,8 @@
 import { asc, desc, eq, inArray, or } from "drizzle-orm";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
 import RatingChart from "@/components/RatingChart";
+import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { ROLE_LABELS, type Role } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
@@ -139,16 +139,9 @@ export default async function ProfilePage({
   const daysUntilAllowed = reseedDaysRemaining(lastSelfSeed?.effectiveAt);
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-8">
-      <div className="mb-5 flex items-baseline justify-between gap-3">
-        <h1 className="truncate text-2xl font-bold">
-          {player.displayName ?? player.username}
-        </h1>
-        <Link href="/leaderboard" className="shrink-0 text-sm font-medium text-[var(--accent)] underline">
-          Leaderboard
-        </Link>
-      </div>
-
+    <>
+      <TopBar title={player.displayName ?? player.username} back="/leaderboard" />
+      <main className="screen pt-4">
       <section className="card">
         <p className="text-sm font-medium text-[var(--muted)]">PicklePlay Rating</p>
         <p className="mt-1 font-mono text-4xl font-bold tabular-nums">
@@ -313,7 +306,8 @@ export default async function ProfilePage({
           </ul>
         </section>
       ) : null}
-    </main>
+      </main>
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import TopBar from "@/components/TopBar";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -25,14 +25,11 @@ export default async function NewSessionPage() {
     .orderBy(asc(players.username));
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-8">
-      <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">New session</h1>
-        <Link href="/" className="text-sm font-medium text-[var(--accent)] underline">
-          Cancel
-        </Link>
-      </div>
-      <SessionForm roster={roster} />
-    </main>
+    <>
+      <TopBar title="New session" back="/" />
+      <main className="screen pt-4">
+        <SessionForm roster={roster} />
+      </main>
+    </>
   );
 }

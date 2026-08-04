@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import TopBar from "@/components/TopBar";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -60,14 +61,17 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const canDelete = me.role === "superadmin" || session.createdBy === me.id;
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-8">
-      <div className="mb-5 flex items-baseline justify-between gap-3">
-        <h1 className="truncate text-2xl font-bold">{session.title}</h1>
-        <Link href={`/s/${id}`} className="shrink-0 text-sm font-medium text-[var(--accent)] underline">
-          Player view
-        </Link>
-      </div>
-
+    <>
+      <TopBar
+        title="Run session"
+        back={`/s/${id}`}
+        action={
+          <Link href={`/s/${id}`} className="text-sm text-[var(--link)]">
+            Player view
+          </Link>
+        }
+      />
+      <main className="screen pt-4">
       <section className="card">
         <h2 className="text-sm font-medium text-[var(--muted)]">
           Who&apos;s here ({attendingCount}/{roster.length})
@@ -146,6 +150,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
 
       {session.status !== "closed" ? <CloseSessionButton sessionId={id} /> : null}
       {canDelete ? <DeleteSessionButton sessionId={id} /> : null}
-    </main>
+      </main>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
+import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
@@ -35,14 +36,9 @@ export default async function LeaderboardPage() {
   const provisional = rows.filter((r) => r.provisional);
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-8">
-      <div className="mb-5 flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Leaderboard</h1>
-        <Link href="/" className="text-sm font-medium text-[var(--accent)] underline">
-          Home
-        </Link>
-      </div>
-
+    <>
+      <TopBar title="Rankings" back="/" />
+      <main className="screen pt-4">
       {rows.length === 0 ? (
         <p className="card text-sm text-[var(--muted)]">Nobody has a rating yet.</p>
       ) : (
@@ -62,7 +58,8 @@ export default async function LeaderboardPage() {
           ) : null}
         </>
       )}
-    </main>
+      </main>
+    </>
   );
 }
 
@@ -92,12 +89,12 @@ function Table({
   }
 
   return (
-    <ul className="card divide-y divide-[var(--border)] p-0">
+    <ul className="card-tight divide-y divide-[var(--border)] overflow-hidden">
       {rows.map((r, i) => (
         <li
           key={r.id}
           className={`flex items-center gap-3 px-4 py-3 ${
-            r.id === meId ? "bg-[var(--accent)]/5" : ""
+            r.id === meId ? "bg-[var(--accent-soft)]" : ""
           }`}
         >
           {startRank !== undefined ? (

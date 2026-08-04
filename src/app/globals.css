@@ -1,58 +1,91 @@
 @import "tailwindcss";
 
+/*
+ * Visual language borrowed from the WeChat mini-program screenshots: a grey
+ * page with white rounded cards floating on it, orange as the accent for
+ * anything active or numeric, green reserved for confirm actions, and a
+ * three-slot bottom bar with an elevated centre button.
+ */
 :root {
-  --background: #ffffff;
+  --bg: #f2f3f5;
   --surface: #ffffff;
-  --border: #e4e4e7;
-  --foreground: #171717;
-  --muted: #71717a;
-  --accent: #15803d;
-  --accent-fg: #ffffff;
-  --danger: #b91c1c;
+  --surface-2: #fafafa;
+  --border: #ededed;
+  --foreground: #1a1a1a;
+  --muted: #9b9b9f;
+  --accent: #ff8f1f;
+  --accent-soft: rgba(255, 143, 31, 0.12);
+  --success: #07c160;
+  --amber: #f7b32b;
+  --link: #576b95;
+  --danger: #fa5151;
+  --ribbon: #b9b9bd;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --surface: #141416;
-    --border: #2a2a2e;
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --surface-2: #232326;
+    --border: #2c2c2e;
     --foreground: #ededed;
-    --muted: #a1a1aa;
-    --accent: #22c55e;
-    --accent-fg: #052e13;
-    --danger: #f87171;
+    --muted: #8a8a8e;
+    --accent: #ff9f38;
+    --accent-soft: rgba(255, 159, 56, 0.16);
+    --success: #30d158;
+    --amber: #ffcc4d;
+    --link: #7d9ac9;
+    --danger: #ff6961;
+    --ribbon: #48484a;
   }
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-border: var(--border);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
-  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-amber: var(--amber);
+  --color-link: var(--link);
   --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
+  background: var(--bg);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   /* Courtside on a phone: never let a stray horizontal scroll appear. */
   overflow-x: hidden;
 }
 
-/* Inputs are sized for thumbs, and 16px stops iOS Safari zooming on focus. */
 @layer components {
+  /* ---- surfaces ------------------------------------------------------- */
+  .card {
+    @apply rounded-2xl bg-[var(--surface)] p-4;
+  }
+  .card-tight {
+    @apply rounded-2xl bg-[var(--surface)];
+  }
+
+  /* Screens sit above the bottom bar; the extra padding is its height plus
+     the home-indicator inset. */
+  .screen {
+    @apply mx-auto w-full max-w-md px-4;
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  /* ---- forms ---------------------------------------------------------- */
   .field {
     @apply w-full rounded-xl border border-[var(--border)] bg-[var(--surface)]
       px-4 py-3 text-base outline-none;
   }
   .field:focus {
-    @apply border-[var(--accent)] ring-2 ring-[var(--accent)]/30;
+    @apply border-[var(--accent)];
   }
   .label {
     @apply mb-1.5 block text-sm font-medium;
@@ -60,11 +93,44 @@ body {
   .hint {
     @apply mt-1.5 text-sm text-[var(--muted)];
   }
+
+  /* ---- buttons -------------------------------------------------------- */
   .btn-primary {
-    @apply w-full rounded-xl bg-[var(--accent)] px-4 py-3.5 text-base font-semibold
-      text-[var(--accent-fg)] transition active:scale-[0.99] disabled:opacity-60;
+    @apply w-full rounded-full bg-[var(--success)] px-4 py-3.5 text-base font-semibold
+      text-white transition active:scale-[0.99] disabled:opacity-50;
   }
-  .card {
-    @apply rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5;
+  .btn-accent {
+    @apply w-full rounded-full bg-[var(--accent)] px-4 py-3.5 text-base font-semibold
+      text-white transition active:scale-[0.99] disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply w-full rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-3
+      text-base font-medium transition active:scale-[0.99] disabled:opacity-50;
+  }
+  .pill {
+    @apply rounded-full px-5 py-2 text-sm font-semibold text-white;
+  }
+
+  /* ---- tabs ----------------------------------------------------------- */
+  .tabs {
+    @apply flex items-center justify-around bg-[var(--surface)] px-2 pb-2;
+  }
+  .tab {
+    @apply relative px-3 py-2 text-lg text-[var(--foreground)] transition;
+  }
+  .tab-active {
+    @apply font-bold text-[var(--accent)];
+  }
+
+  /* Round separator: a centred amber lozenge, as in the matchups screen. */
+  .round-chip {
+    @apply mx-auto rounded-full bg-[var(--amber)] px-5 py-1.5 text-sm font-semibold text-white;
+  }
+
+  /* Diagonal corner banner used for finished / cancelled sessions. */
+  .ribbon {
+    @apply pointer-events-none absolute -right-9 top-3 w-32 rotate-45 py-1 text-center
+      text-[11px] font-semibold text-white;
+    background: var(--ribbon);
   }
 }

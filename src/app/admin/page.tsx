@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import TopBar from "@/components/TopBar";
 import { canManageRoles } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import type { Role } from "@/lib/auth/types";
@@ -45,14 +45,9 @@ export default async function AdminPage() {
     headerList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-8">
-      <div className="mb-6 flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Admin</h1>
-        <Link href="/" className="text-sm font-medium text-[var(--accent)] underline">
-          Back
-        </Link>
-      </div>
-
+    <>
+      <TopBar title="Admin" back="/me" />
+      <main className="screen pt-4">
       <InviteCard code={code} origin={`${proto}://${host}`} />
 
       {/* Super admin only: it exposes whether the deploy is holding credentials. */}
@@ -68,6 +63,7 @@ export default async function AdminPage() {
         meRole={me.role}
         meId={me.id}
       />
-    </main>
+      </main>
+    </>
   );
 }
