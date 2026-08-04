@@ -90,7 +90,7 @@ export default async function MePage() {
           <div className="grid grid-cols-3 gap-y-5">
             <Shortcut href={`/p/${me.username}?from=/me`} icon="📈" label="My record" />
             <Shortcut href="/sessions" icon="📅" label="My sessions" />
-            <Shortcut href="/leaderboard" icon="🏆" label="Rankings" />
+            <Shortcut href="/leaderboard?from=/me" icon="🏆" label="Rankings" />
           </div>
         </section>
 

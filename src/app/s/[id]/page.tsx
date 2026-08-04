@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
 import Tabs from "@/components/Tabs";
-import TopBar from "@/components/TopBar";
+import TopBar, { safeFrom } from "@/components/TopBar";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -37,10 +37,10 @@ export default async function SessionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; from?: string }>;
 }) {
   const { id } = await params;
-  const { tab } = await searchParams;
+  const { tab, from } = await searchParams;
   const active: TabKey =
     tab === "standings" ? "standings" : tab === "schedule" ? "schedule" : "info";
 
@@ -92,18 +92,31 @@ export default async function SessionPage({
 
   const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed).length;
   const base = `/s/${id}`;
+  // A session is reached from Home, My sessions, the play console, or a shared
+  // link. Only the caller knows which, so back follows `from` and falls back
+  // to Home for a link opened cold.
+  const backTo = safeFrom(from, "/");
+
+  /** Tab links must carry `from`, or switching tabs would strip it. */
+  const here = (key: TabKey) => {
+    const q = new URLSearchParams();
+    if (key !== "info") q.set("tab", key);
+    if (backTo !== "/") q.set("from", backTo);
+    const s = q.toString();
+    return s ? `${base}?${s}` : base;
+  };
   // Tapping a name and coming back should land on the tab you left.
-  const backHere = active === "info" ? base : `${base}?tab=${active}`;
+  const backHere = here(active);
 
   return (
     <>
-      <TopBar title={session.title} back="/" />
+      <TopBar title={session.title} back={backTo} />
       <Tabs
         active={active}
         items={[
-          { key: "info", label: "Session", href: base },
-          { key: "standings", label: "Standings", href: `${base}?tab=standings` },
-          { key: "schedule", label: "Matchups", href: `${base}?tab=schedule` },
+          { key: "info", label: "Session", href: here("info") },
+          { key: "standings", label: "Standings", href: here("standings") },
+          { key: "schedule", label: "Matchups", href: here("schedule") },
         ]}
       />
 
@@ -231,10 +244,10 @@ export default async function SessionPage({
               <div className="mt-4 flex flex-col gap-2">
                 {session.status === "open" ? (
                   <>
-                    <Link href={`${base}/play`} className="btn-accent block text-center">
+                    <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-accent block text-center">
                       Set up &amp; start
                     </Link>
-                    <Link href={`${base}/edit`} className="btn-ghost block text-center">
+                    <Link href={`${base}/edit?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
                       Edit details
                     </Link>
                   </>
@@ -245,12 +258,12 @@ export default async function SessionPage({
                       unscored={unscored}
                       className="w-full"
                     />
-                    <Link href={`${base}/play`} className="btn-ghost block text-center">
+                    <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
                       Manage matches &amp; players
                     </Link>
                   </>
                 ) : (
-                  <Link href={`${base}/play`} className="btn-ghost block text-center">
+                  <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
                     Manage session
                   </Link>
                 )}

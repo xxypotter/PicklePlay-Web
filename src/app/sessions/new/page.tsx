@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import TopBar from "@/components/TopBar";
+import TopBar, { safeFrom } from "@/components/TopBar";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -9,7 +9,12 @@ import SessionForm from "./SessionForm";
 
 export const metadata = { title: "New session · PicklePlay" };
 
-export default async function NewSessionPage() {
+export default async function NewSessionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const { from } = await searchParams;
   const me = await getCurrentPlayer();
   if (!me || !canManageSessions(me.role)) notFound();
 
@@ -26,7 +31,8 @@ export default async function NewSessionPage() {
 
   return (
     <>
-      <TopBar title="New session" back="/" />
+      {/* Reached from the centre button, which exists on every screen. */}
+      <TopBar title="New session" back={safeFrom(from, "/")} />
       <main className="screen pt-4">
         <SessionForm roster={roster} />
       </main>

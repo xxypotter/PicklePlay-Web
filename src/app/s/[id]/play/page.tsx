@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import TopBar from "@/components/TopBar";
+import TopBar, { safeFrom } from "@/components/TopBar";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -23,8 +23,15 @@ import {
 
 export const metadata = { title: "Run session · PicklePlay" };
 
-export default async function PlayPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PlayPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
   const { id } = await params;
+  const { from } = await searchParams;
 
   const me = await getCurrentPlayer();
   if (!me || !canManageSessions(me.role)) notFound();
@@ -59,6 +66,11 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
       .orderBy(asc(players.username))
   ).filter((p) => !signedUpIds.has(p.id));
 
+  // Keep the chain intact: an admin who arrived from My sessions should walk
+  // back out the same way rather than being dumped on the session page.
+  const backTo = safeFrom(from, `/s/${id}`);
+  const here = from ? `/s/${id}/play?from=${encodeURIComponent(backTo)}` : `/s/${id}/play`;
+
   const attendingCount = attending.length;
   const canDelete = me.role === "superadmin" || session.createdBy === me.id;
   const unscored = allRounds
@@ -69,9 +81,12 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
     <>
       <TopBar
         title="Run session"
-        back={`/s/${id}`}
+        back={backTo}
         action={
-          <Link href={`/s/${id}`} className="text-sm text-[var(--link)]">
+          <Link
+            href={`/s/${id}?from=${encodeURIComponent(here)}`}
+            className="text-sm text-[var(--link)]"
+          >
             Player view
           </Link>
         }
@@ -101,7 +116,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
           <>
             <StartSessionButton sessionId={id} attendingCount={attendingCount} />
             <Link
-              href={`/s/${id}/edit`}
+              href={`/s/${id}/edit?from=${encodeURIComponent(here)}`}
               className="btn-ghost mt-2 block text-center text-sm"
             >
               Edit session details
@@ -169,7 +184,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </section>
       )}
 
-      <Standings rows={standings} meId={me.id} backHere={`/s/${id}/play`} />
+      <Standings rows={standings} meId={me.id} backHere={here} />
 
       {session.status === "live" ? (
         <EndSessionButton sessionId={id} unscored={unscored} />

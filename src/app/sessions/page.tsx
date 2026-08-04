@@ -132,7 +132,10 @@ function Group({
             const played = matchesBy.get(s.id) ?? 0;
             return (
               <li key={s.id}>
-                <Link href={`/s/${s.id}`} className="card block active:opacity-70">
+                <Link
+                  href={`/s/${s.id}?from=/sessions`}
+                  className="card block active:opacity-70"
+                >
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="truncate font-semibold">{s.title}</span>
                     {mine ? (

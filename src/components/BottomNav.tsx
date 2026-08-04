@@ -20,7 +20,9 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
 
   function create() {
     if (canCreate) {
-      router.push("/sessions/new");
+      // The centre button is on every screen, so cancelling out of the form
+      // should return to whichever one you pressed it from.
+      router.push(`/sessions/new?from=${encodeURIComponent(pathname)}`);
       return;
     }
     // Players get told why rather than finding a dead button, and it clears

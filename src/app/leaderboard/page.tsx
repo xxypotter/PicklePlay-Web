@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import Avatar from "@/components/Avatar";
 import Tabs from "@/components/Tabs";
-import TopBar from "@/components/TopBar";
+import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
@@ -14,9 +14,9 @@ type TabKey = "all" | "male" | "female";
 export default async function LeaderboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; from?: string }>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, from } = await searchParams;
   const active: TabKey = tab === "male" ? "male" : tab === "female" ? "female" : "all";
 
   const [me, all] = await Promise.all([
@@ -59,18 +59,32 @@ export default async function LeaderboardPage({
   const provisional = rows.filter((r) => r.provisional);
 
   const base = "/leaderboard";
-  // Return to the tab they were actually on, not just the default list.
-  const backHere = active === "all" ? base : `${base}?tab=${active}`;
+  // Rankings hangs off both Home and Me, so where back goes depends on which
+  // one you came through. Default to Home for a cold link.
+  const backTo = safeFrom(from, "/");
+
+  /**
+   * Every link that stays on this page has to carry `from` forward, or
+   * switching tabs would quietly strip it and send back to the wrong place.
+   */
+  const here = (key: TabKey) => {
+    const q = new URLSearchParams();
+    if (key !== "all") q.set("tab", key);
+    if (backTo !== "/") q.set("from", backTo);
+    const s = q.toString();
+    return s ? `${base}?${s}` : base;
+  };
+  const backHere = here(active);
 
   return (
     <>
-      <TopBar title="Rankings" back="/" />
+      <TopBar title="Rankings" back={backTo} />
       <Tabs
         active={active}
         items={[
-          { key: "all", label: "All", href: base },
-          { key: "male", label: "Men", href: `${base}?tab=male` },
-          { key: "female", label: "Women", href: `${base}?tab=female` },
+          { key: "all", label: "All", href: here("all") },
+          { key: "male", label: "Men", href: here("male") },
+          { key: "female", label: "Women", href: here("female") },
         ]}
       />
 

@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import TopBar from "@/components/TopBar";
+import TopBar, { safeFrom } from "@/components/TopBar";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -11,10 +11,13 @@ export const metadata = { title: "Edit session · PicklePlay" };
 
 export default async function EditSessionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
 
   const me = await getCurrentPlayer();
   if (!me || !canManageSessions(me.role)) notFound();
@@ -31,7 +34,8 @@ export default async function EditSessionPage({
 
   return (
     <>
-      <TopBar title="Edit session" back={`/s/${id}`} />
+      {/* Edit opens from both the session page and the play console. */}
+      <TopBar title="Edit session" back={safeFrom(from, `/s/${id}`)} />
       <main className="screen pt-4">
         {session.status !== "open" ? (
           <div className="card text-center">
