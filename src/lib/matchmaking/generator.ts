@@ -47,15 +47,24 @@ export interface Weights {
   spread: number;
 }
 
-export type Format = "balanced" | "fixed" | "social" | "manual";
+export type Format = "regular" | "balanced" | "fixed" | "social" | "custom" | "manual";
 
 /**
+ * Every format is the same search with different weights, rather than separate
+ * code paths that could disagree about sit-outs or court structure.
+ *
+ * `regular` — partner with everyone once. The huge partner penalty makes an
+ *   unused partnership beat almost anything else, so pairings spread out
+ *   naturally. It's greedy, not a perfect combinatorial design: with awkward
+ *   player counts a repeat can appear before literally every pair has happened.
+ * `balanced` — even teams by rating; the everyday default.
+ * `fixed` — a *negative* partner weight makes repeating a partner desirable,
+ *   which expresses fixed-partner play through the same machinery.
  * `spread` keeps a 4.5 and a 2.5 off the same court where possible — balanced
- * on paper but miserable to play. `fixed` uses a *negative* partner weight so
- * repeating a partner becomes desirable, which expresses fixed-partner play
- * through the same machinery rather than a separate code path.
+ *   on paper but miserable to play.
  */
-export const WEIGHTS: Record<Exclude<Format, "manual">, Weights> = {
+export const WEIGHTS: Record<Exclude<Format, "manual" | "custom">, Weights> = {
+  regular: { balance: 0, partner: 50, opponent: 3, spread: 0 },
   balanced: { balance: 10, partner: 6, opponent: 2, spread: 1 },
   fixed: { balance: 10, partner: -8, opponent: 2, spread: 1 },
   social: { balance: 0, partner: 6, opponent: 2, spread: 0 },
@@ -192,11 +201,13 @@ export function generateRound(
   const { seated, sittingOut } = selectSeated(players, courts * 4, history, random);
   const ratingOf = new Map(players.map((p) => [p.id, p.rating]));
 
-  const base = format === "manual" ? WEIGHTS.balanced : WEIGHTS[format];
+  const base =
+    format === "manual" || format === "custom" ? WEIGHTS.balanced : WEIGHTS[format];
   const weights: Weights = {
     ...base,
     // Under ~12 players partner repeats are forced by the maths, so penalising
-    // them hard just distorts the balance term for no benefit.
+    // them hard just distorts the balance term for no benefit. Not applied to
+    // `regular`, where avoiding repeats is the entire point.
     partner:
       format === "balanced" && players.length < SMALL_GROUP
         ? SMALL_GROUP_PARTNER_WEIGHT

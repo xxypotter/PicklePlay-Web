@@ -19,9 +19,16 @@ import {
   type SessionHistory,
 } from "./generator";
 
-const GENERATOR_FORMATS: Format[] = ["balanced", "fixed", "social", "manual"];
+const GENERATOR_FORMATS: Format[] = [
+  "regular",
+  "balanced",
+  "fixed",
+  "social",
+  "custom",
+  "manual",
+];
 
-/** "king" isn't implemented yet; fall back to balanced rather than lying. */
+/** "king" was never implemented; fall back to balanced rather than lying. */
 export function toGeneratorFormat(format: string): Format {
   return GENERATOR_FORMATS.includes(format as Format) ? (format as Format) : "balanced";
 }

@@ -174,15 +174,16 @@ export default async function HomePage() {
       <section className="mt-6">
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">Upcoming</h2>
-          {isAtLeast(me.role, "admin") ? (
-            <Link
-              href="/sessions/new"
-              className="text-sm font-semibold text-[var(--accent)] underline"
-            >
-              + New session
-            </Link>
-          ) : null}
+          <Link href="/sessions" className="text-sm font-semibold text-[var(--accent)] underline">
+            All sessions
+          </Link>
         </div>
+
+        {isAtLeast(me.role, "admin") ? (
+          <Link href="/sessions/new" className="btn-primary mb-3 block text-center">
+            + New session
+          </Link>
+        ) : null}
 
         {upcoming.length === 0 ? (
           <p className="card text-sm text-[var(--muted)]">

@@ -1,4 +1,4 @@
-import { asc, desc, eq, or } from "drizzle-orm";
+import { asc, desc, eq, inArray, or } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
@@ -97,6 +97,44 @@ export default async function ProfilePage({
   const chartPoints = history.map((h) => h.ratingAfter);
   if (stats && chartPoints.length > 0) chartPoints.unshift(chartPoints[0] - history[0].delta);
 
+  // Who they've actually been playing with and against. Uses each participant's
+  // rating *at the time of that match*, not today's — otherwise a partner's
+  // later improvement would rewrite the past.
+  const matchIds = history.map((h) => h.matchId);
+  const allEvents = matchIds.length
+    ? await db
+        .select({
+          matchId: ratingEvents.matchId,
+          playerId: ratingEvents.playerId,
+          ratingBefore: ratingEvents.ratingBefore,
+        })
+        .from(ratingEvents)
+        .where(inArray(ratingEvents.matchId, matchIds))
+    : [];
+
+  const ratingAt = new Map(allEvents.map((e) => [`${e.matchId}:${e.playerId}`, e.ratingBefore]));
+  const partnerRatings: number[] = [];
+  const opponentRatings: number[] = [];
+
+  for (const h of history) {
+    const onA = h.a1 === player.id || h.a2 === player.id;
+    const partner = onA ? (h.a1 === player.id ? h.a2 : h.a1) : h.b1 === player.id ? h.b2 : h.b1;
+    const opponents = onA ? [h.b1, h.b2] : [h.a1, h.a2];
+
+    const pr = ratingAt.get(`${h.matchId}:${partner}`);
+    if (pr !== undefined) partnerRatings.push(pr);
+    for (const o of opponents) {
+      const or = ratingAt.get(`${h.matchId}:${o}`);
+      if (or !== undefined) opponentRatings.push(or);
+    }
+  }
+
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
+  const avgPartner = mean(partnerRatings);
+  const avgOpponent = mean(opponentRatings);
+  const decided = (stats?.wins ?? 0) + (stats?.losses ?? 0);
+  const winRate = decided > 0 ? Math.round(((stats?.wins ?? 0) / decided) * 100) : null;
+
   const lastSelfSeed = seeds.find((s) => s.createdBy === player.id);
   const daysUntilAllowed = reseedDaysRemaining(lastSelfSeed?.effectiveAt);
 
@@ -156,6 +194,34 @@ export default async function ProfilePage({
           </p>
         ) : null}
       </section>
+
+      {history.length > 0 ? (
+        <section className="card mt-5">
+          <h2 className="text-sm font-medium text-[var(--muted)]">Who they play</h2>
+          <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <Stat label="Win rate" value={winRate === null ? "—" : `${winRate}%`} />
+            <Stat
+              label="Avg partner"
+              value={avgPartner === null ? "—" : avgPartner.toFixed(3)}
+              mono
+            />
+            <Stat
+              label="Avg opponent"
+              value={avgOpponent === null ? "—" : avgOpponent.toFixed(3)}
+              mono
+            />
+          </dl>
+          {avgOpponent !== null && stats ? (
+            <p className="hint mt-3">
+              {avgOpponent > stats.rating + 0.05
+                ? "Playing up — opponents average above your rating, so wins count for more."
+                : avgOpponent < stats.rating - 0.05
+                  ? "Playing down — opponents average below your rating, so wins move you less."
+                  : "Well matched — opponents average about your own level."}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {isMe && stats ? (
         <ReseedCard

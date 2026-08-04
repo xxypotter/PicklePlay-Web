@@ -1,7 +1,12 @@
 "use client";
 
 import { useTransition } from "react";
-import { setAttendanceAction, setSessionStatusAction } from "@/lib/sessions/actions";
+import {
+  addPlayerAction,
+  removePlayerAction,
+  setAttendanceAction,
+  setSessionStatusAction,
+} from "@/lib/sessions/actions";
 import { discardRoundAction, generateRoundAction } from "@/lib/sessions/play-actions";
 
 export function GenerateRoundButton({
@@ -80,6 +85,60 @@ export function AttendanceToggle({
     >
       <span className="truncate">{username}</span>
       <span className="shrink-0 text-xs">{attended ? "here" : "out"}</span>
+    </button>
+  );
+}
+
+export function AddPlayers({
+  sessionId,
+  candidates,
+}: {
+  sessionId: string;
+  candidates: { id: string; username: string }[];
+}) {
+  const [pending, start] = useTransition();
+  if (candidates.length === 0) return null;
+
+  return (
+    <details className="mt-4">
+      <summary className="cursor-pointer text-sm font-semibold text-[var(--accent)]">
+        Add someone who didn&apos;t sign up ({candidates.length})
+      </summary>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {candidates.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            disabled={pending}
+            onClick={() => start(() => void addPlayerAction(sessionId, c.id))}
+            className="truncate rounded-xl border border-[var(--border)] px-3 py-2.5 text-left
+              text-sm disabled:opacity-50"
+          >
+            + {c.username}
+          </button>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+export function RemovePlayerButton({
+  sessionId,
+  playerId,
+}: {
+  sessionId: string;
+  playerId: string;
+}) {
+  const [pending, start] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => start(() => void removePlayerAction(sessionId, playerId))}
+      aria-label="Remove from session"
+      className="shrink-0 px-1 text-xs text-[var(--muted)] disabled:opacity-50"
+    >
+      ✕
     </button>
   );
 }

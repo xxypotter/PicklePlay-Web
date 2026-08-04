@@ -1,19 +1,34 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createSessionAction } from "@/lib/sessions/actions";
 import type { FormState } from "@/lib/auth/types";
 
-/**
- * "King of the court" is deliberately absent: the generator doesn't implement
- * court promotion yet and would silently fall back to balanced. Offering a
- * format that quietly does something else is worse than not offering it.
- */
 const FORMATS = [
-  { key: "balanced", label: "Balanced round robin", hint: "Teams matched by rating, partners rotate" },
-  { key: "fixed", label: "Fixed partners", hint: "Pairs stay together, opponents rotate" },
-  { key: "social", label: "Social / random", hint: "Random partners, no rating balancing" },
+  {
+    key: "regular",
+    label: "Regular round robin",
+    hint: "Partner with everyone once before anyone repeats.",
+  },
+  {
+    key: "balanced",
+    label: "Balanced round robin",
+    hint: "Teams matched so both sides average a similar rating.",
+  },
+  {
+    key: "fixed",
+    label: "Fixed partners",
+    hint: "Pairs stay together all night; opponents rotate.",
+  },
+  {
+    key: "custom",
+    label: "Custom",
+    hint: "Rounds are still generated, but expect to rearrange courts yourself.",
+  },
 ];
+
+const MAX_COURTS = 4;
+const PLAYERS_PER_COURT = 6;
 
 /** Default to the next 7pm — the usual slot, and saves a lot of tapping. */
 function defaultStart(): string {
@@ -27,6 +42,11 @@ function defaultStart(): string {
 
 export default function SessionForm() {
   const [state, action, pending] = useActionState(createSessionAction, {} as FormState);
+  const [courts, setCourts] = useState("1, 2");
+  const [format, setFormat] = useState("regular");
+
+  const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
+  const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
 
   return (
     <form
@@ -49,7 +69,7 @@ export default function SessionForm() {
           name="title"
           className="field"
           maxLength={80}
-          defaultValue="Tuesday night"
+          defaultValue="PicklePlay Game"
           required
           autoFocus
         />
@@ -59,7 +79,7 @@ export default function SessionForm() {
         <label className="label" htmlFor="location">
           Location
         </label>
-        <input id="location" name="location" className="field" placeholder="Which courts?" />
+        <input id="location" name="location" className="field" placeholder="Club name" />
       </div>
 
       <div>
@@ -85,14 +105,20 @@ export default function SessionForm() {
           id="courtNames"
           name="courtNames"
           className="field"
-          defaultValue="1, 2"
+          value={courts}
+          onChange={(e) => setCourts(e.target.value)}
           placeholder="3, 4"
           required
         />
         <p className="hint">
           Separate with commas — court numbers or names, whatever the venue calls
-          them. Players see these on their matchup.
+          them. Up to {MAX_COURTS}. Players see these on their matchup.
         </p>
+        {courtCount > MAX_COURTS ? (
+          <p className="mt-1 text-sm font-medium text-[var(--danger)]">
+            {MAX_COURTS} courts maximum.
+          </p>
+        ) : null}
       </div>
 
       <div>
@@ -106,25 +132,37 @@ export default function SessionForm() {
           type="number"
           inputMode="numeric"
           min={4}
-          max={64}
+          max={seatCap}
           defaultValue={12}
           required
         />
-        <p className="hint">Anyone after this joins the waitlist.</p>
+        <p className="hint">
+          Up to {PLAYERS_PER_COURT} per court, so {seatCap} for{" "}
+          {Math.min(MAX_COURTS, Math.max(1, courtCount))} court
+          {courtCount === 1 ? "" : "s"}. Anyone after that joins the waitlist.
+        </p>
       </div>
 
       <div>
         <label className="label" htmlFor="format">
           Format
         </label>
-        <select id="format" name="format" className="field" defaultValue="balanced">
+        <select
+          id="format"
+          name="format"
+          className="field"
+          value={format}
+          onChange={(e) => setFormat(e.target.value)}
+        >
           {FORMATS.map((f) => (
             <option key={f.key} value={f.key}>
               {f.label}
             </option>
           ))}
         </select>
-        <p className="hint">{FORMATS[0].hint} — you can override any matchup.</p>
+        <p className="hint">
+          {FORMATS.find((f) => f.key === format)?.hint} You can override any matchup.
+        </p>
       </div>
 
       <div>
@@ -144,7 +182,7 @@ export default function SessionForm() {
         <input type="checkbox" name="rated" defaultChecked className="size-5 accent-[var(--accent)]" />
         <span>
           <span className="font-medium">Counts toward ratings</span>
-          <span className="hint block">Turn off for a casual night.</span>
+          <span className="hint block">Turn off for a casual event.</span>
         </span>
       </label>
 

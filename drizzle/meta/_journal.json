@@ -43,6 +43,13 @@
       "when": 1785813060066,
       "tag": "0005_thin_chameleon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785814379413,
+      "tag": "0006_unusual_hellion",
+      "breakpoints": true
     }
   ]
 }

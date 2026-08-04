@@ -11,8 +11,12 @@ import { sessions, signups } from "@/lib/db/schema";
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const num = (fd: FormData, key: string) => Number(str(fd, key));
 
-const FORMATS = ["balanced", "fixed", "king", "social", "manual"] as const;
+const FORMATS = ["regular", "balanced", "fixed", "custom"] as const;
 type Format = (typeof FORMATS)[number];
+
+/** Server-side caps; the form mirrors these but is not what enforces them. */
+const MAX_COURTS = 4;
+const PLAYERS_PER_COURT = 6;
 
 export async function createSessionAction(
   _prev: FormState,
@@ -36,11 +40,13 @@ export async function createSessionAction(
   const courtNames = str(formData, "courtNames")
     .split(",")
     .map((c) => c.trim())
-    .filter(Boolean)
-    .slice(0, 12);
+    .filter(Boolean);
 
   if (courtNames.length === 0) {
     return { error: "Name at least one court, e.g. 3, 4", field: "courtNames" };
+  }
+  if (courtNames.length > MAX_COURTS) {
+    return { error: `${MAX_COURTS} courts maximum.`, field: "courtNames" };
   }
   if (new Set(courtNames.map((c) => c.toLowerCase())).size !== courtNames.length) {
     return { error: "Each court needs a different name.", field: "courtNames" };
@@ -50,14 +56,14 @@ export async function createSessionAction(
   }
 
   const courtCount = courtNames.length;
+  const seatCap = courtCount * PLAYERS_PER_COURT;
   const maxPlayers = num(formData, "maxPlayers");
 
-  if (!Number.isInteger(maxPlayers) || maxPlayers < 4 || maxPlayers > 64) {
-    return { error: "Max players must be between 4 and 64.", field: "maxPlayers" };
-  }
-  if (maxPlayers < courtCount * 4) {
+  if (!Number.isInteger(maxPlayers) || maxPlayers < 4 || maxPlayers > seatCap) {
     return {
-      error: `${courtCount} courts need at least ${courtCount * 4} players.`,
+      error: `Max players must be between 4 and ${seatCap} for ${courtCount} court${
+        courtCount === 1 ? "" : "s"
+      }.`,
       field: "maxPlayers",
     };
   }
@@ -160,6 +166,60 @@ async function resequenceWaitlist(sessionId: string): Promise<void> {
     ) ranked
     where s.id = ranked.id and s.waitlist_pos is distinct from ranked.pos
   `);
+}
+
+/**
+ * Add someone to a session on their behalf.
+ *
+ * Two real cases: a player turns up who never RSVP'd, and an organizer wants to
+ * build a roster without twelve people each logging in. Uses the same capacity
+ * rule as a self-RSVP, so an admin can't silently overfill the courts.
+ */
+export async function addPlayerAction(sessionId: string, playerId: string): Promise<void> {
+  await requireAdmin();
+  const db = getDb();
+
+  const found = await db
+    .select({ maxPlayers: sessions.maxPlayers })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (!found[0]) throw new Error("That session no longer exists.");
+
+  await db.execute(sql`
+    insert into ${signups} (session_id, player_id, state)
+    select ${sessionId}::uuid, ${playerId}::uuid,
+      case when (
+        select count(*) from ${signups}
+        where session_id = ${sessionId}::uuid and state = 'in'
+      ) < ${found[0].maxPlayers} then 'in'::signup_state else 'waitlist'::signup_state end
+    on conflict (session_id, player_id) do nothing
+  `);
+
+  await resequenceWaitlist(sessionId);
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+}
+
+export async function removePlayerAction(sessionId: string, playerId: string): Promise<void> {
+  await requireAdmin();
+  const db = getDb();
+
+  const found = await db
+    .select({ maxPlayers: sessions.maxPlayers })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  await db
+    .delete(signups)
+    .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, playerId)));
+
+  if (found[0]) await promoteFromWaitlist(sessionId, found[0].maxPlayers);
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
 }
 
 export async function setAttendanceAction(

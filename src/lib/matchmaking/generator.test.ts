@@ -133,6 +133,38 @@ describe("balanced format", () => {
   });
 });
 
+describe("regular round robin", () => {
+  it("pairs everyone with a new partner before repeating anyone", () => {
+    // 8 players on 2 courts: 4 partnerships per round, 28 possible pairs.
+    // Across 7 rounds nobody should be stuck repeating while fresh pairs exist.
+    const { history } = playSession(makePlayers(8), 2, 7, {
+      format: "regular",
+      random: seeded(31),
+    });
+
+    const used = Object.values(history.partnerCounts);
+    expect(used.length).toBeGreaterThanOrEqual(20);
+    expect(Math.max(...used)).toBeLessThanOrEqual(2);
+  });
+
+  it("beats balanced on partner variety, which is the whole point", () => {
+    const players = makePlayers(8);
+    const regular = playSession(players, 2, 6, { format: "regular", random: seeded(41) });
+    const balanced = playSession(players, 2, 6, { format: "balanced", random: seeded(41) });
+
+    const distinct = (h: SessionHistory) => Object.keys(h.partnerCounts).length;
+    expect(distinct(regular.history)).toBeGreaterThan(distinct(balanced.history));
+  });
+
+  it("still shares games and sit-outs fairly", () => {
+    const players = makePlayers(10);
+    const { history } = playSession(players, 2, 6, { format: "regular", random: seeded(53) });
+
+    const games = players.map((p) => history.gamesPlayed[p.id] ?? 0);
+    expect(Math.max(...games) - Math.min(...games)).toBeLessThanOrEqual(1);
+  });
+});
+
 describe("other formats", () => {
   it("fixed keeps partnerships together across rounds", () => {
     const { history } = playSession(makePlayers(8), 2, 4, {

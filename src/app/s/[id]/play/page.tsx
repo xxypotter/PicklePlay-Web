@@ -9,6 +9,7 @@ import { getAttending } from "@/lib/matchmaking/service";
 import { courtLabel, getCurrentRound } from "@/lib/sessions/queries";
 import MatchCard from "../MatchCard";
 import {
+  AddPlayers,
   AttendanceToggle,
   CloseSessionButton,
   DiscardRoundButton,
@@ -67,6 +68,17 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const nameOf = new Map(roster.map((r) => [r.playerId, r.username]));
   const attendingCount = attending.length;
 
+  // Everyone in the group who isn't already on this session's roster, so an
+  // organizer can add a walk-in without making them log in.
+  const signedUpIds = new Set(roster.map((r) => r.playerId));
+  const notSignedUp = (
+    await db
+      .select({ id: players.id, username: players.username })
+      .from(players)
+      .where(eq(players.active, true))
+      .orderBy(asc(players.username))
+  ).filter((p) => !signedUpIds.has(p.id));
+
   const roundUnplayed = round?.matches.every((m) => !m.completed) ?? false;
   const playingIds = new Set(
     round?.matches.flatMap((m) => [...m.teamA, ...m.teamB].map((p) => p.id)) ?? [],
@@ -99,6 +111,8 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
             />
           ))}
         </div>
+
+        <AddPlayers sessionId={id} candidates={notSignedUp} />
 
         <GenerateRoundButton
           sessionId={id}

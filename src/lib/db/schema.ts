@@ -36,12 +36,19 @@ export const sessionStatusEnum = pgEnum("session_status", ["draft", "open", "liv
 export const roundStateEnum = pgEnum("round_state", ["pending", "active", "done"]);
 export const matchStatusEnum = pgEnum("match_status", ["scheduled", "completed", "void"]);
 export const seedSourceEnum = pgEnum("seed_source", ["dupr", "picker", "admin"]);
+/**
+ * "king", "social" and "manual" are retired but kept in the type: removing an
+ * enum value means recreating the type, and old sessions still reference them.
+ * Only the four the form offers are reachable for new sessions.
+ */
 export const formatEnum = pgEnum("session_format", [
   "balanced",
   "fixed",
   "king",
   "social",
   "manual",
+  "regular",
+  "custom",
 ]);
 
 // ---------------------------------------------------------------------------
