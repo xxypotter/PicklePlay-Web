@@ -2,6 +2,12 @@
 
 import { useState, useTransition } from "react";
 import {
+  planCasualRounds,
+  planRegularRounds,
+  seatsFor,
+  splitsEvenly,
+} from "@/lib/matchmaking/plan";
+import {
   addPlayerAction,
   removePlayerAction,
   setAttendanceAction,
@@ -21,19 +27,22 @@ export function GenerateRoundButton({
   attendingCount,
   courtCount,
   roundsSoFar,
+  format,
 }: {
   sessionId: string;
   attendingCount: number;
   courtCount: number;
   roundsSoFar: number;
+  format: string;
 }) {
   const [pending, start] = useTransition();
   const tooFew = attendingCount < 4;
 
-  // A sensible night: enough rounds that everyone gets a good number of games
-  // without the organizer doing arithmetic. They can change it.
-  const seats = Math.min(courtCount, Math.floor(attendingCount / 4)) * 4;
-  const suggested = Math.max(3, Math.min(12, Math.round((attendingCount / Math.max(1, seats)) * 6)));
+  // A round robin has an exact right length; other formats get a rule of
+  // thumb. Either way the organizer can override it.
+  const seats = seatsFor(attendingCount, courtCount);
+  const plan = format === "regular" ? planRegularRounds(attendingCount, courtCount) : null;
+  const suggested = plan?.rounds ?? planCasualRounds(attendingCount, courtCount);
 
   // Text, not a number: coercing every keystroke made the box impossible to
   // clear and retype.
@@ -41,8 +50,12 @@ export function GenerateRoundButton({
   const rounds = Number.parseInt(roundsText, 10);
   const roundsValid = Number.isInteger(rounds) && rounds >= 1 && rounds <= 20;
 
-  const gamesEach =
-    seats > 0 && roundsValid ? ((rounds * seats) / attendingCount).toFixed(1) : null;
+  const gamesEach = seats > 0 && roundsValid ? (rounds * seats) / attendingCount : null;
+  const byesEach = gamesEach === null ? 0 : rounds - gamesEach;
+  // Flag this before the night rather than after. An uneven split is
+  // arithmetic — no amount of clever scheduling rescues it.
+  const uneven =
+    roundsValid && seats > 0 && !splitsEvenly(attendingCount, courtCount, rounds);
 
   if (tooFew) {
     return (
@@ -75,10 +88,28 @@ export function GenerateRoundButton({
             {pending ? "Building…" : "Create all matches"}
           </button>
         </div>
-        <p className={`hint ${roundsValid ? "" : "text-[var(--danger)]"}`}>
-          {roundsValid
-            ? `About ${gamesEach} games each. You can add more rounds later.`
-            : "Enter a number of rounds between 1 and 20."}
+        <p
+          className={`hint ${
+            !roundsValid ? "text-[var(--danger)]" : uneven ? "text-[var(--accent)]" : ""
+          }`}
+        >
+          {!roundsValid ? (
+            "Enter a number of rounds between 1 and 20."
+          ) : uneven ? (
+            <>
+              {rounds} rounds doesn&apos;t divide evenly across {attendingCount} players —{" "}
+              {Math.ceil(gamesEach!)} games for some, {Math.floor(gamesEach!)} for the rest.
+              {plan ? ` Use ${plan.rounds} to give everyone the same.` : ""}
+            </>
+          ) : (
+            <>
+              {gamesEach} games each
+              {byesEach > 0 ? `, sitting out ${byesEach}` : ""}
+              {plan && rounds === plan.rounds && plan.fullCoverage
+                ? " — and you partner everyone exactly once."
+                : ". You can add more rounds later."}
+            </>
+          )}
         </p>
       </div>
     );

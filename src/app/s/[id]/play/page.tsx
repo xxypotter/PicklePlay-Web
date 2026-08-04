@@ -114,6 +114,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
               attendingCount={attendingCount}
               courtCount={session.courtNames.length}
               roundsSoFar={allRounds.length}
+              format={session.format}
             />
             {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
           </>
