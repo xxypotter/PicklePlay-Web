@@ -55,12 +55,29 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/*
+ * Courtside on a phone: never let a stray horizontal scroll appear.
+ *
+ * This lives on the root and uses `clip`, not `overflow-x: hidden` on `body`,
+ * which is where it used to be. Two reasons, in order of how much they matter:
+ *
+ * 1. `overflow` on `body` is a documented way to break `position: fixed` in
+ *    iOS Safari — the bottom bar stops tracking the viewport and drifts up the
+ *    page on long screens. Other engines tolerate it, which is why the bar
+ *    behaved on desktop Chrome and misbehaved on an iPhone.
+ * 2. `clip` is not a scroll container at all, where `hidden` is. A scroll
+ *    container is precisely the thing that changes how fixed and sticky
+ *    descendants are resolved, so `clip` cannot reintroduce the same class of
+ *    bug later.
+ */
+html {
+  overflow-x: clip;
+}
+
 body {
   background: var(--bg);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
-  /* Courtside on a phone: never let a stray horizontal scroll appear. */
-  overflow-x: hidden;
 }
 
 @layer components {
