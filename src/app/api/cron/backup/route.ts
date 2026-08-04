@@ -84,6 +84,12 @@ export async function GET(request: Request) {
     signups: signupRows,
   };
 
+  // Serialize before the configuration check, so a value that can't be encoded
+  // fails loudly on every run rather than only once credentials are added.
+  const path = `backups/${payload.takenAt.slice(0, 10)}.json`;
+  const json = JSON.stringify(payload, null, 2);
+  const content = Buffer.from(json).toString("base64");
+
   const repo = process.env.BACKUP_GITHUB_REPO;
   const token = process.env.BACKUP_GITHUB_TOKEN;
 
@@ -94,12 +100,10 @@ export async function GET(request: Request) {
       ok: true,
       stored: false,
       warning: "BACKUP_GITHUB_REPO / BACKUP_GITHUB_TOKEN not set; nothing was uploaded.",
+      bytes: json.length,
       counts: payload.counts,
     });
   }
-
-  const path = `backups/${payload.takenAt.slice(0, 10)}.json`;
-  const content = Buffer.from(JSON.stringify(payload, null, 2)).toString("base64");
 
   const api = `https://api.github.com/repos/${repo}/contents/${path}`;
   const headers = {

@@ -13,7 +13,7 @@ export default function Standings({ rows, meId }: { rows: StandingRow[]; meId?: 
   return (
     <section className="card mt-6">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-[var(--muted)]">Tonight&apos;s standings</h2>
+        <h2 className="text-sm font-medium text-[var(--muted)]">Session standings</h2>
         <Link href="/leaderboard" className="text-xs font-semibold text-[var(--accent)] underline">
           All-time
         </Link>
@@ -56,7 +56,9 @@ export default function Standings({ rows, meId }: { rows: StandingRow[]; meId?: 
           );
         })}
       </ul>
-      <p className="hint mt-3">Won–lost, point difference, and rating change tonight.</p>
+      <p className="hint mt-3">
+        Won–lost, point difference, and rating change from this session.
+      </p>
     </section>
   );
 }

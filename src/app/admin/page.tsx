@@ -8,6 +8,7 @@ import type { Role } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
 import { getInviteCode } from "@/lib/invite";
+import BackupCard from "./BackupCard";
 import InviteCard from "./InviteCard";
 import RosterCard from "./RosterCard";
 
@@ -53,6 +54,13 @@ export default async function AdminPage() {
       </div>
 
       <InviteCard code={code} origin={`${proto}://${host}`} />
+
+      {/* Super admin only: it exposes whether the deploy is holding credentials. */}
+      {me.role === "superadmin" ? (
+        <BackupCard
+          configured={!!process.env.BACKUP_GITHUB_REPO && !!process.env.BACKUP_GITHUB_TOKEN}
+        />
+      ) : null}
 
       <RosterCard
         roster={roster.map((p) => ({ ...p, role: p.role as Role }))}

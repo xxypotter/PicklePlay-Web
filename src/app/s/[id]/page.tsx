@@ -12,6 +12,7 @@ import MatchCard from "./MatchCard";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import ShareLink from "./ShareLink";
 import Standings from "./Standings";
+import { DeleteSessionButton } from "./play/PlayControls";
 
 export const metadata = { title: "Session · PicklePlay" };
 
@@ -56,6 +57,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     headerList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
 
   const isAdmin = !!me && canManageSessions(me.role);
+  // Mirrors deleteSessionAction: your own sessions, or anything if super admin.
+  const canDelete =
+    !!me && (me.role === "superadmin" || (isAdmin && session.createdBy === me.id));
   const spotsLeft = Math.max(0, session.maxPlayers - confirmed.length);
 
   const isMine = (m: { teamA: { id: string }[]; teamB: { id: string }[] }) =>
@@ -160,7 +164,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           className="mt-6 block rounded-xl bg-[var(--accent)] px-4 py-3.5 text-center text-base
             font-semibold text-[var(--accent-fg)]"
         >
-          Run the session
+          {session.status === "closed" ? "Manage session" : "Run the session"}
         </Link>
       ) : null}
 
@@ -220,6 +224,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       {waiting.length > 0 ? (
         <Roster title={`Waitlist (${waiting.length})`} rows={waiting} empty="" showPosition />
       ) : null}
+
+      {/*
+        Deleting a finished session is the most likely reason an admin comes
+        back to an old page, so it lives here rather than only inside the play
+        console. Authorization is enforced in the action regardless.
+      */}
+      {canDelete ? <DeleteSessionButton sessionId={id} /> : null}
     </main>
   );
 }
