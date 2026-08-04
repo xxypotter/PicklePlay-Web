@@ -72,6 +72,14 @@
  */
 html {
   overflow-x: clip;
+
+  /*
+   * Stop the rubber-band bounce at the ends of a scroll. On iOS the whole page
+   * lifts when you drag past the end, and anything fixed lifts with it — the
+   * bottom bar included, which reads as the bar coming unstuck. Desktop
+   * browsers don't bounce, so this only shows up on the phone.
+   */
+  overscroll-behavior-y: none;
 }
 
 body {

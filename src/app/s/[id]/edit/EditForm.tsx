@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import type { FormState } from "@/lib/auth/types";
 import { updateSessionAction } from "@/lib/sessions/edit-actions";
+import DateTimeField from "@/components/DateTimeField";
 
 const FORMATS = [
   { key: "regular", label: "Regular round robin", hint: "Partner with everyone once before anyone repeats." },
@@ -13,15 +14,6 @@ const FORMATS = [
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;
-
-/** `datetime-local` needs a local-time string, not an ISO one. */
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
-}
 
 export interface EditableSession {
   id: string;
@@ -93,13 +85,10 @@ export default function EditForm({ session }: { session: EditableSession }) {
         <label className="label" htmlFor="startsAtLocal">
           Date &amp; time
         </label>
-        <input
+        <DateTimeField
           id="startsAtLocal"
           name="startsAtLocal"
-          className="field"
-          type="datetime-local"
-          defaultValue={toLocalInput(session.startsAtIso)}
-          required
+          initialIso={session.startsAtIso}
         />
       </div>
 

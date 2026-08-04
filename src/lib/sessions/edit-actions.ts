@@ -117,6 +117,10 @@ export async function updateSessionAction(
     .where(eq(sessions.id, sessionId));
 
   revalidatePath(`/s/${sessionId}`);
+  // The edit screen itself, or reopening it serves the values you just changed.
+  revalidatePath(`/s/${sessionId}/edit`);
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath("/sessions");
   revalidatePath("/");
   redirect(`/s/${sessionId}`);
 }

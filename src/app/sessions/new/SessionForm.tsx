@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { createSessionAction } from "@/lib/sessions/actions";
 import type { FormState } from "@/lib/auth/types";
+import DateTimeField from "@/components/DateTimeField";
 
 const FORMATS = [
   {
@@ -29,16 +30,6 @@ const FORMATS = [
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;
-
-/** Default to the next 7pm — the usual slot, and saves a lot of tapping. */
-function defaultStart(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  if (d.getHours() >= 19) d.setDate(d.getDate() + 1);
-  d.setHours(19);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export interface PickablePlayer {
   id: string;
@@ -116,14 +107,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
         <label className="label" htmlFor="startsAtLocal">
           Date &amp; time
         </label>
-        <input
-          id="startsAtLocal"
-          name="startsAtLocal"
-          className="field"
-          type="datetime-local"
-          defaultValue={defaultStart()}
-          required
-        />
+        <DateTimeField id="startsAtLocal" name="startsAtLocal" />
         <input type="hidden" name="startsAt" />
       </div>
 
