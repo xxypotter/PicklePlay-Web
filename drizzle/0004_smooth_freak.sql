@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "court_names" text[] DEFAULT '{"1","2"}' NOT NULL;

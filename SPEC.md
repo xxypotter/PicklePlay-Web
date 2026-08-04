@@ -112,6 +112,27 @@ dump is a **complete, restorable backup of the entire product** — a few hundre
 It also means we're never locked in: restoring it into Supabase or anywhere else is
 a single script.
 
+#### Dev and production are separate databases
+
+Local development runs against a **`pickleplay_dev`** database on the same Neon
+project; production uses `neondb`. Before this split, every test run wrote to
+live player data — which is exactly how a dozen `dev_*` accounts once ended up
+on the real leaderboard.
+
+- `.env.local` points at `pickleplay_dev`. `npm run db:migrate` only ever
+  touches dev.
+- `DATABASE_URL_PROD_UNPOOLED` in `.env.local` points at `neondb`, and is used
+  **only** by `npm run db:migrate:prod`, which has its own drizzle config. Two
+  separate configs rather than one flag, so the destructive one can't be reached
+  by a typo.
+- `npm run db:seed` creates twelve `dev_*` test players; `npm run db:seed purge`
+  removes them. The purge only ever matches the `dev_` prefix, so it cannot
+  touch a real account even if pointed at the wrong database.
+
+A Neon *branch* would be marginally better (copy-on-write, so you can test
+against a copy of real data), but a separate database on the same project needs
+no console trip and gives the isolation that actually mattered.
+
 #### Two setup details that bite
 
 - **Use Neon's pooled connection string** (the `-pooler` hostname), not the direct

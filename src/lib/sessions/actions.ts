@@ -32,16 +32,26 @@ export async function createSessionAction(
     return { error: "Pick a date and time.", field: "startsAtLocal" };
   }
 
-  const durationMin = num(formData, "durationMin");
-  const courtCount = num(formData, "courtCount");
+  // "3, 4" or "Center, North" — whatever the venue actually calls them.
+  const courtNames = str(formData, "courtNames")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  if (courtNames.length === 0) {
+    return { error: "Name at least one court, e.g. 3, 4", field: "courtNames" };
+  }
+  if (new Set(courtNames.map((c) => c.toLowerCase())).size !== courtNames.length) {
+    return { error: "Each court needs a different name.", field: "courtNames" };
+  }
+  if (courtNames.some((c) => c.length > 16)) {
+    return { error: "Court names must be 16 characters or fewer.", field: "courtNames" };
+  }
+
+  const courtCount = courtNames.length;
   const maxPlayers = num(formData, "maxPlayers");
 
-  if (!Number.isInteger(durationMin) || durationMin < 30 || durationMin > 480) {
-    return { error: "Duration must be between 30 and 480 minutes.", field: "durationMin" };
-  }
-  if (!Number.isInteger(courtCount) || courtCount < 1 || courtCount > 12) {
-    return { error: "Courts must be between 1 and 12.", field: "courtCount" };
-  }
   if (!Number.isInteger(maxPlayers) || maxPlayers < 4 || maxPlayers > 64) {
     return { error: "Max players must be between 4 and 64.", field: "maxPlayers" };
   }
@@ -61,7 +71,7 @@ export async function createSessionAction(
       title,
       location: str(formData, "location") || null,
       startsAt,
-      durationMin,
+      courtNames,
       courtCount,
       maxPlayers,
       format,

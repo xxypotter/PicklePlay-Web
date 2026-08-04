@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:prod": "drizzle-kit migrate --config drizzle.config.prod.ts",
     "db:studio": "drizzle-kit studio",
     "db:check": "node scripts/check-db.mjs",
     "db:seed": "node scripts/seed-dev.mjs"

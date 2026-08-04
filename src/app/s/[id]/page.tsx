@@ -7,6 +7,8 @@ import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats, sessions, signups } from "@/lib/db/schema";
+import { getCurrentRound } from "@/lib/sessions/queries";
+import MatchCard from "./MatchCard";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import ShareLink from "./ShareLink";
 
@@ -20,7 +22,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const session = found[0];
   if (!session) notFound();
 
-  const [me, roster, headerList] = await Promise.all([
+  const [me, roster, round, headerList] = await Promise.all([
     getCurrentPlayer(),
     db
       .select({
@@ -28,6 +30,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         username: players.username,
         state: signups.state,
         waitlistPos: signups.waitlistPos,
+        attended: signups.attended,
         rating: playerStats.rating,
         provisional: playerStats.provisional,
       })
@@ -36,6 +39,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       .leftJoin(playerStats, eq(playerStats.playerId, signups.playerId))
       .where(eq(signups.sessionId, id))
       .orderBy(asc(signups.createdAt)),
+    getCurrentRound(id, session.courtNames),
     headers(),
   ]);
 
@@ -47,31 +51,101 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const host = headerList.get("host") ?? "localhost:3000";
   const proto =
     headerList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const url = `${proto}://${host}/s/${id}`;
 
   const isAdmin = !!me && canManageSessions(me.role);
   const spotsLeft = Math.max(0, session.maxPlayers - confirmed.length);
 
+  const myMatch = me
+    ? round?.matches.find((m) =>
+        [...m.teamA, ...m.teamB].some((p) => p.id === me.id),
+      )
+    : undefined;
+
+  const otherMatches = round?.matches.filter((m) => m.id !== myMatch?.id) ?? [];
+
+  const playingIds = new Set(round?.matches.flatMap((m) => [...m.teamA, ...m.teamB].map((p) => p.id)) ?? []);
+  const sittingOut = round
+    ? confirmed.filter((r) => r.attended && !playingIds.has(r.playerId))
+    : [];
+
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
-      <div className="mb-5 flex items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-bold">{session.title}</h1>
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h1 className="truncate text-2xl font-bold">{session.title}</h1>
         <Link href="/" className="shrink-0 text-sm font-medium text-[var(--accent)] underline">
           Home
         </Link>
       </div>
 
+      {/* During play, your own court is the only thing you're looking for. */}
+      {myMatch ? (
+        <section className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-[var(--accent)]">
+            Your match · Round {round!.index}
+          </h2>
+          <MatchCard match={myMatch} meId={me!.id} canEnterScore highlight />
+        </section>
+      ) : null}
+
+      {round && !myMatch && sittingOut.some((s) => s.playerId === me?.id) ? (
+        <p className="card mb-6 text-center text-sm">
+          You&apos;re sitting out round {round.index}. You&apos;re up next.
+        </p>
+      ) : null}
+
+      {round && otherMatches.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="mb-2 text-sm font-medium text-[var(--muted)]">
+            {myMatch ? "Other courts" : `Round ${round.index}`}
+          </h2>
+          <div className="flex flex-col gap-3">
+            {otherMatches.map((m) => (
+              <MatchCard
+                key={m.id}
+                match={m}
+                meId={me?.id}
+                canEnterScore={isAdmin && !myMatch}
+              />
+            ))}
+          </div>
+          {sittingOut.length > 0 ? (
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Sitting out: {sittingOut.map((s) => s.username).join(", ")}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      <div className="mb-6 flex gap-3">
+        <Link
+          href="/leaderboard"
+          className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-center
+            text-sm font-semibold"
+        >
+          Rankings
+        </Link>
+        {isAdmin ? (
+          <Link
+            href={`/s/${id}/play`}
+            className="flex-1 rounded-xl bg-[var(--accent)] px-4 py-3 text-center text-sm
+              font-semibold text-[var(--accent-fg)]"
+          >
+            Run the session
+          </Link>
+        ) : null}
+      </div>
+
       <section className="card">
-        <p className="text-lg font-semibold">
+        <p className="font-semibold">
           <LocalDateTime iso={session.startsAt.toISOString()} />
         </p>
         {session.location ? (
           <p className="mt-1 text-[var(--muted)]">{session.location}</p>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
           <Badge>
-            {session.courtCount} court{session.courtCount === 1 ? "" : "s"}
+            Court{session.courtNames.length === 1 ? "" : "s"} {session.courtNames.join(", ")}
           </Badge>
           <Badge>
             {confirmed.length}/{session.maxPlayers} in
@@ -81,10 +155,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </div>
 
         {session.notes ? (
-          <p className="mt-4 whitespace-pre-line text-sm text-[var(--muted)]">{session.notes}</p>
+          <p className="mt-3 whitespace-pre-line text-sm text-[var(--muted)]">{session.notes}</p>
         ) : null}
 
-        <div className="mt-5">
+        <div className="mt-4">
           {me ? (
             session.status === "closed" ? (
               <p className="text-sm text-[var(--muted)]">This session is closed.</p>
@@ -99,25 +173,18 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className="mt-3">
-          <ShareLink url={url} title={session.title} />
+          <ShareLink url={`${proto}://${host}/s/${id}`} title={session.title} />
         </div>
       </section>
 
-      <Roster title={`Playing (${confirmed.length})`} rows={confirmed} empty="Nobody yet — be first." />
+      <Roster
+        title={`Playing (${confirmed.length})`}
+        rows={confirmed}
+        empty="Nobody yet — be first."
+      />
 
       {waiting.length > 0 ? (
-        <Roster
-          title={`Waitlist (${waiting.length})`}
-          rows={waiting}
-          empty=""
-          showPosition
-        />
-      ) : null}
-
-      {isAdmin ? (
-        <Link href={`/s/${id}/play`} className="btn-primary mt-6 block text-center">
-          Open play console
-        </Link>
+        <Roster title={`Waitlist (${waiting.length})`} rows={waiting} empty="" showPosition />
       ) : null}
     </main>
   );
@@ -157,7 +224,9 @@ function Roster({
                     {r.waitlistPos}.
                   </span>
                 ) : null}
-                <span className="truncate font-medium">{r.username}</span>
+                <Link href={`/p/${r.username}`} className="truncate font-medium">
+                  {r.username}
+                </Link>
               </span>
               <span className="shrink-0 font-mono text-sm tabular-nums text-[var(--muted)]">
                 {r.rating === null ? "—" : r.rating.toFixed(3)}

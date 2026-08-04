@@ -7,6 +7,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { playerStats, sessions, signups } from "@/lib/db/schema";
+import { getCurrentRound } from "@/lib/sessions/queries";
 
 /**
  * Sessions stay listed until a few hours after they start, so the page is still
@@ -60,6 +61,7 @@ export default async function HomePage() {
         startsAt: sessions.startsAt,
         maxPlayers: sessions.maxPlayers,
         status: sessions.status,
+        courtNames: sessions.courtNames,
       })
       .from(sessions)
       .where(and(gte(sessions.startsAt, cutoff), ne(sessions.status, "closed")))
@@ -87,6 +89,14 @@ export default async function HomePage() {
   const countBy = new Map(counts.map((c) => [c.sessionId, c.n]));
   const stateBy = new Map(mine.map((m) => [m.sessionId, m.state]));
 
+  // Mid-session, the only thing anyone wants is which court they're on. Surface
+  // it on the home screen rather than making them navigate to find it.
+  const live = upcoming.find((s) => s.status === "live" && stateBy.has(s.id));
+  const liveRound = live ? await getCurrentRound(live.id, live.courtNames) : null;
+  const liveMatch = liveRound?.matches.find((m) =>
+    [...m.teamA, ...m.teamB].some((p) => p.id === me.id),
+  );
+
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
       <header className="mb-6 flex items-baseline justify-between">
@@ -100,6 +110,27 @@ export default async function HomePage() {
           </span>
         ) : null}
       </header>
+
+      {liveMatch && live ? (
+        <Link
+          href={`/s/${live.id}`}
+          className="mb-6 block rounded-2xl border-2 border-[var(--accent)] bg-[var(--accent)]/5 p-5
+            active:opacity-70"
+        >
+          <p className="text-sm font-semibold text-[var(--accent)]">
+            You&apos;re on now · Round {liveRound!.index}
+          </p>
+          <p className="mt-1 text-2xl font-bold">{liveMatch.courtLabel}</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {[...liveMatch.teamA, ...liveMatch.teamB]
+              .map((p) => (p.id === me.id ? "you" : p.username))
+              .join(", ")}
+          </p>
+          <p className="mt-3 text-sm font-semibold text-[var(--accent)]">
+            {liveMatch.completed ? "Score recorded — tap to change" : "Tap to enter the score"}
+          </p>
+        </Link>
+      ) : null}
 
       <section className="card">
         <div className="flex items-baseline justify-between">
@@ -116,10 +147,12 @@ export default async function HomePage() {
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-          {stats?.provisional ? (
+          {!stats ? (
+            <Badge>Not rated yet</Badge>
+          ) : stats.provisional ? (
             <Badge>Provisional</Badge>
           ) : (
-            <Badge>{Math.round((stats?.reliability ?? 0) * 100)}% reliable</Badge>
+            <Badge>{Math.round(stats.reliability * 100)}% reliable</Badge>
           )}
           {stats?.selfDeclared ? <Badge>Self-declared</Badge> : null}
         </div>

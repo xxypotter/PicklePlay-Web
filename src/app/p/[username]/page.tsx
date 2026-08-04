@@ -118,10 +118,12 @@ export default async function ProfilePage({
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-          {stats?.provisional ? (
+          {!stats ? (
+            <Badge>Not rated yet</Badge>
+          ) : stats.provisional ? (
             <Badge>Provisional</Badge>
           ) : (
-            <Badge>{Math.round((stats?.reliability ?? 0) * 100)}% reliable</Badge>
+            <Badge>{Math.round(stats.reliability * 100)}% reliable</Badge>
           )}
           {stats?.selfDeclared ? <Badge>Self-declared</Badge> : null}
           {player.role !== "player" ? <Badge>{ROLE_LABELS[player.role as Role]}</Badge> : null}

@@ -132,7 +132,13 @@ export const sessions = pgTable(
     title: text("title").notNull(),
     location: text("location"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-    durationMin: integer("duration_min").notNull().default(120),
+    /**
+     * The actual court names or numbers, e.g. ["3","4"] or ["Center","North"].
+     * Knowing you're on court 7 is what a player needs; a bare count leaves the
+     * organizer shouting "which court?" all night. Length is the court count.
+     */
+    courtNames: text("court_names").array().notNull().default(["1", "2"]),
+    /** Always courtNames.length; kept as a column so queries can filter on it. */
     courtCount: integer("court_count").notNull().default(2),
     maxPlayers: integer("max_players").notNull().default(16),
     format: formatEnum("format").notNull().default("balanced"),

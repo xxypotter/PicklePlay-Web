@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canManageSessions } from "@/lib/auth/policy";
@@ -6,15 +6,16 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { matches, players, rounds, sessions, signups } from "@/lib/db/schema";
 import { getAttending } from "@/lib/matchmaking/service";
+import { courtLabel, getCurrentRound } from "@/lib/sessions/queries";
+import MatchCard from "../MatchCard";
 import {
   AttendanceToggle,
   CloseSessionButton,
   DiscardRoundButton,
   GenerateRoundButton,
 } from "./PlayControls";
-import ScoreEntry, { type CourtMatch } from "./ScoreEntry";
 
-export const metadata = { title: "Play · PicklePlay" };
+export const metadata = { title: "Run session · PicklePlay" };
 
 export default async function PlayPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,7 +28,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
   const session = found[0];
   if (!session) notFound();
 
-  const [roster, roundRows, matchRows, attending] = await Promise.all([
+  const [roster, roundRows, pastMatches, attending, round] = await Promise.all([
     db
       .select({
         playerId: signups.playerId,
@@ -42,7 +43,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
       .select({ id: rounds.id, index: rounds.index })
       .from(rounds)
       .where(eq(rounds.sessionId, id))
-      .orderBy(asc(rounds.index)),
+      .orderBy(desc(rounds.index)),
     db
       .select({
         id: matches.id,
@@ -60,41 +61,31 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
       .where(and(eq(matches.sessionId, id), ne(matches.status, "void")))
       .orderBy(asc(matches.courtNo)),
     getAttending(id),
+    getCurrentRound(id, session.courtNames),
   ]);
 
   const nameOf = new Map(roster.map((r) => [r.playerId, r.username]));
-  const attendingIds = new Set(attending.map((a) => a.id));
+  const attendingCount = attending.length;
 
-  const latest = roundRows[roundRows.length - 1];
-  const latestMatches = latest ? matchRows.filter((m) => m.roundId === latest.id) : [];
-  const latestUnplayed = latestMatches.every((m) => m.status !== "completed");
-
-  const toCourtMatch = (m: (typeof matchRows)[number]): CourtMatch => ({
-    id: m.id,
-    courtNo: m.courtNo,
-    teamA: [m.a1, m.a2].map((p) => nameOf.get(p) ?? "?"),
-    teamB: [m.b1, m.b2].map((p) => nameOf.get(p) ?? "?"),
-    scoreA: m.scoreA,
-    scoreB: m.scoreB,
-    completed: m.status === "completed",
-  });
-
-  const sittingOut = attending.filter(
-    (p) => !latestMatches.some((m) => [m.a1, m.a2, m.b1, m.b2].includes(p.id)),
+  const roundUnplayed = round?.matches.every((m) => !m.completed) ?? false;
+  const playingIds = new Set(
+    round?.matches.flatMap((m) => [...m.teamA, ...m.teamB].map((p) => p.id)) ?? [],
   );
+  const sittingOut = attending.filter((p) => !playingIds.has(p.id));
+  const earlierRounds = roundRows.slice(1);
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
       <div className="mb-5 flex items-baseline justify-between gap-3">
         <h1 className="truncate text-2xl font-bold">{session.title}</h1>
         <Link href={`/s/${id}`} className="shrink-0 text-sm font-medium text-[var(--accent)] underline">
-          Details
+          Player view
         </Link>
       </div>
 
       <section className="card">
         <h2 className="text-sm font-medium text-[var(--muted)]">
-          Who&apos;s here ({attendingIds.size}/{roster.length})
+          Who&apos;s here ({attendingCount}/{roster.length})
         </h2>
         <p className="hint">Tap anyone who didn&apos;t show up.</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -111,21 +102,28 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
 
         <GenerateRoundButton
           sessionId={id}
-          attendingCount={attendingIds.size}
+          attendingCount={attendingCount}
           hasOpenRound={roundRows.length > 0}
         />
+        <p className="hint">
+          Court{session.courtNames.length === 1 ? "" : "s"} {session.courtNames.join(", ")} ·
+          seats {session.courtNames.length * 4}
+          {attendingCount > session.courtNames.length * 4
+            ? ` · ${attendingCount - session.courtNames.length * 4} sit out each round`
+            : ""}
+        </p>
       </section>
 
-      {latest ? (
+      {round ? (
         <section className="mt-6">
           <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold">Round {latest.index}</h2>
-            {latestUnplayed ? <DiscardRoundButton sessionId={id} roundId={latest.id} /> : null}
+            <h2 className="text-lg font-semibold">Round {round.index}</h2>
+            {roundUnplayed ? <DiscardRoundButton sessionId={id} roundId={round.id} /> : null}
           </div>
 
           <div className="flex flex-col gap-3">
-            {latestMatches.map((m) => (
-              <ScoreEntry key={m.id} match={toCourtMatch(m)} />
+            {round.matches.map((m) => (
+              <MatchCard key={m.id} match={m} meId={me.id} canEnterScore canVoid />
             ))}
           </div>
 
@@ -141,35 +139,33 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </p>
       )}
 
-      {roundRows.length > 1 ? (
+      {earlierRounds.length > 0 ? (
         <section className="mt-8">
           <h2 className="mb-3 text-sm font-medium text-[var(--muted)]">Earlier rounds</h2>
           <div className="flex flex-col gap-3">
-            {[...roundRows]
-              .slice(0, -1)
-              .reverse()
-              .map((r) => (
-                <div key={r.id} className="card">
-                  <h3 className="text-sm font-semibold text-[var(--muted)]">Round {r.index}</h3>
-                  <ul className="mt-2 flex flex-col gap-1.5 text-sm">
-                    {matchRows
-                      .filter((m) => m.roundId === r.id)
-                      .map((m) => {
-                        const c = toCourtMatch(m);
-                        return (
-                          <li key={m.id} className="flex items-baseline justify-between gap-2">
-                            <span className="min-w-0 truncate">
-                              {c.teamA.join(" & ")} v {c.teamB.join(" & ")}
-                            </span>
-                            <span className="shrink-0 font-mono tabular-nums">
-                              {c.completed ? `${c.scoreA}–${c.scoreB}` : "—"}
-                            </span>
-                          </li>
-                        );
-                      })}
-                  </ul>
-                </div>
-              ))}
+            {earlierRounds.map((r) => (
+              <div key={r.id} className="card">
+                <h3 className="text-sm font-semibold text-[var(--muted)]">Round {r.index}</h3>
+                <ul className="mt-2 flex flex-col gap-1.5 text-sm">
+                  {pastMatches
+                    .filter((m) => m.roundId === r.id)
+                    .map((m) => (
+                      <li key={m.id} className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate">
+                          <span className="text-[var(--muted)]">
+                            {courtLabel(session.courtNames, m.courtNo)}:{" "}
+                          </span>
+                          {[m.a1, m.a2].map((p) => nameOf.get(p) ?? "?").join(" & ")} v{" "}
+                          {[m.b1, m.b2].map((p) => nameOf.get(p) ?? "?").join(" & ")}
+                        </span>
+                        <span className="shrink-0 font-mono tabular-nums">
+                          {m.status === "completed" ? `${m.scoreA}–${m.scoreB}` : "—"}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ))}
           </div>
         </section>
       ) : null}

@@ -4,12 +4,15 @@ import { useActionState } from "react";
 import { createSessionAction } from "@/lib/sessions/actions";
 import type { FormState } from "@/lib/auth/types";
 
+/**
+ * "King of the court" is deliberately absent: the generator doesn't implement
+ * court promotion yet and would silently fall back to balanced. Offering a
+ * format that quietly does something else is worse than not offering it.
+ */
 const FORMATS = [
   { key: "balanced", label: "Balanced round robin", hint: "Teams matched by rating, partners rotate" },
   { key: "fixed", label: "Fixed partners", hint: "Pairs stay together, opponents rotate" },
-  { key: "king", label: "King of the court", hint: "Winners move up a court, losers move down" },
   { key: "social", label: "Social / random", hint: "Random partners, no rating balancing" },
-  { key: "manual", label: "Manual", hint: "You build every matchup by hand" },
 ];
 
 /** Default to the next 7pm — the usual slot, and saves a lot of tapping. */
@@ -74,56 +77,40 @@ export default function SessionForm() {
         <input type="hidden" name="startsAt" />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="label" htmlFor="courtCount">
-            Courts
-          </label>
-          <input
-            id="courtCount"
-            name="courtCount"
-            className="field"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={12}
-            defaultValue={2}
-            required
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="maxPlayers">
-            Max
-          </label>
-          <input
-            id="maxPlayers"
-            name="maxPlayers"
-            className="field"
-            type="number"
-            inputMode="numeric"
-            min={4}
-            max={64}
-            defaultValue={12}
-            required
-          />
-        </div>
-        <div>
-          <label className="label" htmlFor="durationMin">
-            Minutes
-          </label>
-          <input
-            id="durationMin"
-            name="durationMin"
-            className="field"
-            type="number"
-            inputMode="numeric"
-            min={30}
-            max={480}
-            step={15}
-            defaultValue={120}
-            required
-          />
-        </div>
+      <div>
+        <label className="label" htmlFor="courtNames">
+          Which courts?
+        </label>
+        <input
+          id="courtNames"
+          name="courtNames"
+          className="field"
+          defaultValue="1, 2"
+          placeholder="3, 4"
+          required
+        />
+        <p className="hint">
+          Separate with commas — court numbers or names, whatever the venue calls
+          them. Players see these on their matchup.
+        </p>
+      </div>
+
+      <div>
+        <label className="label" htmlFor="maxPlayers">
+          Max players
+        </label>
+        <input
+          id="maxPlayers"
+          name="maxPlayers"
+          className="field"
+          type="number"
+          inputMode="numeric"
+          min={4}
+          max={64}
+          defaultValue={12}
+          required
+        />
+        <p className="hint">Anyone after this joins the waitlist.</p>
       </div>
 
       <div>
