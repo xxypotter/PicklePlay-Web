@@ -83,8 +83,8 @@ export default async function LeaderboardPage({
         active={active}
         items={[
           { key: "all", label: "All", href: here("all") },
-          { key: "male", label: "Men", href: here("male") },
-          { key: "female", label: "Women", href: here("female") },
+          { key: "male", label: "Boy", href: here("male") },
+          { key: "female", label: "Girl", href: here("female") },
         ]}
       />
 

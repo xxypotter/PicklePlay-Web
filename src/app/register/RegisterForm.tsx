@@ -112,8 +112,8 @@ export default function RegisterForm({
         <input type="hidden" name="gender" value={gender} />
         <div className="grid grid-cols-3 gap-2">
           {[
-            { key: "male", label: "Men" },
-            { key: "female", label: "Women" },
+            { key: "male", label: "Boy" },
+            { key: "female", label: "Girl" },
             { key: "unspecified", label: "Not listed" },
           ].map((o) => (
             <Choice

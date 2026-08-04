@@ -164,8 +164,8 @@ export function GenderCard({ gender }: { gender: string }) {
   const [value, setValue] = useState(gender);
 
   const options = [
-    { key: "male", label: "Men" },
-    { key: "female", label: "Women" },
+    { key: "male", label: "Boy" },
+    { key: "female", label: "Girl" },
     { key: "unspecified", label: "Not listed" },
   ];
 
