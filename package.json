@@ -15,7 +15,8 @@
     "db:migrate:prod": "drizzle-kit migrate --config drizzle.config.prod.ts",
     "db:studio": "drizzle-kit studio",
     "db:check": "node scripts/check-db.mjs",
-    "db:seed": "node scripts/seed-dev.mjs"
+    "db:seed": "node scripts/seed-dev.mjs",
+    "db:reset": "node scripts/reset-dev.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

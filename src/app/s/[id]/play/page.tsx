@@ -108,7 +108,8 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
         </p>
       ) : (
         <section className="mt-6 flex flex-col gap-6">
-          {[...allRounds].reverse().map((round) => {
+          {/* Round 1 first: the schedule reads in the order it's played. */}
+          {allRounds.map((round) => {
             const playingIds = new Set(
               round.matches.flatMap((m) => [...m.teamA, ...m.teamB].map((p) => p.id)),
             );

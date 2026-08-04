@@ -67,11 +67,14 @@ if (process.argv[2] === "purge") {
     made++;
   }
 
-  // One seeded admin so admin-only flows are testable without touching a real
-  // account. Never a superadmin — that role belongs to the real owner.
-  await sql`update players set role = 'admin' where username_lower = ${PREFIX + "ana"}`;
+  // All three roles present, so the permission boundaries between them are
+  // actually testable rather than assumed.
+  await sql`update players set role = 'superadmin' where username_lower = ${PREFIX + "ana"}`;
+  await sql`update players set role = 'admin' where username_lower = ${PREFIX + "ben"}`;
 
-  console.log(`seeded ${made} dev accounts (PIN 4729); dev_ana is admin`);
+  console.log(
+    `seeded ${made} dev accounts (PIN 4729); dev_ana=superadmin, dev_ben=admin, rest players`,
+  );
 }
 
 const all = await sql`select count(*)::int as n from players`;

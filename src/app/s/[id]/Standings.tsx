@@ -56,8 +56,10 @@ export default function Standings({ rows, meId }: { rows: StandingRow[]; meId?: 
           );
         })}
       </ul>
+      {/* An unrated session has no rating column, so don't promise one. */}
       <p className="hint mt-3">
-        Won–lost, point difference, and rating change from this session.
+        Won–lost and point difference
+        {rows.some((r) => r.ratingDelta !== null) ? ", plus rating change from this session" : ""}.
       </p>
     </section>
   );
