@@ -11,29 +11,49 @@ import { importRecordAction, setAvatarAction, setGenderAction } from "@/lib/prof
  * A phone photo is several megabytes; the avatar renders at 56px. Shrinking to
  * 160px square here keeps the stored data URL around 10KB, which is the only
  * reason storing it in the database at all is reasonable.
+ *
+ * Decodes through an <img> rather than createImageBitmap: iPhone photos are
+ * HEIC, and Safari will render HEIC in an image element while createImageBitmap
+ * refuses it. The <img> path also applies EXIF orientation, so pictures taken
+ * sideways don't come out sideways.
  */
-async function toSquareDataUrl(file: File, size = 160): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const side = Math.min(bitmap.width, bitmap.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+function toSquareDataUrl(file: File, size = 160): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas unavailable.");
-  ctx.drawImage(
-    bitmap,
-    (bitmap.width - side) / 2,
-    (bitmap.height - side) / 2,
-    side,
-    side,
-    0,
-    0,
-    size,
-    size,
-  );
-  bitmap.close();
-  return canvas.toDataURL("image/jpeg", 0.82);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      if (!side) return reject(new Error("Empty image."));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas unavailable."));
+
+      ctx.drawImage(
+        img,
+        (img.naturalWidth - side) / 2,
+        (img.naturalHeight - side) / 2,
+        side,
+        side,
+        0,
+        0,
+        size,
+        size,
+      );
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("That image couldn't be read."));
+    };
+
+    img.src = url;
+  });
 }
 
 export function AvatarCard({
@@ -46,14 +66,16 @@ export function AvatarCard({
   const [state, action, pending] = useActionState(setAvatarAction, {} as FormState);
   const [choice, setChoice] = useState<string>(avatar ?? "");
   const [busy, setBusy] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function pickFile(file: File) {
     setBusy(true);
+    setReadError(null);
     try {
       setChoice(await toSquareDataUrl(file));
     } catch {
-      // A file the browser can't decode; leaving the current choice is fine.
+      setReadError("That image couldn't be read. Try a different photo.");
     } finally {
       setBusy(false);
     }
@@ -63,7 +85,7 @@ export function AvatarCard({
     <form action={action} className="card mt-3">
       <h2 className="text-sm text-[var(--muted)]">Your picture</h2>
 
-      <div className="mt-3 flex items-center gap-4">
+      <div className="relative mt-3 flex items-center gap-4">
         <Avatar username={username} avatar={choice || null} size={64} />
         <div className="flex-1">
           <input type="hidden" name="avatar" value={choice} />
@@ -75,14 +97,26 @@ export function AvatarCard({
           >
             {busy ? "Resizing…" : "Upload a photo"}
           </button>
+          {/*
+            iOS decides what the picker offers from `accept`. Bare "image/*"
+            can leave HEIC — which is what an iPhone actually shoots —
+            unmatched, so the Photo Library entries grey out and the only live
+            option is Files. Naming the extensions explicitly puts Photo Library
+            back in play. Not display:none either: iOS Safari is unreliable
+            about opening the picker for a hidden input.
+          */}
           <input
             ref={fileRef}
             type="file"
-            accept="image/*"
-            className="hidden"
+            accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
+            aria-hidden
+            tabIndex={-1}
+            className="absolute size-px overflow-hidden opacity-0"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) void pickFile(f);
+              // Reset so picking the same file twice still fires onChange.
+              e.target.value = "";
             }}
           />
         </div>
@@ -112,9 +146,9 @@ export function AvatarCard({
         })}
       </div>
 
-      {state.error ? (
+      {state.error || readError ? (
         <p role="alert" className="mt-3 text-sm font-medium text-[var(--danger)]">
-          {state.error}
+          {state.error ?? readError}
         </p>
       ) : null}
 

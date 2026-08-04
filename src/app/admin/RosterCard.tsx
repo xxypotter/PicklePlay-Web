@@ -2,6 +2,7 @@
 
 import { useActionState, useTransition } from "react";
 import { ROLE_LABELS, type FormState, type Role } from "@/lib/auth/types";
+import { clearImportedRecordAction } from "@/lib/profile/actions";
 import { adjustRatingAction, recomputeAction, resetPinAction, setRoleAction } from "./actions";
 
 export interface RosterEntry {
@@ -13,6 +14,8 @@ export interface RosterEntry {
   provisional: boolean | null;
   selfDeclared: boolean | null;
   localMatches: number | null;
+  importedMatches: number;
+  importedWins: number;
 }
 
 export default function RosterCard({
@@ -36,6 +39,7 @@ export default function RosterCard({
   );
   const [pinState, pinAction, pinPending] = useActionState(resetPinAction, {} as FormState);
   const [recomputing, startRecompute] = useTransition();
+  const [clearing, startClear] = useTransition();
 
   return (
     <section className="card mt-5">
@@ -149,11 +153,36 @@ export default function RosterCard({
                     {adjustPending ? "Saving…" : "Override rating"}
                   </button>
                   <p className="text-xs text-[var(--muted)]">
-                    Recorded as a dated correction in their history, not a silent edit.
-                    Ratings recompute immediately.
+                    Sets their rating and reliability only — win/loss comes from real
+                    matches and can&apos;t be typed in. Recorded as a dated correction in
+                    their history, not a silent edit.
                   </p>
                 </form>
               </details>
+
+              {/*
+                Clearing, not editing. The super admin can wipe an imported
+                record so the player can enter it again — nobody can type a
+                number *into* someone else's history, which is the property
+                that keeps the record trustworthy.
+              */}
+              {canManageRoles && p.importedMatches > 0 ? (
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2">
+                  <span className="text-xs text-[var(--muted)]">
+                    Imported {p.importedWins}/{p.importedMatches} (
+                    {Math.round((p.importedWins / p.importedMatches) * 100)}%)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={clearing}
+                    onClick={() => startClear(() => void clearImportedRecordAction(p.id))}
+                    className="shrink-0 text-xs font-semibold text-[var(--danger)] underline
+                      disabled:opacity-50"
+                  >
+                    {clearing ? "…" : "Clear"}
+                  </button>
+                </div>
+              ) : null}
 
               {canResetPin(p.role) ? (
                 <details className="mt-1.5">

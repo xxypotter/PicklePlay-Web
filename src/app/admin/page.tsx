@@ -32,6 +32,8 @@ export default async function AdminPage() {
         provisional: playerStats.provisional,
         selfDeclared: playerStats.selfDeclared,
         localMatches: playerStats.localMatches,
+        importedMatches: players.importedMatches,
+        importedWins: players.importedWins,
       })
       .from(players)
       .leftJoin(playerStats, eq(playerStats.playerId, players.id))
