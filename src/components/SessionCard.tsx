@@ -61,7 +61,8 @@ export default function SessionCard({ session: s }: { session: SessionCardData }
             {s.signedUp}/{s.maxPlayers}
           </span>{" "}
           signed up
-          {s.organizer ? ` · ${s.organizer}` : ""}
+          {/* Name alone read as another player rather than whose session it is. */}
+          {s.organizer ? ` · organizer ${s.organizer}` : ""}
           {!s.rated ? " · casual" : ""}
         </Row>
       </dl>

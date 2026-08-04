@@ -1,83 +1,76 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import Avatar from "@/components/Avatar";
 import type { FormState } from "@/lib/auth/types";
+import type { RoundPlayer } from "@/lib/sessions/queries";
 import { saveScoreAction, voidMatchAction } from "@/lib/sessions/play-actions";
 
 export interface MatchCardData {
   id: string;
   courtLabel: string;
-  teamA: { id: string; username: string }[];
-  teamB: { id: string; username: string }[];
+  teamA: RoundPlayer[];
+  teamB: RoundPlayer[];
   scoreA: number | null;
   scoreB: number | null;
   completed: boolean;
 }
 
-/**
- * Functional updater, not `value + 1`.
- *
- * React batches state updates, so several taps inside one frame would all read
- * the same stale value and collapse into a single increment — exactly what
- * happens when someone taps out an 11-point game.
- */
-const step = (delta: number) => (current: number) =>
-  Math.max(0, Math.min(99, current + delta));
+const MAX_SCORE = 99;
 
+/**
+ * Scores are held as text, not numbers.
+ *
+ * Coercing on every keystroke makes the box impossible to clear and retype —
+ * you end up typing "1" onto a stubborn "0" and getting "01". Text in, parsed
+ * once at the edges.
+ */
+const clampText = (value: string) => {
+  const digits = value.replace(/\D/g, "").slice(0, 2);
+  return digits === "" ? "" : String(Math.min(MAX_SCORE, Number(digits)));
+};
+
+const stepFrom = (current: string, delta: number) =>
+  String(Math.max(0, Math.min(MAX_SCORE, (Number.parseInt(current, 10) || 0) + delta)));
+
+/** Always interactive — read-only matches render as compact rows in Schedule. */
 export default function MatchCard({
   match,
   meId,
-  canEnterScore,
   canVoid = false,
   highlight = false,
 }: {
   match: MatchCardData;
   meId?: string;
-  canEnterScore: boolean;
   canVoid?: boolean;
   highlight?: boolean;
 }) {
   const [state, action, pending] = useActionState(saveScoreAction, {} as FormState);
   const [voiding, startVoid] = useTransition();
-  const [a, setA] = useState(match.scoreA ?? 0);
-  const [b, setB] = useState(match.scoreB ?? 0);
+  const [a, setA] = useState(String(match.scoreA ?? 0));
+  const [b, setB] = useState(String(match.scoreB ?? 0));
 
-  const mine = (team: { id: string }[]) => team.some((p) => p.id === meId);
-  const label = (team: { id: string; username: string }[]) =>
-    team.map((p) => (p.id === meId ? "You" : p.username)).join(" & ");
+  const na = Number.parseInt(a, 10);
+  const nb = Number.parseInt(b, 10);
+  const bothEntered = Number.isInteger(na) && Number.isInteger(nb);
+  const tied = bothEntered && na === nb;
 
-  // Read-only rows for anyone not in the match: seeing the court is the point,
-  // editing it isn't.
-  if (!canEnterScore) {
-    return (
-      <div
-        className={`card ${highlight ? "border-[var(--accent)]" : ""}`}
-      >
-        <div className="flex items-baseline justify-between">
-          <h3 className="text-sm font-semibold">{match.courtLabel}</h3>
-          {match.completed ? (
-            <span className="font-mono text-sm tabular-nums">
-              {match.scoreA}–{match.scoreB}
-            </span>
-          ) : (
-            <span className="text-xs text-[var(--muted)]">In play</span>
-          )}
-        </div>
-        <p className={`mt-1.5 text-sm ${mine(match.teamA) ? "font-semibold" : ""}`}>
-          {label(match.teamA)}
-        </p>
-        <p className={`text-sm ${mine(match.teamB) ? "font-semibold" : ""}`}>
-          {label(match.teamB)}
-        </p>
-      </div>
-    );
-  }
+  const mine = (team: RoundPlayer[]) => team.some((p) => p.id === meId);
+
+  // Your own team renders on top whichever side of the court you're on. A fixed
+  // A/B order is how people put the numbers in the wrong row.
+  const sides = mine(match.teamB)
+    ? ([
+        { key: "B", players: match.teamB, value: b, set: setB },
+        { key: "A", players: match.teamA, value: a, set: setA },
+      ] as const)
+    : ([
+        { key: "A", players: match.teamA, value: a, set: setA },
+        { key: "B", players: match.teamB, value: b, set: setB },
+      ] as const);
 
   return (
-    <form
-      action={action}
-      className={`card ${highlight ? "border-2 border-[var(--accent)]" : ""}`}
-    >
+    <form action={action} className={`card ${highlight ? "border-2 border-[var(--accent)]" : ""}`}>
       <div className="flex items-baseline justify-between">
         <h3 className="text-base font-bold">{match.courtLabel}</h3>
         {match.completed ? (
@@ -89,30 +82,16 @@ export default function MatchCard({
       <input type="hidden" name="scoreA" value={a} />
       <input type="hidden" name="scoreB" value={b} />
 
-      {/*
-        Your own team always renders on top, whichever side of the court you're
-        on. Entering your score first is the natural motion, and a fixed A/B
-        order is how people put the numbers in the wrong rows.
-      */}
       <div className="mt-3 flex flex-col gap-3">
-        {(mine(match.teamB)
-          ? ([
-              ["B", label(match.teamB), b, setB],
-              ["A", label(match.teamA), a, setA],
-            ] as const)
-          : ([
-              ["A", label(match.teamA), a, setA],
-              ["B", label(match.teamB), b, setB],
-            ] as const)
-        ).map(([side, text, value, setter]) => (
+        {sides.map((side) => (
           <Side
-            key={side}
-            label={text}
-            value={value}
-            onStep={(d) => setter(step(d))}
-            highlight={
-              (side === "A" && mine(match.teamA)) || (side === "B" && mine(match.teamB))
-            }
+            key={side.key}
+            players={side.players}
+            meId={meId}
+            value={side.value}
+            onChange={(v) => side.set(clampText(v))}
+            onStep={(d) => side.set((prev) => stepFrom(prev, d))}
+            highlight={mine(side.players)}
           />
         ))}
       </div>
@@ -125,21 +104,19 @@ export default function MatchCard({
 
       <button
         type="submit"
-        disabled={pending || a === b}
+        disabled={pending || !bothEntered || tied}
         className="btn-primary mt-4 disabled:opacity-40"
       >
         {pending ? "Saving…" : match.completed ? "Update score" : "Save score"}
       </button>
+
       {/* Only once someone has actually scored — 0–0 is a fresh card, not a tie. */}
-      {a === b && a > 0 ? (
+      {tied && na > 0 ? (
         <p className="hint text-center">Pickleball has no ties.</p>
+      ) : !bothEntered ? (
+        <p className="hint text-center">Enter both scores.</p>
       ) : null}
 
-      {/*
-        Voiding is kept out of the player-facing card and off unplayed matches:
-        it's for an admin undoing a wrong result, not a way to delete a loss.
-        The match is marked void rather than deleted, so history stays auditable.
-      */}
       {canVoid && match.completed ? (
         <button
           type="button"
@@ -156,28 +133,61 @@ export default function MatchCard({
 }
 
 function Side({
-  label,
+  players,
+  meId,
   value,
+  onChange,
   onStep,
-  highlight = false,
+  highlight,
 }: {
-  label: string;
-  value: number;
+  players: RoundPlayer[];
+  meId?: string;
+  value: string;
+  onChange: (value: string) => void;
   onStep: (delta: number) => void;
-  highlight?: boolean;
+  highlight: boolean;
 }) {
+  const label = players.map((p) => (p.id === meId ? "You" : p.username)).join(" & ");
+
   return (
-    <div className="flex items-center gap-3">
-      <span
-        className={`min-w-0 flex-1 truncate text-sm ${
-          highlight ? "font-bold" : "font-medium text-[var(--muted)]"
-        }`}
-      >
-        {label}
-      </span>
-      <div className="flex shrink-0 items-center gap-2">
+    <div className="flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="flex shrink-0">
+          {players.map((p, i) => (
+            <span key={p.id} className={i > 0 ? "-ml-2" : ""}>
+              <Avatar
+                username={p.username}
+                avatar={p.avatar}
+                size={24}
+                className="ring-2 ring-[var(--surface)]"
+              />
+            </span>
+          ))}
+        </span>
+        <span
+          className={`truncate text-sm ${
+            highlight ? "font-bold" : "font-medium text-[var(--muted)]"
+          }`}
+        >
+          {label}
+        </span>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
         <Step label="−" onClick={() => onStep(-1)} />
-        <span className="w-9 text-center font-mono text-2xl font-bold tabular-nums">{value}</span>
+        {/* Tappable and typeable: eleven taps to record an 11 is absurd. */}
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          aria-label={`Score for ${label}`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          className="w-12 rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2
+            text-center font-mono text-xl font-bold tabular-nums outline-none
+            focus:border-[var(--accent)]"
+        />
         <Step label="+" onClick={() => onStep(1)} />
       </div>
     </div>
@@ -189,8 +199,9 @@ function Step({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="size-11 rounded-xl border border-[var(--border)] text-xl font-semibold
-        active:bg-[var(--accent)]/10"
+      aria-label={label === "+" ? "Increase" : "Decrease"}
+      className="size-11 shrink-0 rounded-xl border border-[var(--border)] text-xl font-semibold
+        active:bg-[var(--accent-soft)]"
     >
       {label}
     </button>

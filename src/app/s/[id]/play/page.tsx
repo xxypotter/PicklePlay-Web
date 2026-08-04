@@ -153,7 +153,7 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
 
                 <div className="flex flex-col gap-3">
                   {round.matches.map((m) => (
-                    <MatchCard key={m.id} match={m} meId={me.id} canEnterScore canVoid />
+                    <MatchCard key={m.id} match={m} meId={me.id} canVoid />
                   ))}
                 </div>
 

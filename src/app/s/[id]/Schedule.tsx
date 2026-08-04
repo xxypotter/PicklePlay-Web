@@ -50,7 +50,6 @@ export default function Schedule({
                     key={m.id}
                     match={m}
                     meId={meId}
-                    canEnterScore
                     canVoid={canScoreAny}
                     highlight={mine}
                   />
