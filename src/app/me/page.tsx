@@ -95,11 +95,15 @@ export default async function MePage() {
         </section>
 
         <section className="card-tight mt-3 overflow-hidden">
-          <RowLink href={`/p/${me.username}`} icon="⭐" label="Update my DUPR" />
+          <RowLink
+            href={`/p/${me.username}`}
+            icon="⭐"
+            label="Update my DUPR"
+            last={!isAtLeast(me.role, "admin")}
+          />
           {isAtLeast(me.role, "admin") ? (
-            <RowLink href="/admin" icon="🛠" label="Admin" hint="Invite code, players" />
+            <RowLink href="/admin" icon="🛠" label="Admin" hint="Invite code, players" last />
           ) : null}
-          <RowLink href="/sessions" icon="🗂" label="All sessions" last />
         </section>
 
         <AvatarCard username={me.username} avatar={profile?.avatar ?? null} />

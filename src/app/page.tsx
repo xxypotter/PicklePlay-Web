@@ -105,6 +105,9 @@ export default async function HomePage({
     myState: stateBy.get(r.id),
   }));
 
+  const myCards = cards.filter((c) => c.myState);
+  const otherCards = cards.filter((c) => !c.myState);
+
   return (
     <>
       <TopBar />
@@ -117,7 +120,7 @@ export default async function HomePage({
       />
 
       <main className="screen pt-4">
-        <div className="mb-2 flex items-baseline justify-between px-1">
+        <div className="mb-3 flex items-baseline justify-between px-1">
           <h2 className="text-sm text-[var(--muted)]">
             {cards.length}{" "}
             {active === "upcoming"
@@ -147,11 +150,38 @@ export default async function HomePage({
             )}
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            {cards.map((s) => (
-              <SessionCard key={s.id} session={s} />
-            ))}
-          </div>
+          <>
+            {/* Yours first — the ones you need to act on shouldn't be hunted for. */}
+            {myCards.length > 0 ? (
+              <section className="mb-6">
+                <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
+                  {active === "upcoming" ? "You're in" : "You played"}
+                </h3>
+                <div className="flex flex-col gap-3">
+                  {myCards.map((s) => (
+                    <SessionCard key={s.id} session={s} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {otherCards.length > 0 ? (
+              <section>
+                <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  {active === "upcoming"
+                    ? myCards.length > 0
+                      ? "Also open"
+                      : "Open to join"
+                    : "Other sessions"}
+                </h3>
+                <div className="flex flex-col gap-3">
+                  {otherCards.map((s) => (
+                    <SessionCard key={s.id} session={s} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </>
         )}
       </main>
     </>

@@ -6,6 +6,7 @@ import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { matches, sessions, signups } from "@/lib/db/schema";
+import { closeStaleSessions } from "@/lib/sessions/auto-close";
 
 export const metadata = { title: "Sessions · PicklePlay" };
 
@@ -14,6 +15,7 @@ export default async function SessionsPage() {
   if (!me) redirect("/login");
 
   const db = getDb();
+  await closeStaleSessions();
 
   const all = await db
     .select({
@@ -22,12 +24,11 @@ export default async function SessionsPage() {
       location: sessions.location,
       startsAt: sessions.startsAt,
       status: sessions.status,
-      courtNames: sessions.courtNames,
       rated: sessions.rated,
     })
     .from(sessions)
     .orderBy(desc(sessions.startsAt))
-    .limit(60);
+    .limit(80);
 
   const ids = all.map((s) => s.id);
 
@@ -48,28 +49,47 @@ export default async function SessionsPage() {
   const matchesBy = new Map(playedCounts.map((c) => [c.sessionId, c.n]));
   const mineBy = new Map(mySignups.map((s) => [s.sessionId, s.state]));
 
-  const past = all.filter((s) => s.status === "closed");
-  const current = all.filter((s) => s.status !== "closed");
+  /*
+   * Yours first, then everyone else's.
+   *
+   * This page is reached from "My sessions", so a flat list of every session in
+   * the group buried the two or three that are actually yours. Each session
+   * appears once — your past nights aren't repeated in the archive below.
+   */
+  const mineUpcoming = all
+    .filter((s) => s.status !== "closed" && mineBy.has(s.id))
+    .reverse(); // soonest first
+  const minePast = all.filter((s) => s.status === "closed" && mineBy.has(s.id));
+  const otherPast = all.filter((s) => s.status === "closed" && !mineBy.has(s.id));
+  const otherUpcoming = all.filter((s) => s.status !== "closed" && !mineBy.has(s.id)).length;
 
   return (
     <>
-      <TopBar title="Sessions" back="/" />
+      <TopBar title="My sessions" back="/me" />
       <main className="screen pt-4">
-      <h2 className="mb-2 px-1 text-sm text-[var(--muted)]">Upcoming &amp; in progress</h2>
-      {current.length === 0 ? (
-        <p className="card text-sm text-[var(--muted)]">Nothing scheduled.</p>
-      ) : (
-        <List rows={current} matchesBy={matchesBy} mineBy={mineBy} />
-      )}
+        <Group title="Upcoming & in progress" rows={mineUpcoming} matchesBy={matchesBy} mine>
+          {otherUpcoming > 0 ? (
+            <p className="card text-sm text-[var(--muted)]">
+              You&apos;re not in any upcoming session.{" "}
+              <Link href="/" className="font-medium text-[var(--accent)] underline">
+                {otherUpcoming} open on Home
+              </Link>
+              .
+            </p>
+          ) : (
+            <p className="card text-sm text-[var(--muted)]">Nothing scheduled.</p>
+          )}
+        </Group>
 
-      <h2 className="mt-8 mb-2 px-1 text-sm text-[var(--muted)]">Past sessions</h2>
-      {past.length === 0 ? (
-        <p className="card text-sm text-[var(--muted)]">
-          Nothing finished yet. Closed sessions stay here with their full results.
-        </p>
-      ) : (
-        <List rows={past} matchesBy={matchesBy} mineBy={mineBy} />
-      )}
+        <Group title="My past sessions" rows={minePast} matchesBy={matchesBy} mine>
+          <p className="card text-sm text-[var(--muted)]">
+            None yet. Sessions you played land here once they finish.
+          </p>
+        </Group>
+
+        <Group title="Other past sessions" rows={otherPast} matchesBy={matchesBy}>
+          <p className="card text-sm text-[var(--muted)]">Nothing else in the archive.</p>
+        </Group>
       </main>
     </>
   );
@@ -81,48 +101,61 @@ interface Row {
   location: string | null;
   startsAt: Date;
   status: string;
-  courtNames: string[];
   rated: boolean;
 }
 
-function List({
+function Group({
+  title,
   rows,
   matchesBy,
-  mineBy,
+  mine = false,
+  children,
 }: {
+  title: string;
   rows: Row[];
   matchesBy: Map<string | null, number>;
-  mineBy: Map<string, string>;
+  mine?: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <ul className="flex flex-col gap-3">
-      {rows.map((s) => {
-        const played = matchesBy.get(s.id) ?? 0;
-        const mine = mineBy.get(s.id);
-        return (
-          <li key={s.id}>
-            <Link href={`/s/${s.id}`} className="card block active:opacity-70">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="truncate font-semibold">{s.title}</span>
-                {mine ? (
-                  <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
-                    {mine === "in" ? "You played" : "Waitlist"}
-                  </span>
-                ) : null}
-              </div>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                <LocalDateTime iso={s.startsAt.toISOString()} />
-                {s.location ? ` · ${s.location}` : ""}
-              </p>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                {played > 0 ? `${played} match${played === 1 ? "" : "es"}` : "No matches yet"}
-                {s.status === "live" ? " · in progress" : ""}
-                {!s.rated ? " · unrated" : ""}
-              </p>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+    <section className="mb-7">
+      <h2 className="mb-2 px-1 text-sm text-[var(--muted)]">
+        {title}
+        {rows.length > 0 ? ` (${rows.length})` : ""}
+      </h2>
+
+      {rows.length === 0 ? (
+        children
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {rows.map((s) => {
+            const played = matchesBy.get(s.id) ?? 0;
+            return (
+              <li key={s.id}>
+                <Link href={`/s/${s.id}`} className="card block active:opacity-70">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="truncate font-semibold">{s.title}</span>
+                    {mine ? (
+                      <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
+                        {s.status === "closed" ? "Played" : "You're in"}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    <LocalDateTime iso={s.startsAt.toISOString()} />
+                    {s.location ? ` · ${s.location}` : ""}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {played > 0 ? `${played} match${played === 1 ? "" : "es"}` : "No matches"}
+                    {s.status === "live" ? " · in progress" : ""}
+                    {!s.rated ? " · casual" : ""}
+                  </p>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
