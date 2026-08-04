@@ -6,7 +6,6 @@ import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
-import { getAllRounds } from "@/lib/sessions/queries";
 
 /**
  * Split by time, not by kind.
@@ -102,17 +101,6 @@ export default async function HomePage({
     myState: stateBy.get(r.id),
   }));
 
-  // Mid-session the only thing anyone wants is which court they're on.
-  const playingNow = cards.find((c) => c.status === "live" && c.myState === "in");
-  const liveRounds = playingNow ? await getAllRounds(playingNow.id, playingNow.courtNames) : [];
-  const mineInRounds = liveRounds
-    .map((r) => ({
-      index: r.index,
-      match: r.matches.find((m) => [...m.teamA, ...m.teamB].some((p) => p.id === me.id)),
-    }))
-    .filter((x): x is { index: number; match: NonNullable<typeof x.match> } => !!x.match);
-  const upNext = mineInRounds.find((x) => !x.match.completed) ?? mineInRounds.at(-1);
-
   return (
     <>
       <TopBar />
@@ -125,26 +113,6 @@ export default async function HomePage({
       />
 
       <main className="screen pt-4">
-        {upNext && playingNow ? (
-          <Link
-            href={`/s/${playingNow.id}`}
-            className="mb-4 block rounded-2xl bg-[var(--accent)] p-5 text-white active:opacity-80"
-          >
-            <p className="text-sm font-semibold opacity-90">
-              You&apos;re up · Round {upNext.index}
-            </p>
-            <p className="mt-1 text-2xl font-bold">{upNext.match.courtLabel}</p>
-            <p className="mt-1 text-sm opacity-90">
-              {[...upNext.match.teamA, ...upNext.match.teamB]
-                .map((p) => (p.id === me.id ? "you" : p.username))
-                .join(", ")}
-            </p>
-            <p className="mt-3 text-sm font-semibold">
-              {upNext.match.completed ? "Score recorded — tap to change" : "Tap to enter the score"}
-            </p>
-          </Link>
-        ) : null}
-
         <div className="mb-2 flex items-baseline justify-between px-1">
           <h2 className="text-sm text-[var(--muted)]">
             {cards.length}{" "}

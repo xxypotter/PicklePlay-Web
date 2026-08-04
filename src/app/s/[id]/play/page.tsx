@@ -17,6 +17,8 @@ import {
   DeleteSessionButton,
   DiscardRoundButton,
   GenerateRoundButton,
+  ReopenSessionButton,
+  StartSessionButton,
 } from "./PlayControls";
 
 export const metadata = { title: "Run session · PicklePlay" };
@@ -91,12 +93,29 @@ export default async function PlayPage({ params }: { params: Promise<{ id: strin
 
         <AddPlayers sessionId={id} candidates={notSignedUp} />
 
-        <GenerateRoundButton
-          sessionId={id}
-          attendingCount={attendingCount}
-          courtCount={session.courtNames.length}
-          roundsSoFar={allRounds.length}
-        />
+        {/* Setup and play are separate phases; only one set of controls applies. */}
+        {session.status === "open" ? (
+          <>
+            <StartSessionButton sessionId={id} attendingCount={attendingCount} />
+            <Link
+              href={`/s/${id}/edit`}
+              className="btn-ghost mt-2 block text-center text-sm"
+            >
+              Edit session details
+            </Link>
+          </>
+        ) : (
+          <>
+            <GenerateRoundButton
+              sessionId={id}
+              attendingCount={attendingCount}
+              courtCount={session.courtNames.length}
+              roundsSoFar={allRounds.length}
+            />
+            {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
+          </>
+        )}
+
         <p className="hint">
           Court{session.courtNames.length === 1 ? "" : "s"} {session.courtNames.join(", ")} ·
           seats {session.courtNames.length * 4}

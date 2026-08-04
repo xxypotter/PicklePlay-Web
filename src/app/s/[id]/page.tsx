@@ -11,7 +11,6 @@ import { getDb } from "@/lib/db";
 import { players, playerStats, sessions, signups } from "@/lib/db/schema";
 import { getInviteCode } from "@/lib/invite";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
-import MatchCard from "./MatchCard";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import Schedule from "./Schedule";
 import ShareLink from "./ShareLink";
@@ -86,16 +85,6 @@ export default async function SessionPage({
     !!me && (me.role === "superadmin" || (isAdmin && session.createdBy === me.id));
   const spotsLeft = Math.max(0, session.maxPlayers - confirmed.length);
 
-  const myMatches = me
-    ? allRounds
-        .map((r) => ({
-          round: r.index,
-          match: r.matches.find((m) => [...m.teamA, ...m.teamB].some((p) => p.id === me.id)),
-        }))
-        .filter((x): x is { round: number; match: NonNullable<typeof x.match> } => !!x.match)
-    : [];
-  const nextUnplayed = myMatches.find((x) => !x.match.completed) ?? myMatches.at(-1);
-
   const base = `/s/${id}`;
 
   return (
@@ -111,21 +100,20 @@ export default async function SessionPage({
       />
 
       <main className="screen pt-4">
-        {/* Your own court, on every tab — it's what you opened the app for. */}
-        {nextUnplayed ? (
-          <section className="mb-4">
-            <p className="mb-2 px-1 text-sm font-semibold text-[var(--accent)]">
-              {nextUnplayed.match.completed ? "Your last match" : "Your match"} · Round{" "}
-              {nextUnplayed.round}
-            </p>
-            <MatchCard match={nextUnplayed.match} meId={me!.id} canEnterScore highlight />
-          </section>
-        ) : null}
-
+        {/*
+          Each tab answers one question. Pinning "your next match" on all three
+          assumed rounds get played in order, which they don't — so scores now
+          live only on Matchups, where you find the match you actually played.
+        */}
         {active === "standings" ? (
           <Standings rows={standings} meId={me?.id} />
         ) : active === "schedule" ? (
-          <Schedule rounds={allRounds} meId={me?.id} courtCount={session.courtNames.length} />
+          <Schedule
+            rounds={allRounds}
+            meId={me?.id}
+            courtCount={session.courtNames.length}
+            canScoreAny={isAdmin}
+          />
         ) : (
           <>
             <section className="card relative overflow-hidden">
@@ -224,9 +212,21 @@ export default async function SessionPage({
             ) : null}
 
             {isAdmin ? (
-              <Link href={`${base}/play`} className="btn-accent mt-4 block text-center">
-                {session.status === "closed" ? "Manage session" : "Run the session"}
-              </Link>
+              <div className="mt-4 flex flex-col gap-2">
+                <Link href={`${base}/play`} className="btn-accent block text-center">
+                  {session.status === "closed"
+                    ? "Manage session"
+                    : session.status === "open"
+                      ? "Set up & start"
+                      : "Run the session"}
+                </Link>
+                {/* Details are only editable before play begins. */}
+                {session.status === "open" ? (
+                  <Link href={`${base}/edit`} className="btn-ghost block text-center">
+                    Edit details
+                  </Link>
+                ) : null}
+              </div>
             ) : null}
 
             {canDelete ? <DeleteSessionButton sessionId={id} /> : null}

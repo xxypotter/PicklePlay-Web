@@ -1,25 +1,33 @@
 import Avatar from "@/components/Avatar";
 import type { CurrentRound, RoundPlayer } from "@/lib/sessions/queries";
+import MatchCard from "./MatchCard";
 
 /**
- * The matchups screen: an amber lozenge separating each round, then one card
- * per court — both teams either side of "vs", court and score on the right
- * with the winner's number in orange.
+ * The matchups screen, and the only place scores are entered.
+ *
+ * Rounds don't get played in the order they were generated — courts free up out
+ * of sequence — so there's no "your next match" to pin. You find the match you
+ * played and put the score in. Matches you were in open with steppers; the rest
+ * are read-only, which also makes your own stand out in a long list.
  */
 export default function Schedule({
   rounds,
   meId,
   courtCount,
+  canScoreAny = false,
 }: {
   rounds: CurrentRound[];
   meId?: string;
   courtCount: number;
+  canScoreAny?: boolean;
 }) {
   if (rounds.length === 0) {
     return (
       <div className="card py-12 text-center">
         <p className="text-[var(--muted)]">No matches yet.</p>
-        <p className="hint">The organizer builds the schedule when play starts.</p>
+        <p className="hint">
+          The organizer starts the session and builds the schedule when play begins.
+        </p>
       </div>
     );
   }
@@ -35,15 +43,23 @@ export default function Schedule({
           <div className="mt-3 flex flex-col gap-2.5">
             {round.matches.map((m) => {
               const mine = [...m.teamA, ...m.teamB].some((p) => p.id === meId);
-              const aWon = m.completed && (m.scoreA ?? 0) > (m.scoreB ?? 0);
 
+              if (mine || canScoreAny) {
+                return (
+                  <MatchCard
+                    key={m.id}
+                    match={m}
+                    meId={meId}
+                    canEnterScore
+                    canVoid={canScoreAny}
+                    highlight={mine}
+                  />
+                );
+              }
+
+              const aWon = m.completed && (m.scoreA ?? 0) > (m.scoreB ?? 0);
               return (
-                <div
-                  key={m.id}
-                  className={`card flex items-center gap-3 ${
-                    mine ? "ring-1 ring-[var(--accent)]" : ""
-                  }`}
-                >
+                <div key={m.id} className="card flex items-center gap-3">
                   <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center gap-2">
                     <Team players={m.teamA} meId={meId} />
                     <span className="text-xs text-[var(--muted)]">vs</span>

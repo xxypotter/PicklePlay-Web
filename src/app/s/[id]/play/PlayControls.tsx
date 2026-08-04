@@ -12,6 +12,8 @@ import {
   discardRoundAction,
   generateAllRoundsAction,
   generateRoundAction,
+  reopenSessionAction,
+  startSessionAction,
 } from "@/lib/sessions/play-actions";
 
 export function GenerateRoundButton({
@@ -228,6 +230,74 @@ export function RemovePlayerButton({
     >
       ✕
     </button>
+  );
+}
+
+/**
+ * The line between setup and play.
+ *
+ * Before it, details can be edited and no matches exist. After it, the session
+ * shows as Playing and its details are locked, so the schedule can't end up
+ * describing courts or a format that have since changed underneath it.
+ */
+export function StartSessionButton({
+  sessionId,
+  attendingCount,
+}: {
+  sessionId: string;
+  attendingCount: number;
+}) {
+  const [pending, start] = useTransition();
+  const tooFew = attendingCount < 4;
+
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        disabled={pending || tooFew}
+        onClick={() => start(() => void startSessionAction(sessionId))}
+        className="btn-primary disabled:opacity-40"
+      >
+        {pending ? "Starting…" : "Start session"}
+      </button>
+      <p className="hint">
+        {tooFew
+          ? "Mark at least 4 players present to start."
+          : "Locks the details and lets you build the matches. You can undo this until the first round exists."}
+      </p>
+    </div>
+  );
+}
+
+export function ReopenSessionButton({ sessionId }: { sessionId: string }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            try {
+              await reopenSessionAction(sessionId);
+              setError(null);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Couldn't reopen.");
+            }
+          })
+        }
+        className="btn-ghost text-sm text-[var(--muted)]"
+      >
+        {pending ? "…" : "Back to setup"}
+      </button>
+      {error ? (
+        <p role="alert" className="hint text-[var(--danger)]">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

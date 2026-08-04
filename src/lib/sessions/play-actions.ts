@@ -11,11 +11,77 @@ import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
 import { createNextRound } from "@/lib/matchmaking/service";
 import { recomputeAll } from "@/lib/rating/service";
 
+/**
+ * Begin play.
+ *
+ * Explicit, rather than inferred from the first round being generated. Building
+ * a schedule ahead of time used to flip a session to "Playing" days before
+ * anyone turned up, and it silently locked nothing — so details stayed editable
+ * while the night was supposedly underway.
+ *
+ * Starting is the line: before it the details can change, after it they can't.
+ */
+export async function startSessionAction(sessionId: string): Promise<void> {
+  await requireAdmin();
+
+  await getDb()
+    .update(sessions)
+    .set({ status: "live" })
+    .where(and(eq(sessions.id, sessionId), eq(sessions.status, "open")));
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+  revalidatePath("/");
+}
+
+/**
+ * Undo a start — only while nothing has been played.
+ *
+ * Tapping Start a day early shouldn't be permanent, but once a round exists the
+ * session has really begun and reopening it would put edits back in reach of a
+ * night in progress.
+ */
+export async function reopenSessionAction(sessionId: string): Promise<void> {
+  await requireAdmin();
+  const db = getDb();
+
+  const existing = await db
+    .select({ id: rounds.id })
+    .from(rounds)
+    .where(eq(rounds.sessionId, sessionId))
+    .limit(1);
+
+  if (existing.length > 0) {
+    throw new Error("Matches have been created. Discard them before reopening.");
+  }
+
+  await db
+    .update(sessions)
+    .set({ status: "open" })
+    .where(and(eq(sessions.id, sessionId), eq(sessions.status, "live")));
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+  revalidatePath("/");
+}
+
+/** Matches only exist once play has started. */
+async function requireLive(sessionId: string): Promise<void> {
+  const found = await getDb()
+    .select({ status: sessions.status })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (found[0]?.status !== "live") {
+    throw new Error("Start the session before creating matches.");
+  }
+}
+
 export async function generateRoundAction(sessionId: string): Promise<void> {
   await requireAdmin();
+  await requireLive(sessionId);
   await createNextRound(sessionId);
-
-  await getDb().update(sessions).set({ status: "live" }).where(eq(sessions.id, sessionId));
 
   revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);
@@ -37,13 +103,12 @@ export async function generateAllRoundsAction(
   roundCount: number,
 ): Promise<void> {
   await requireAdmin();
+  await requireLive(sessionId);
 
   const wanted = Math.max(1, Math.min(MAX_ROUNDS, Math.floor(roundCount)));
   for (let i = 0; i < wanted; i++) {
     await createNextRound(sessionId);
   }
-
-  await getDb().update(sessions).set({ status: "live" }).where(eq(sessions.id, sessionId));
 
   revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);
