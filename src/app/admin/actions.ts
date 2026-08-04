@@ -10,7 +10,7 @@ import { getDb } from "@/lib/db";
 import { auditLog, players, ratingSeeds } from "@/lib/db/schema";
 import { generateInviteCode, setInviteCode } from "@/lib/invite";
 import { RATING } from "@/lib/rating/constants";
-import { recomputeAll } from "@/lib/rating/service";
+import { recomputeAll, type RecomputeSummary } from "@/lib/rating/service";
 
 export async function rotateInviteCodeAction(): Promise<void> {
   const me = await requireAdmin();
@@ -207,8 +207,11 @@ export async function resetPinAction(_prev: FormState, formData: FormData): Prom
  * Ratings are always derived (§5.6), so this is safe to run at any time and is
  * the fix for any suspected drift. Also the way freshly seeded players get
  * their stats row before they've played a match.
+ *
+ * Returns what it rebuilt: pressing a button that appears to do nothing is how
+ * an admin ends up pressing it five more times.
  */
-export async function recomputeAction(): Promise<void> {
+export async function recomputeAction(): Promise<RecomputeSummary> {
   const me = await requireAdmin();
 
   const summary = await recomputeAll();
@@ -221,4 +224,5 @@ export async function recomputeAction(): Promise<void> {
 
   revalidatePath("/admin");
   revalidatePath("/");
+  return summary;
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
+import type { RecomputeSummary } from "@/lib/rating/service";
 import { ROLE_LABELS, type FormState, type Role } from "@/lib/auth/types";
 import { clearImportedRecordAction } from "@/lib/profile/actions";
 import { adjustRatingAction, recomputeAction, resetPinAction, setRoleAction } from "./actions";
@@ -39,6 +40,7 @@ export default function RosterCard({
   );
   const [pinState, pinAction, pinPending] = useActionState(resetPinAction, {} as FormState);
   const [recomputing, startRecompute] = useTransition();
+  const [recomputed, setRecomputed] = useState<RecomputeSummary | null>(null);
   const [clearing, startClear] = useTransition();
 
   return (
@@ -47,13 +49,42 @@ export default function RosterCard({
         <h2 className="text-sm font-medium text-[var(--muted)]">Players ({roster.length})</h2>
         <button
           type="button"
-          onClick={() => startRecompute(() => void recomputeAction())}
+          onClick={() =>
+            startRecompute(async () => {
+              const summary = await recomputeAction();
+              setRecomputed(summary);
+            })
+          }
           disabled={recomputing}
           className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
         >
           {recomputing ? "Recomputing…" : "Recompute ratings"}
         </button>
       </div>
+
+      {/*
+        Without this, the button looks like it does nothing — it finishes in
+        well under a second and the numbers usually don't move, because they
+        were already correct.
+      */}
+      {recomputed ? (
+        <p className="mt-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">
+          Rebuilt <strong>{recomputed.players}</strong> player
+          {recomputed.players === 1 ? "" : "s"} from{" "}
+          <strong>{recomputed.matches}</strong> match
+          {recomputed.matches === 1 ? "" : "es"} and{" "}
+          <strong>{recomputed.seeds}</strong> starting rating
+          {recomputed.seeds === 1 ? "" : "s"}. Numbers not moving means they were
+          already right.
+        </p>
+      ) : (
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          Ratings rebuild themselves after every score, edit, void or deletion, so
+          you rarely need this. Press it if a rating looks out of date, or after
+          anyone is added outside the app. It only recalculates — it never changes
+          a match result, and it can&apos;t lose anything.
+        </p>
+      )}
 
       {roleState.error || adjustState.error || pinState.error ? (
         <p role="alert" className="mt-3 text-sm font-medium text-[var(--danger)]">
