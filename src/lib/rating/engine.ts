@@ -160,9 +160,6 @@ export function ratingDelta(
 interface State {
   rating: number;
   peak: number;
-  seedHl: number;
-  seedOpponents: number;
-  seedAtMs: number | null;
   /** Timestamps of local matches, used for the decayed half-life sum. */
   matchTimes: number[];
   opponents: Set<string>;
@@ -193,48 +190,39 @@ const decayFactor = (fromMs: number, toMs: number, halfLifeDays: number) =>
   evidenceWeight((toMs - fromMs) / DAY_MS, halfLifeDays);
 
 /** Weighted count of how much *live* evidence we have about a player. */
+/**
+ * Only matches played here count as evidence.
+ *
+ * A self-declared rating used to buy up to 8 half-lives and 8 opponents, which
+ * put a player who had never played at 0.6*(8/10) + 0.4*(8/8) = 88% reliable —
+ * past the 60% threshold, so their K-factor was already down at the "settled"
+ * end. That got it backwards: the least verified number in the system was the
+ * hardest one to correct, and a conservative self-assessment was punished with
+ * a lower reliability than an ambitious one.
+ *
+ * DUPR's reliability is explicitly about logged results, how recently you
+ * played, and who you played against. A self-posted claim can't make you
+ * reliable there, so it doesn't here either — the declared rating still says
+ * where you start, it just no longer claims to be evidence.
+ */
 function halfLifeAt(state: State, nowMs: number): number {
   let hl = 0;
-  if (state.seedAtMs !== null) {
-    hl += state.seedHl * decayFactor(state.seedAtMs, nowMs, RATING.SEED_HALF_LIFE_DAYS);
-  }
   for (const t of state.matchTimes) {
     hl += decayFactor(t, nowMs, RATING.MATCH_HALF_LIFE_DAYS);
   }
   return hl;
 }
 
-function opponentEvidenceAt(state: State, nowMs: number): number {
-  const imported =
-    state.seedAtMs === null
-      ? 0
-      : state.seedOpponents * decayFactor(state.seedAtMs, nowMs, RATING.SEED_HALF_LIFE_DAYS);
-  return imported + state.opponents.size;
-}
-
 function reliabilityAt(state: State, nowMs: number): number {
   const hl = halfLifeAt(state, nowMs);
-  const opp = opponentEvidenceAt(state, nowMs);
   return (
     RATING.W_HALF_LIFE * Math.min(1, hl / RATING.HL_FULL) +
-    RATING.W_OPPONENTS * Math.min(1, opp / RATING.OPPONENTS_FULL)
+    RATING.W_OPPONENTS * Math.min(1, state.opponents.size / RATING.OPPONENTS_FULL)
   );
 }
 
 const isProvisional = (halfLife: number, reliability: number) =>
   halfLife < RATING.HL_RELIABLE || reliability < RATING.RELIABILITY_PASS;
-
-/** Convert a declared reliability percentage into imported evidence (§5.7). */
-export function seedEvidence(declaredReliability: number): {
-  hl: number;
-  opponents: number;
-} {
-  const frac = clamp(declaredReliability, 0, 100) / 100;
-  return {
-    hl: frac * RATING.SEED_HL_MAX,
-    opponents: frac * RATING.SEED_OPPONENTS_MAX,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Whole-history recompute (§5.6)
@@ -244,9 +232,6 @@ function newState(rating: number): State {
   return {
     rating,
     peak: rating,
-    seedHl: 0,
-    seedOpponents: 0,
-    seedAtMs: null,
     matchTimes: [],
     opponents: new Set(),
     localMatches: 0,
@@ -275,15 +260,13 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
   for (const event of events) {
     const atMs = event.at.getTime();
 
+    // A seed moves where a player starts. It buys no evidence — see
+    // halfLifeAt — so an unplayed player stays provisional with a fast K and
+    // their first real matches carry them to their actual level.
     if (event.kind === "seed") {
       const s = stateFor(event.playerId);
       s.rating = clamp(event.rating, RATING.MIN, RATING.MAX);
       s.peak = Math.max(s.peak, s.rating);
-
-      const evidence = seedEvidence(event.declaredReliability);
-      s.seedHl = evidence.hl;
-      s.seedOpponents = evidence.opponents;
-      s.seedAtMs = atMs;
       continue;
     }
 

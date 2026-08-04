@@ -224,11 +224,7 @@ export default async function ProfilePage({
       ) : null}
 
       {isMe && stats ? (
-        <ReseedCard
-          currentRating={stats.rating}
-          currentReliability={stats.reliability}
-          daysUntilAllowed={daysUntilAllowed}
-        />
+        <ReseedCard currentRating={stats.rating} daysUntilAllowed={daysUntilAllowed} />
       ) : null}
 
       <section className="card mt-5">

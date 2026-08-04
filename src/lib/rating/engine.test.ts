@@ -14,7 +14,7 @@ import {
   matchSurprise,
   ratingDelta,
   recompute,
-  seedEvidence,
+
   type MatchEvent,
   type SeedEvent,
   type TimelineEvent,
@@ -155,11 +155,48 @@ describe("K factor and the seed floor (§5.3, §5.7)", () => {
     expect(kFactor(1, 5)).toBeLessThan(RATING.K_SEED_FLOOR);
   });
 
-  it("caps how much evidence a declared reliability can buy", () => {
-    expect(seedEvidence(100).hl).toBe(RATING.SEED_HL_MAX);
-    expect(seedEvidence(150).hl).toBe(RATING.SEED_HL_MAX);
-    expect(seedEvidence(0).hl).toBe(0);
-    expect(seedEvidence(50).hl).toBe(RATING.SEED_HL_MAX / 2);
+});
+
+describe("a self-declared rating is not evidence (§5.7)", () => {
+  const now = Date.now();
+
+  it("leaves a seeded player who has never played fully unreliable", () => {
+    // The bug this replaced: declaring 100% reliability bought 8 half-lives
+    // and 8 opponents, which computed to 88% — past the 60% threshold — so a
+    // player who had never hit a ball was treated as settled.
+    const { players } = recompute([seed("p1", 4.3, 100, now - day(1))]);
+    const p = players.get("p1")!;
+    expect(p.rating).toBeCloseTo(4.3, 6);
+    expect(p.reliability).toBe(0);
+    expect(p.provisional).toBe(true);
+  });
+
+  it("does not reward an ambitious claim over a conservative one", () => {
+    const bold = recompute([seed("p1", 4.3, 100, now - day(1))]).players.get("p1")!;
+    const shy = recompute([seed("p2", 4.3, 5, now - day(1))]).players.get("p2")!;
+    expect(bold.reliability).toBe(shy.reliability);
+    expect(bold.provisional).toBe(shy.provisional);
+  });
+
+  it("still anchors where the player starts", () => {
+    const high = recompute([seed("p1", 5.0, 0, now - day(1))]).players.get("p1")!;
+    const low = recompute([seed("p2", 2.5, 0, now - day(1))]).players.get("p2")!;
+    expect(high.rating).toBeGreaterThan(low.rating);
+  });
+
+  it("earns reliability only by playing", () => {
+    const events = [
+      seed("p1", 3.5, 100, now - day(30)),
+      seed("p2", 3.5, 100, now - day(30)),
+      seed("p3", 3.5, 100, now - day(30)),
+      seed("p4", 3.5, 100, now - day(30)),
+      match("m1", ["p1", "p2"], ["p3", "p4"], 11, 7, now - day(2)),
+    ];
+    const p1 = recompute(events).players.get("p1")!;
+    // One match against three opponents: real but nowhere near settled.
+    expect(p1.reliability).toBeGreaterThan(0);
+    expect(p1.reliability).toBeLessThan(RATING.RELIABILITY_PASS);
+    expect(p1.provisional).toBe(true);
   });
 });
 

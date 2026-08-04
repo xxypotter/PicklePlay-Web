@@ -142,41 +142,22 @@ export default function RegisterForm({
 
       {hasDupr ? (
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label" htmlFor="dupr">
-                Your DUPR
-              </label>
-              <input
-                id="dupr"
-                name="dupr"
-                className="field"
-                type="number"
-                inputMode="decimal"
-                step="0.001"
-                min={RATING.MIN}
-                max={RATING.MAX}
-                placeholder="3.750"
-                required={hasDupr}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="reliability">
-                Reliability %
-              </label>
-              <input
-                id="reliability"
-                name="reliability"
-                className="field"
-                type="number"
-                inputMode="numeric"
-                step="1"
-                min={0}
-                max={100}
-                placeholder="60"
-                required={hasDupr}
-              />
-            </div>
+          <div>
+            <label className="label" htmlFor="dupr">
+              Your DUPR
+            </label>
+            <input
+              id="dupr"
+              name="dupr"
+              className="field"
+              type="number"
+              inputMode="decimal"
+              step="0.001"
+              min={RATING.MIN}
+              max={RATING.MAX}
+              placeholder="3.750"
+              required={hasDupr}
+            />
           </div>
           <p className="hint">
             Both are on your DUPR profile. Nothing connects to DUPR — this is a one-time

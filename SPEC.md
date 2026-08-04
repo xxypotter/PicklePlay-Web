@@ -323,18 +323,21 @@ Half-life measures how much *live* evidence we have. Each match starts at weight
 and decays with a **90-day half-life**:
 
 ```
-HL_i = seed_hl_i * 0.5 ^ (days_since_seed / 180)              # imported, fades
-     + Σ over player i's local matches of 0.5 ^ (days_ago / 90)
+HL_i = Σ over player i's local matches of 0.5 ^ (days_ago / 90)
 ```
 
-The second term reproduces the documented DUPR property that the number of matches
-needed doubles every 90 days: 3 matches today, 6 matches from 90 days ago, and 12
-from 180 days ago all contribute the same `HL = 3.0`.
+This reproduces the documented DUPR property that the number of matches needed
+doubles every 90 days: 3 matches today, 6 matches from 90 days ago, and 12 from
+180 days ago all contribute the same `HL = 3.0`.
 
-The first term is the credit we extend for a self-declared DUPR (§5.7). It decays
-on a **180-day half-life** — slower than real matches, because an imported rating
-represents a lot of history, but it still fades. Within about six months a player's
-reliability is built entirely on matches we actually witnessed.
+**Only matches played here count.** A self-declared DUPR sets where a player
+starts (§5.7) and buys no evidence at all. An earlier version granted a seed up
+to 8 half-lives and 8 opponents, which put a player who had never played at 88%
+reliable — past the 60% threshold, so the least verified number in the system was
+also the hardest to correct, and a modest self-assessment was penalised relative
+to an ambitious one. DUPR's reliability is explicitly a function of logged
+results, recency of play, and opponent variety; a self-posted claim cannot make
+you reliable there, so it doesn't here.
 
 ```
 reliability_i = 0.60 * min(1, HL_i / 10)
@@ -409,24 +412,23 @@ history charts, "+0.043" next to each match), but it's a rebuildable cache.
 
 ### 5.7 Seeding from a real DUPR
 
-At signup a player enters **their current real DUPR** (2.000–8.000) and **their real
-reliability %** (0–100). This is a one-time typed-in starting point — nothing syncs,
-and we never contact DUPR.
-
-Reliability is collected because it's the more useful of the two numbers. A player
-saying "4.2 at 90% reliability" is telling us something very different from "4.2 at
-15% reliability," and the second player should move much faster in their first few
-games. Feeding it into K (§5.3) is exactly what makes that happen.
-
-**Declared reliability converts to imported evidence:**
+At signup a player enters **their current real DUPR** (2.000–8.000). This is a
+one-time typed-in starting point — nothing syncs, and we never contact DUPR.
 
 ```
-seed_rating   = declared DUPR
-seed_hl       = (declared_reliability / 100) * 8       # capped at 8
-seed_opponents= (declared_reliability / 100) * 8
+seed_rating = declared DUPR      # anchors where they start, nothing more
 ```
 
-which then decays on a 180-day half-life per §5.4.
+**A seed is not evidence.** It moves the starting rating and contributes zero to
+half-life and zero to opponent variety, so a seeded player who has not played is
+`HL = 0`, `reliability = 0`, and **Provisional** — which puts them at the fast end
+of K (§5.3) so their first real matches carry them to their actual level quickly.
+That is the intended behaviour: an unverified number should be easy to correct,
+not hard.
+
+We no longer collect a declared reliability %. It only ever fed the evidence terms
+above, and doing so inverted the incentive — see §5.4. The `declared_reliability`
+column is retained at 0 for historical rows rather than dropped.
 
 **Fallback for players with no DUPR** — the plain-language picker, seeded at
 reliability 0:

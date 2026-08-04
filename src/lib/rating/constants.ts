@@ -48,13 +48,12 @@ export const RATING = {
   CAP_RELIABLE: 0.1,
 
   /**
-   * Evidence decay (§5.4). Real matches halve in weight every 90 days, which
+   * Evidence decay (§5.4). Matches halve in weight every 90 days, which
    * reproduces DUPR's "results needed doubles every 90 days" property.
-   * Imported (self-declared) evidence decays slower but still fades, so within
-   * ~6 months reliability rests entirely on matches we actually witnessed.
+   * Self-declared ratings are not evidence at any age — only matches played
+   * here count toward reliability.
    */
   MATCH_HALF_LIFE_DAYS: 90,
-  SEED_HALF_LIFE_DAYS: 180,
 
   /** Reliability inputs: full credit at 10 weighted matches / 8 distinct opponents. */
   HL_FULL: 10,
@@ -62,10 +61,6 @@ export const RATING = {
   /** Weights of the two reliability terms; must sum to 1. */
   W_HALF_LIFE: 0.6,
   W_OPPONENTS: 0.4,
-
-  /** Ceiling on how much evidence a self-declared reliability can buy. */
-  SEED_HL_MAX: 8,
-  SEED_OPPONENTS_MAX: 8,
 
   /** Below either of these, a rating is shown as Provisional. */
   HL_RELIABLE: 3.0,

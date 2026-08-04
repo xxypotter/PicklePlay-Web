@@ -141,34 +141,19 @@ export default function RosterCard({
                 </summary>
                 <form action={adjustAction} className="mt-3 flex flex-col gap-2">
                   <input type="hidden" name="playerId" value={p.id} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="text-xs text-[var(--muted)]">
-                      Rating
-                      <input
-                        name="rating"
-                        className="field mt-1 py-2 text-sm"
-                        type="number"
-                        step="0.001"
-                        min={2}
-                        max={8}
-                        defaultValue={p.rating?.toFixed(3) ?? "3.500"}
-                        required
-                      />
-                    </label>
-                    <label className="text-xs text-[var(--muted)]">
-                      Reliability %
-                      <input
-                        name="reliability"
-                        className="field mt-1 py-2 text-sm"
-                        type="number"
-                        step="1"
-                        min={0}
-                        max={100}
-                        defaultValue={Math.round((p.reliability ?? 0) * 100)}
-                        required
-                      />
-                    </label>
-                  </div>
+                  <label className="text-xs text-[var(--muted)]">
+                    Rating
+                    <input
+                      name="rating"
+                      className="field mt-1 py-2 text-sm"
+                      type="number"
+                      step="0.001"
+                      min={2}
+                      max={8}
+                      defaultValue={p.rating?.toFixed(3) ?? "3.500"}
+                      required
+                    />
+                  </label>
                   <input
                     name="note"
                     className="field py-2 text-sm"
@@ -184,9 +169,10 @@ export default function RosterCard({
                     {adjustPending ? "Saving…" : "Override rating"}
                   </button>
                   <p className="text-xs text-[var(--muted)]">
-                    Sets their rating and reliability only — win/loss comes from real
-                    matches and can&apos;t be typed in. Recorded as a dated correction in
-                    their history, not a silent edit.
+                    Sets where their rating sits — win/loss comes from real matches and
+                    can&apos;t be typed in. Reliability is earned by playing, so it
+                    isn&apos;t settable. Recorded as a dated correction in their history,
+                    not a silent edit.
                   </p>
                 </form>
               </details>

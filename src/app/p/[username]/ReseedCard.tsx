@@ -6,11 +6,9 @@ import { reseedAction } from "@/lib/rating/reseed-actions";
 
 export default function ReseedCard({
   currentRating,
-  currentReliability,
   daysUntilAllowed,
 }: {
   currentRating: number;
-  currentReliability: number;
   daysUntilAllowed: number;
 }) {
   const [state, action, pending] = useActionState(reseedAction, {} as FormState);
@@ -30,34 +28,19 @@ export default function ReseedCard({
         </p>
       ) : (
         <form action={action} className="mt-4 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs text-[var(--muted)]">
-              DUPR
-              <input
-                name="rating"
-                className="field mt-1"
-                type="number"
-                step="0.001"
-                min={2}
-                max={8}
-                defaultValue={currentRating.toFixed(3)}
-                required
-              />
-            </label>
-            <label className="text-xs text-[var(--muted)]">
-              Reliability %
-              <input
-                name="reliability"
-                className="field mt-1"
-                type="number"
-                step="1"
-                min={0}
-                max={100}
-                defaultValue={Math.round(currentReliability * 100)}
-                required
-              />
-            </label>
-          </div>
+          <label className="text-xs text-[var(--muted)]">
+            DUPR
+            <input
+              name="rating"
+              className="field mt-1"
+              type="number"
+              step="0.001"
+              min={2}
+              max={8}
+              defaultValue={currentRating.toFixed(3)}
+              required
+            />
+          </label>
 
           {state.error ? (
             <p role="alert" className="text-sm font-medium text-[var(--danger)]">
