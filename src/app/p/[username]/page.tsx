@@ -44,6 +44,8 @@ export default async function ProfilePage({
       displayName: players.displayName,
       role: players.role,
       createdAt: players.createdAt,
+      importedMatches: players.importedMatches,
+      importedWins: players.importedWins,
     })
     .from(players)
     .where(eq(players.usernameLower, decodeURIComponent(username).toLowerCase()))
@@ -139,8 +141,13 @@ export default async function ProfilePage({
   const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
   const avgPartner = mean(partnerRatings);
   const avgOpponent = mean(opponentRatings);
-  const decided = (stats?.wins ?? 0) + (stats?.losses ?? 0);
-  const winRate = decided > 0 ? Math.round(((stats?.wins ?? 0) / decided) * 100) : null;
+  // Career = what they brought with them plus what they've done here, matching
+  // how the leaderboard and Me both count it.
+  const careerMatches =
+    player.importedMatches + (stats?.wins ?? 0) + (stats?.losses ?? 0);
+  const careerWins = player.importedWins + (stats?.wins ?? 0);
+  const careerRate =
+    careerMatches > 0 ? Math.round((careerWins / careerMatches) * 100) : null;
 
   const lastSelfSeed = seeds.find((s) => s.createdBy === player.id);
   const daysUntilAllowed = reseedDaysRemaining(lastSelfSeed?.effectiveAt);
@@ -150,56 +157,100 @@ export default async function ProfilePage({
       <TopBar title={player.displayName ?? player.username} back={backTo} />
       <main className="screen pt-4">
       <section className="card">
-        <p className="text-sm font-medium text-[var(--muted)]">PicklePlay Rating</p>
-        <p className="mt-1 font-mono text-4xl font-bold tabular-nums">
-          {stats ? stats.rating.toFixed(3) : "—"}
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-          {!stats ? (
-            <Badge>Not rated yet</Badge>
-          ) : stats.provisional ? (
-            <Badge>Provisional</Badge>
-          ) : (
-            <Badge>{Math.round(stats.reliability * 100)}% reliable</Badge>
-          )}
-          {stats?.selfDeclared ? <Badge>Self-declared</Badge> : null}
-          {player.role !== "player" ? <Badge>{ROLE_LABELS[player.role as Role]}</Badge> : null}
+        {/* Current rating leads; the peak it has reached sits beside it. */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-[var(--muted)]">PicklePlay Rating</p>
+            <p className="mt-1 font-mono text-4xl font-bold tabular-nums">
+              {stats ? stats.rating.toFixed(3) : "—"}
+              {stats?.provisional ? (
+                <span className="text-2xl text-[var(--muted)]">?</span>
+              ) : null}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-sm font-medium text-[var(--muted)]">Career peak</p>
+            <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-[var(--muted)]">
+              {stats ? stats.peakRating.toFixed(3) : "—"}
+            </p>
+          </div>
         </div>
+
+        {/* Role only. The rest of what used to be badged is explained below. */}
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+          <Badge>{ROLE_LABELS[player.role as Role]}</Badge>
+        </div>
+
+        <dl className="mt-4 grid grid-cols-4 gap-2 text-center">
+          <Stat
+            label="Reliability"
+            value={stats ? `${Math.round(stats.reliability * 100)}%` : "—"}
+          />
+          <Stat label="Played" value={careerMatches} />
+          <Stat label="Won" value={careerWins} />
+          <Stat label="Win rate" value={careerRate === null ? "—" : `${careerRate}%`} />
+        </dl>
 
         <div className="mt-4">
           <RatingChart points={chartPoints} />
         </div>
 
-        <dl className="mt-4 grid grid-cols-4 gap-2 text-center">
-          <Stat label="Played" value={stats?.localMatches ?? 0} />
-          <Stat label="Won" value={stats?.wins ?? 0} />
-          <Stat label="Lost" value={stats?.losses ?? 0} />
-          <Stat
-            label="Peak"
-            value={stats ? stats.peakRating.toFixed(2) : "—"}
-            mono
-          />
-        </dl>
+        {/*
+          Everything that needs a sentence lives here rather than on Me, which
+          is the glanceable screen. The win-rate caveat matters most: people
+          read the two numbers as if one should follow the other.
+        */}
+        <div className="mt-4 flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+          {stats?.provisional ? (
+            <p className="hint">
+              The <strong>?</strong> means this rating is still settling — there
+              aren&apos;t enough matches here yet for it to be dependable. It
+              clears once {isMe ? "you have" : "they have"} played a full session
+              or two.
+            </p>
+          ) : stats ? (
+            <p className="hint">
+              This rating is <strong>reliable</strong> — enough recent matches
+              against enough different people for the number to mean something.
+            </p>
+          ) : null}
 
-        {stats && stats.localMatches > 0 ? (
-          <p className="hint mt-3">
-            {stats.streak > 0
-              ? `On a ${stats.streak}-match win streak.`
-              : stats.streak < 0
-                ? `Lost the last ${-stats.streak}.`
-                : ""}{" "}
-            Point differential {stats.pointsFor - stats.pointsAgainst >= 0 ? "+" : ""}
-            {stats.pointsFor - stats.pointsAgainst}.
+          {player.importedMatches > 0 ? (
+            <p className="hint">
+              <strong>{player.importedMatches}</strong> of those matches were
+              brought in from before PicklePlay, with{" "}
+              <strong>{player.importedWins}</strong> won.{" "}
+              <strong>{stats?.localMatches ?? 0}</strong> were played here. Only
+              the ones played here move the rating.
+            </p>
+          ) : null}
+
+          <p className="hint">
+            Win rate and rating don&apos;t track each other, and they aren&apos;t
+            meant to. Imported matches count toward the record but not the
+            rating, casual sessions count toward neither, and beating stronger
+            opponents moves the rating far more than beating weaker ones — so a
+            modest win rate against tough opposition can outrank a high one.
           </p>
-        ) : null}
+
+          {stats && stats.localMatches > 0 ? (
+            <p className="hint">
+              {stats.streak > 0
+                ? `On a ${stats.streak}-match win streak.`
+                : stats.streak < 0
+                  ? `Lost the last ${-stats.streak}.`
+                  : ""}{" "}
+              Point differential {stats.pointsFor - stats.pointsAgainst >= 0 ? "+" : ""}
+              {stats.pointsFor - stats.pointsAgainst}.
+            </p>
+          ) : null}
+        </div>
       </section>
 
       {history.length > 0 ? (
         <section className="card mt-5">
           <h2 className="text-sm font-medium text-[var(--muted)]">Who they play</h2>
-          <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <Stat label="Win rate" value={winRate === null ? "—" : `${winRate}%`} />
+          <dl className="mt-3 grid grid-cols-2 gap-2 text-center">
             <Stat
               label="Avg partner"
               value={avgPartner === null ? "—" : avgPartner.toFixed(3)}

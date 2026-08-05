@@ -53,10 +53,15 @@ export default async function LeaderboardPage({
   const rows = active === "all" ? listed : listed.filter((r) => r.gender === active);
   const meOptedOut = !!me && all.some((r) => r.id === me.id && r.gender === "unspecified");
 
-  // Established players rank first. A provisional 4.8 hasn't earned a spot
-  // above someone who has actually played here, so they're listed separately.
-  const ranked = rows.filter((r) => !r.provisional);
-  const provisional = rows.filter((r) => r.provisional);
+  /*
+   * One list, everyone in it.
+   *
+   * Splitting settled players from provisional ones answered a real worry — a
+   * self-declared 4.8 outranking people who have actually played — but it cost
+   * more than it fixed: half the group sat under a second heading that read
+   * like a waiting room, and on a young group the main table was empty. A `?`
+   * on the number says the same thing without breaking the list in two.
+   */
 
   const base = "/leaderboard";
   // Rankings hangs off both Home and Me, so where back goes depends on which
@@ -106,16 +111,14 @@ export default async function LeaderboardPage({
           </div>
         ) : (
           <>
-            <Table rows={ranked} meId={me?.id} startRank={1} backHere={backHere} />
+            <Table rows={rows} meId={me?.id} startRank={1} backHere={backHere} />
 
-            {provisional.length > 0 ? (
-              <>
-                <h2 className="mt-6 mb-1 px-1 text-sm text-[var(--muted)]">Still settling</h2>
-                <p className="mb-2 px-1 text-xs text-[var(--muted)]">
-                  Not enough recent matches here for a reliable number yet.
-                </p>
-                <Table rows={provisional} meId={me?.id} backHere={backHere} />
-              </>
+            {rows.some((r) => r.provisional) ? (
+              <p className="mt-3 px-1 text-xs text-[var(--muted)]">
+                <span className="font-mono font-semibold">?</span> means the
+                rating is still settling — not enough matches here yet for it to
+                be dependable. It clears after a full session or two.
+              </p>
             ) : null}
           </>
         )}
@@ -196,6 +199,9 @@ function Table({
 
             <span className="shrink-0 font-mono text-lg font-semibold tabular-nums text-[var(--accent)]">
               {r.rating.toFixed(3)}
+              {r.provisional ? (
+                <span className="text-[var(--muted)]">?</span>
+              ) : null}
             </span>
           </li>
         );

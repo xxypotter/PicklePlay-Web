@@ -48,41 +48,36 @@ export default async function MePage() {
       <TopBar title="PicklePlay" />
 
       <main className="screen pt-4">
-        {/* Profile header: name, role, then the numbers in orange. */}
+        {/*
+          Name and rating on one line, then the four numbers. Everything that
+          needs a sentence to explain it — imported counts, what provisional
+          means, where the rating came from — lives on My rating instead. This
+          screen is the one you glance at.
+        */}
         <section className="card">
           <div className="flex items-center gap-3">
             <Avatar username={me.username} avatar={profile?.avatar} size={56} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-lg font-bold">{me.displayName ?? me.username}</p>
-              {me.role !== "player" ? (
-                <span className="mt-0.5 inline-block rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]">
-                  {ROLE_LABELS[me.role]}
-                </span>
-              ) : null}
+              <span className="mt-0.5 inline-block rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]">
+                {ROLE_LABELS[me.role]}
+              </span>
             </div>
+            <p className="shrink-0 font-mono text-3xl font-bold tabular-nums text-[var(--accent)]">
+              {stats ? stats.rating.toFixed(3) : "—"}
+              {stats?.provisional ? <span className="text-xl">?</span> : null}
+            </p>
           </div>
 
           <div className="mt-4 grid grid-cols-4 gap-2 border-t border-[var(--border)] pt-4 text-center">
-            <Stat label="Rating" value={stats ? stats.rating.toFixed(3) : "—"} />
+            <Stat
+              label="Reliability"
+              value={stats ? `${Math.round(stats.reliability * 100)}%` : "—"}
+            />
             <Stat label="Played" value={String(careerMatches)} />
             <Stat label="Won" value={String(careerWins)} />
             <Stat label="Win rate" value={careerMatches > 0 ? `${winRate}%` : "—"} />
           </div>
-
-          {profile && profile.importedMatches > 0 ? (
-            <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
-              Includes {profile.importedMatches} imported · {stats?.localMatches ?? 0} played here
-            </p>
-          ) : null}
-
-          {stats ? (
-            <p className="mt-3 text-center text-xs text-[var(--muted)]">
-              {stats.provisional
-                ? "Provisional — a few more games and this settles."
-                : `${Math.round(stats.reliability * 100)}% reliable`}
-              {stats.selfDeclared ? " · self-declared" : ""}
-            </p>
-          ) : null}
         </section>
 
         {/* Shortcut grid, as in the mini-program's profile tab. */}
@@ -98,7 +93,8 @@ export default async function MePage() {
           <RowLink
             href={`/p/${me.username}?from=/me`}
             icon="⭐"
-            label="Update my DUPR"
+            label="My rating"
+            hint="Details, history, update"
             last={!isAtLeast(me.role, "admin")}
           />
           {isAtLeast(me.role, "admin") ? (
