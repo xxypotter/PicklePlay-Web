@@ -7,6 +7,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
+import { canManageSessions } from "@/lib/auth/policy";
 
 /**
  * Split by time, not by kind.
@@ -99,6 +100,8 @@ export default async function HomePage({
   const countBy = new Map(counts.map((c) => [c.sessionId, c.n]));
   const stateBy = new Map(mine.map((m) => [m.sessionId, m.state]));
 
+  const canCreate = !!me && canManageSessions(me.role);
+
   const cards: SessionCardData[] = rows.map((r) => ({
     ...r,
     signedUp: countBy.get(r.id) ?? 0,
@@ -144,7 +147,16 @@ export default async function HomePage({
             {active === "upcoming" ? (
               <>
                 <p className="text-[var(--muted)]">Nothing scheduled.</p>
-                <p className="hint">Tap + below to set one up.</p>
+                {/*
+                  This is the screen most of the group sees most of the time,
+                  and it used to tell every player to tap a + that refuses them.
+                  Only say it to someone who can actually do it.
+                */}
+                <p className="hint">
+                  {canCreate
+                    ? "Tap + below to set one up."
+                    : "Your organizer will post the next one here."}
+                </p>
               </>
             ) : (
               <>

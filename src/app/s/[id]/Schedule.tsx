@@ -66,7 +66,18 @@ export default function Schedule({
 
               const aWon = m.completed && (m.scoreA ?? 0) > (m.scoreB ?? 0);
               return (
-                <div key={m.id} className="card flex items-center gap-3">
+                /*
+                  Mark your own games here too, not only while they're editable.
+                  The highlight used to come with the score box, so it vanished
+                  the moment a session closed — which is exactly when people come
+                  back to look, and a finished night can be fifteen cards long.
+                */
+                <div
+                  key={m.id}
+                  className={`card flex items-center gap-3 ${
+                    mine ? "border-2 border-[var(--accent)]" : ""
+                  }`}
+                >
                   <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center gap-2">
                     <Team players={m.teamA} meId={meId} />
                     <span className="text-xs text-[var(--muted)]">vs</span>

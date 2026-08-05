@@ -1,4 +1,5 @@
-import { asc, desc, eq, inArray, or } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
 import RatingChart from "@/components/RatingChart";
@@ -36,6 +37,12 @@ export default async function ProfilePage({
   // link opened cold.
   const { from } = await searchParams;
   const backTo = safeFrom(from, "/leaderboard");
+  // Where the record screen should come back to: here, with our own origin
+  // preserved so the chain keeps unwinding.
+  const backHere =
+    backTo === "/leaderboard"
+      ? `/p/${decodeURIComponent(username)}`
+      : `/p/${decodeURIComponent(username)}?from=${encodeURIComponent(backTo)}`;
   const db = getDb();
 
   const found = await db
@@ -91,18 +98,6 @@ export default async function ProfilePage({
 
   const stats = statsRow[0];
   const isMe = me?.id === player.id;
-
-  // Names for every opponent and partner in one query rather than N.
-  const involved = new Set<string>();
-  for (const h of history) for (const id of [h.a1, h.a2, h.b1, h.b2]) involved.add(id);
-
-  const nameRows = involved.size
-    ? await db
-        .select({ id: players.id, username: players.username })
-        .from(players)
-        .where(or(...[...involved].map((id) => eq(players.id, id))))
-    : [];
-  const nameOf = new Map(nameRows.map((n) => [n.id, n.username]));
 
   const chartPoints = history.map((h) => h.ratingAfter);
   if (stats && chartPoints.length > 0) chartPoints.unshift(chartPoints[0] - history[0].delta);
@@ -226,6 +221,20 @@ export default async function ProfilePage({
             </p>
           ) : null}
 
+          {/*
+            Reliability needs saying in words somewhere, and this is the screen
+            that owns it. The ring alone reads as a fourth performance stat, and
+            a low one reads as a weak player — which is the opposite of true.
+          */}
+          <p className="hint">
+            <strong>Reliability</strong> is how well-established the rating is,
+            not how good {isMe ? "you are" : "they are"}. It climbs by playing
+            different partners and opponents rather than by playing a lot, so
+            the fastest way to fill the ring is a mixed session — and a beginner
+            who turns up every week is more reliable than a strong player who
+            came twice.
+          </p>
+
           <p className="hint">
             Win rate and rating don&apos;t track each other, and they aren&apos;t
             meant to. Imported matches count toward the record but not the
@@ -279,59 +288,24 @@ export default async function ProfilePage({
         <ReseedCard currentRating={stats.rating} daysUntilAllowed={daysUntilAllowed} />
       ) : null}
 
-      <section className="card mt-5">
-        <h2 className="text-sm font-medium text-[var(--muted)]">
-          Matches ({history.length})
-        </h2>
-        {history.length === 0 ? (
-          <p className="mt-3 text-sm text-[var(--muted)]">No matches yet.</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-[var(--border)]">
-            {[...history].reverse().map((h) => {
-              const onA = h.a1 === player.id || h.a2 === player.id;
-              const partner = onA
-                ? h.a1 === player.id
-                  ? h.a2
-                  : h.a1
-                : h.b1 === player.id
-                  ? h.b2
-                  : h.b1;
-              const opponents = onA ? [h.b1, h.b2] : [h.a1, h.a2];
-              const mine = onA ? h.scoreA : h.scoreB;
-              const theirs = onA ? h.scoreB : h.scoreA;
-              const won = (mine ?? 0) > (theirs ?? 0);
-
-              return (
-                <li key={h.matchId} className="py-2.5">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 truncate text-sm">
-                      <span className={won ? "font-semibold" : ""}>
-                        {mine}–{theirs}
-                      </span>{" "}
-                      <span className="text-[var(--muted)]">
-                        with {nameOf.get(partner) ?? "?"} v{" "}
-                        {opponents.map((o) => nameOf.get(o) ?? "?").join(" & ")}
-                      </span>
-                    </span>
-                    <span
-                      className={`shrink-0 font-mono text-sm tabular-nums ${
-                        h.delta >= 0 ? "text-[var(--accent)]" : "text-[var(--danger)]"
-                      }`}
-                    >
-                      {h.delta >= 0 ? "+" : ""}
-                      {h.delta.toFixed(3)}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-[var(--muted)]">
-                    <LocalDateTime iso={h.playedAt.toISOString()} withWeekday={false} /> ·{" "}
-                    {h.ratingAfter.toFixed(3)}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      {/*
+        Match history moved to the record screen. Two lists of the same matches,
+        one annotated with rating deltas and one not, was the same information
+        asking to be read twice.
+      */}
+      <Link
+        href={`/p/${player.username}/record?from=${encodeURIComponent(backHere)}`}
+        className="card mt-5 flex items-center gap-3 active:bg-[var(--surface-2)]"
+      >
+        <span className="text-lg">📈</span>
+        <span className="flex-1 font-medium">
+          {isMe ? "My record" : `${player.username}'s record`}
+        </span>
+        <span className="text-sm text-[var(--muted)]">
+          {history.length} match{history.length === 1 ? "" : "es"}
+        </span>
+        <span className="text-[var(--muted)]">›</span>
+      </Link>
 
       {seeds.length > 0 ? (
         <section className="card mt-5">

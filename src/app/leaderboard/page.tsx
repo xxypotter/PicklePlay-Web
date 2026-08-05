@@ -169,10 +169,16 @@ function Table({
         const rate = matches > 0 ? Math.round((wins / matches) * 100) : null;
 
         return (
-          <li
-            key={r.id}
+          /*
+            The whole row is the link. It used to be just the name — a 161x24
+            target in a stack of twelve, which is a mis-tap waiting to happen on
+            a phone. Same look, a target you can actually hit.
+          */
+          <li key={r.id}>
+          <Link
+            href={`/p/${r.username}?from=${encodeURIComponent(backHere)}`}
             className={`flex items-center gap-3 border-b border-[var(--border)] px-4 py-3
-              last:border-0 ${r.id === meId ? "bg-[var(--accent-soft)]" : ""}`}
+              last:border-0 active:bg-[var(--surface-2)] ${r.id === meId ? "bg-[var(--accent-soft)]" : ""}`}
           >
             {startRank !== undefined ? (
               <span className="w-6 shrink-0 text-center text-sm tabular-nums">
@@ -183,12 +189,7 @@ function Table({
             <Avatar username={r.username} avatar={r.avatar} size={36} />
 
             <div className="min-w-0 flex-1">
-              <Link
-                href={`/p/${r.username}?from=${encodeURIComponent(backHere)}`}
-                className="block truncate font-medium"
-              >
-                {r.username}
-              </Link>
+              <span className="block truncate font-medium">{r.username}</span>
               <p className="text-xs text-[var(--muted)]">
                 {matches === 0
                   ? "No matches yet"
@@ -203,6 +204,7 @@ function Table({
                 <span className="text-[var(--muted)]">?</span>
               ) : null}
             </span>
+          </Link>
           </li>
         );
       })}

@@ -88,7 +88,7 @@ export default async function MePage() {
         {/* Shortcut grid, as in the mini-program's profile tab. */}
         <section className="card mt-3">
           <div className="grid grid-cols-3 gap-y-5">
-            <Shortcut href={`/p/${me.username}?from=/me`} icon="📈" label="My record" />
+            <Shortcut href={`/p/${me.username}/record?from=/me`} icon="📈" label="My record" />
             <Shortcut href="/sessions" icon="📅" label="My sessions" />
             <Shortcut href="/leaderboard?from=/me" icon="🏆" label="Rankings" />
           </div>
