@@ -115,7 +115,16 @@ export default async function PlayPage({
 
         <AddPlayers sessionId={id} candidates={notSignedUp} />
 
-        {/* Setup and play are separate phases; only one set of controls applies. */}
+        {/*
+          Three phases, not two. Testing "is it open?" put closed sessions down
+          the same branch as live ones, so a finished night still offered to
+          build matches — and the server, correctly, refused with "Start the
+          session before creating matches", which is a baffling thing to be told
+          about a session that already happened.
+
+          A session can close on its own (24h after its start time), so this is
+          reachable without anyone pressing anything.
+        */}
         {session.status === "open" ? (
           <>
             <StartSessionButton sessionId={id} attendingCount={attendingCount} />
@@ -126,7 +135,7 @@ export default async function PlayPage({
               Edit session details
             </Link>
           </>
-        ) : (
+        ) : session.status === "live" ? (
           <>
             <GenerateRoundButton
               sessionId={id}
@@ -137,6 +146,10 @@ export default async function PlayPage({
             />
             {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
           </>
+        ) : (
+          <p className="hint mt-4">
+            This session is finished. Scores can still be corrected below.
+          </p>
         )}
 
         <p className="hint">
