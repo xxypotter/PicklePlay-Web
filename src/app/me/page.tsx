@@ -64,10 +64,14 @@ export default async function MePage() {
                 {ROLE_LABELS[me.role]}
               </span>
             </div>
-            <p className="shrink-0 font-mono text-3xl font-bold tabular-nums text-[var(--accent)]">
-              {stats ? stats.rating.toFixed(3) : "—"}
-              {stats?.provisional ? <span className="text-xl">?</span> : null}
-            </p>
+            {/* A bare number beside a name doesn't say what it is. */}
+            <div className="shrink-0 text-right">
+              <p className="font-mono text-3xl font-bold tabular-nums text-[var(--accent)]">
+                {stats ? stats.rating.toFixed(3) : "—"}
+                {stats?.provisional ? <span className="text-xl">?</span> : null}
+              </p>
+              <p className="text-[11px] text-[var(--muted)]">PicklePlay Rating</p>
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-4 items-end gap-2 border-t border-[var(--border)] pt-4 text-center">
