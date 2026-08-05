@@ -8,10 +8,14 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  canAdjustRating,
   canManageInviteCode,
   canManageRoles,
   canManageSessions,
   canOrganizeSession,
+  canRecomputeRatings,
+  canRotateInviteCode,
+  canRunBackup,
   canScoreMatch,
   isAtLeast,
   type SessionScope,
@@ -126,5 +130,56 @@ describe("who may score a match", () => {
 
   it("still lets participants score a session that hasn't started", () => {
     expect(canScoreMatch(PLAYER, session("open"), true)).toBe(true);
+  });
+});
+
+describe("owner-level controls", () => {
+  it("keeps rotating the invite code, recomputing and backups with the super admin", () => {
+    // Each acts on the whole group at once, so an admin badge isn't enough.
+    for (const check of [canRotateInviteCode, canRecomputeRatings, canRunBackup]) {
+      expect(check("player")).toBe(false);
+      expect(check("admin")).toBe(false);
+      expect(check("superadmin")).toBe(true);
+    }
+  });
+
+  it("still lets any admin see and share the code", () => {
+    expect(canManageInviteCode("admin")).toBe(true);
+  });
+});
+
+describe("who may overwrite a rating", () => {
+  const player = { id: "pat", role: "player" as Role };
+  const otherAdmin = { id: "other", role: "admin" as Role };
+  const owner = { id: "owner", role: "admin" as Role };
+  const boss = { id: "boss", role: "superadmin" as Role };
+
+  it("lets an admin correct a player", () => {
+    expect(canAdjustRating(OWNER, player)).toBe(true);
+  });
+
+  it("lets an admin correct their own", () => {
+    expect(canAdjustRating(OWNER, owner)).toBe(true);
+  });
+
+  it("stops an admin reaching another admin", () => {
+    // The reported bug: SummerX, an admin, could rewrite another admin's rating.
+    expect(canAdjustRating(OWNER, otherAdmin)).toBe(false);
+  });
+
+  it("stops an admin reaching the super admin", () => {
+    expect(canAdjustRating(OWNER, boss)).toBe(false);
+  });
+
+  it("lets the super admin correct anyone, including themselves", () => {
+    for (const target of [player, otherAdmin, owner, boss]) {
+      expect(canAdjustRating(SUPER, target)).toBe(true);
+    }
+  });
+
+  it("gives a plain player no reach at all, not even their own", () => {
+    // Players change their own rating through the re-seed flow, which has a
+    // cooldown; this path deliberately isn't theirs.
+    expect(canAdjustRating(PLAYER, player)).toBe(false);
   });
 });

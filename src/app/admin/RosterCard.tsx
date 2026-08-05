@@ -22,17 +22,27 @@ export interface RosterEntry {
 export default function RosterCard({
   roster,
   canManageRoles,
+  canRecompute,
   meRole,
   meId,
 }: {
   roster: RosterEntry[];
   canManageRoles: boolean;
+  /** Rebuilding every rating at once is the owner's call. */
+  canRecompute: boolean;
   meRole: Role;
   meId: string;
 }) {
   /** Mirrors resetPinAction's rule; the server is what actually enforces it. */
   const canResetPin = (role: Role) =>
     role !== "superadmin" && (role !== "admin" || meRole === "superadmin");
+  /*
+   * Mirrors canAdjustRating. An admin may correct a player, and themselves —
+   * not a peer, and not the owner. Hiding it is a courtesy; adjustRatingAction
+   * is what actually refuses.
+   */
+  const canAdjust = (p: RosterEntry) =>
+    meRole === "superadmin" || p.id === meId || p.role === "player";
   const [roleState, roleAction, rolePending] = useActionState(setRoleAction, {} as FormState);
   const [adjustState, adjustAction, adjustPending] = useActionState(
     adjustRatingAction,
@@ -47,19 +57,21 @@ export default function RosterCard({
     <section className="card mt-5">
       <div className="flex items-baseline justify-between">
         <h2 className="text-sm font-medium text-[var(--muted)]">Players ({roster.length})</h2>
-        <button
-          type="button"
-          onClick={() =>
-            startRecompute(async () => {
-              const summary = await recomputeAction();
-              setRecomputed(summary);
-            })
-          }
-          disabled={recomputing}
-          className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
-        >
-          {recomputing ? "Recomputing…" : "Recompute ratings"}
-        </button>
+        {canRecompute ? (
+          <button
+            type="button"
+            onClick={() =>
+              startRecompute(async () => {
+                const summary = await recomputeAction();
+                setRecomputed(summary);
+              })
+            }
+            disabled={recomputing}
+            className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
+          >
+            {recomputing ? "Recomputing…" : "Recompute ratings"}
+          </button>
+        ) : null}
       </div>
 
       {/*
@@ -135,6 +147,7 @@ export default function RosterCard({
                 </div>
               </div>
 
+              {canAdjust(p) ? (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs font-semibold text-[var(--accent)]">
                   Adjust rating
@@ -176,6 +189,7 @@ export default function RosterCard({
                   </p>
                 </form>
               </details>
+              ) : null}
 
               {/*
                 Clearing, not editing. The super admin can wipe an imported

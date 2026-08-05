@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth/permissions";
 import { hashPin, validatePin } from "@/lib/auth/pin";
+import { canAdjustRating } from "@/lib/auth/policy";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
@@ -13,7 +14,9 @@ import { RATING } from "@/lib/rating/constants";
 import { recomputeAll, type RecomputeSummary } from "@/lib/rating/service";
 
 export async function rotateInviteCodeAction(): Promise<void> {
-  const me = await requireAdmin();
+  // Rotating invalidates the code for anyone part-way through signing up, so
+  // it stays with the owner rather than with everyone holding an admin badge.
+  const me = await requireSuperAdmin();
 
   const code = await setInviteCode(generateInviteCode(), me.id);
 
@@ -113,13 +116,23 @@ export async function adjustRatingAction(
 
   const db = getDb();
   const rows = await db
-    .select({ id: players.id, username: players.username })
+    .select({ id: players.id, username: players.username, role: players.role })
     .from(players)
     .where(eq(players.id, targetId))
     .limit(1);
 
   const target = rows[0];
   if (!target) return { error: "That player no longer exists." };
+
+  // Being an admin is not permission to rewrite another admin's rating.
+  if (!canAdjustRating(me, { id: target.id, role: target.role })) {
+    return {
+      error:
+        target.role === "superadmin"
+          ? "The super admin's rating can't be changed here."
+          : "Only the super admin can change another admin's rating.",
+    };
+  }
 
   await db.insert(ratingSeeds).values({
     playerId: targetId,
@@ -212,7 +225,7 @@ export async function resetPinAction(_prev: FormState, formData: FormData): Prom
  * an admin ends up pressing it five more times.
  */
 export async function recomputeAction(): Promise<RecomputeSummary> {
-  const me = await requireAdmin();
+  const me = await requireSuperAdmin();
 
   const summary = await recomputeAll();
 

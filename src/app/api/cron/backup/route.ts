@@ -20,7 +20,7 @@ import { timingSafeEqual } from "node:crypto";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { isAtLeast } from "@/lib/auth/policy";
 import { getDb } from "@/lib/db";
-import { matches, players, ratingSeeds, sessions, signups } from "@/lib/db/schema";
+import { auditLog, matches, players, ratingSeeds, sessions, signups } from "@/lib/db/schema";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
 
 export const dynamic = "force-dynamic";
@@ -37,11 +37,17 @@ function secretMatches(header: string | null): boolean {
 }
 
 export async function GET(request: Request) {
-  // Vercel Cron presents the secret; an admin can also trigger it by hand to
-  // confirm the whole path works rather than waiting a week to find out.
-  const authorized =
-    secretMatches(request.headers.get("authorization")) ||
-    (await getCurrentPlayer().then((me) => !!me && isAtLeast(me.role, "admin")));
+  /*
+   * Vercel Cron presents the secret; the owner can also trigger it by hand to
+   * confirm the whole path works rather than waiting a week to find out.
+   *
+   * Superadmin rather than any admin: the response says whether the deploy is
+   * holding a working GitHub token and which private repo it writes to, and
+   * the manual run publishes the group's data on demand.
+   */
+  const byCron = secretMatches(request.headers.get("authorization"));
+  const me = byCron ? null : await getCurrentPlayer();
+  const authorized = byCron || (!!me && isAtLeast(me.role, "superadmin"));
 
   if (!authorized) {
     return NextResponse.json({ error: "Not authorized." }, { status: 401 });
@@ -232,6 +238,21 @@ export async function GET(request: Request) {
       { status: 502 },
     );
   }
+
+  /*
+   * Record the run. A backup you can't confirm ran is barely a backup — this
+   * is what lets the admin page answer "when did this last work?" rather than
+   * leaving the weekly cron to fail silently for a month.
+   *
+   * actorId is null for the cron, which is also how we tell the two apart.
+   */
+  await db.insert(auditLog).values({
+    actorId: me?.id ?? null,
+    action: "backup.run",
+    detail: Object.entries(payload.counts)
+      .map(([k, v]) => `${v} ${k}`)
+      .join(" · "),
+  });
 
   return NextResponse.json({ ok: true, stored: true, path, counts: payload.counts });
 }

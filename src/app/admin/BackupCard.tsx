@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import LocalDateTime from "@/components/LocalDateTime";
 
 interface BackupResult {
   ok?: boolean;
@@ -23,7 +24,14 @@ interface BackupResult {
  * discovering the token is wrong on the Monday you actually need the data is
  * the worst possible time.
  */
-export default function BackupCard({ configured }: { configured: boolean }) {
+export default function BackupCard({
+  configured,
+  lastBackup,
+}: {
+  configured: boolean;
+  /** Most recent successful run, or null if it has never completed. */
+  lastBackup: { iso: string; automatic: boolean } | null;
+}) {
   const [result, setResult] = useState<BackupResult | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -50,6 +58,24 @@ export default function BackupCard({ configured }: { configured: boolean }) {
         {configured
           ? "Runs automatically every Monday, and commits players, matches, and rating history to your private repo."
           : "Not switched on yet. Add BACKUP_GITHUB_REPO and BACKUP_GITHUB_TOKEN in Vercel, then redeploy."}
+      </p>
+
+      <p className="mt-2 text-sm">
+        {lastBackup ? (
+          <>
+            <span className="text-[var(--muted)]">Last backup </span>
+            <span className="font-medium">
+              <LocalDateTime iso={lastBackup.iso} />
+            </span>
+            <span className="text-[var(--muted)]">
+              {lastBackup.automatic ? " · automatic" : " · run by hand"}
+            </span>
+          </>
+        ) : (
+          <span className="text-[var(--muted)]">
+            No backup has completed yet.
+          </span>
+        )}
       </p>
 
       <div className="mt-3 flex gap-2">
@@ -81,9 +107,17 @@ export default function BackupCard({ configured }: { configured: boolean }) {
               Saved to {result.repo} · {result.path}
             </p>
           ) : result.checkOnly ? (
-            <p className="font-medium text-[var(--success)]">
-              {result.repo} is reachable and private. Nothing was written.
-            </p>
+            <>
+              <p className="font-medium text-[var(--success)]">
+                {result.repo} is reachable and private.
+              </p>
+              {/* "Nothing was written" read as a failure. Say what a check is. */}
+              <p className="hint">
+                That was a check, not a backup — it confirms the repo and token
+                work without saving anything. Use <strong>Back up now</strong> to
+                actually save a copy.
+              </p>
+            </>
           ) : (
             <>
               <p className="font-medium text-[var(--danger)]">

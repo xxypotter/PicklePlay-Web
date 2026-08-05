@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { rotateInviteCodeAction } from "./actions";
 
-export default function InviteCard({ code, origin }: { code: string | null; origin: string }) {
+export default function InviteCard({
+  code,
+  origin,
+  canRotate,
+}: {
+  code: string | null;
+  origin: string;
+  /** Rotating locks out anyone mid-signup, so it belongs to the owner. */
+  canRotate: boolean;
+}) {
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const link = code ? `${origin}/register?code=${code}` : "";
 
@@ -56,6 +65,7 @@ export default function InviteCard({ code, origin }: { code: string | null; orig
         </p>
       )}
 
+      {canRotate ? (
       <form action={rotateInviteCodeAction} className="mt-6 border-t border-[var(--border)] pt-5">
         <button
           type="submit"
@@ -70,6 +80,7 @@ export default function InviteCard({ code, origin }: { code: string | null; orig
           </p>
         ) : null}
       </form>
+      ) : null}
     </section>
   );
 }
