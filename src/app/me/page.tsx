@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Avatar from "@/components/Avatar";
+import ReliabilityRing from "@/components/ReliabilityRing";
 import TopBar from "@/components/TopBar";
 import { logoutAction } from "@/lib/auth/actions";
 import { isAtLeast } from "@/lib/auth/policy";
@@ -69,11 +70,11 @@ export default async function MePage() {
             </p>
           </div>
 
-          <div className="mt-4 grid grid-cols-4 gap-2 border-t border-[var(--border)] pt-4 text-center">
-            <Stat
-              label="Reliability"
-              value={stats ? `${Math.round(stats.reliability * 100)}%` : "—"}
-            />
+          <div className="mt-4 grid grid-cols-4 items-end gap-2 border-t border-[var(--border)] pt-4 text-center">
+            <div className="flex flex-col items-center gap-1">
+              <ReliabilityRing value={stats?.reliability ?? 0} size={44} />
+              <p className="text-[11px] text-[var(--muted)]">Reliability</p>
+            </div>
             <Stat label="Played" value={String(careerMatches)} />
             <Stat label="Won" value={String(careerWins)} />
             <Stat label="Win rate" value={careerMatches > 0 ? `${winRate}%` : "—"} />

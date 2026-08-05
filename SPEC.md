@@ -345,35 +345,64 @@ CAP = 0.25 if provisional else 0.10
 
 Doubles only — there is no singles path anywhere in this formula or the product.
 
-### 5.4 Reliability and half-life
+### 5.4 Reliability
 
-Half-life measures how much *live* evidence we have. Each match starts at weight 1
-and decays with a **90-day half-life**:
+Reliability answers "can this number be trusted?", never "is this player any
+good". A beginner who plays every week is fully reliable; a 5.0 who has played
+twice is not.
 
-```
-HL_i = Σ over player i's local matches of 0.5 ^ (days_ago / 90)
-```
+It follows DUPR's published doubles waypoints rather than a formula of our own:
 
-This reproduces the documented DUPR property that the number of matches needed
-doubles every 90 days: 3 matches today, 6 matches from 90 days ago, and 12 from
-180 days ago all contribute the same `HL = 3.0`.
-
-**Only matches played here count.** A self-declared DUPR sets where a player
-starts (§5.7) and buys no evidence at all. An earlier version granted a seed up
-to 8 half-lives and 8 opponents, which put a player who had never played at 88%
-reliable — past the 60% threshold, so the least verified number in the system was
-also the hardest to correct, and a modest self-assessment was penalised relative
-to an ambitious one. DUPR's reliability is explicitly a function of logged
-results, recency of play, and opponent variety; a self-posted claim cannot make
-you reliable there, so it doesn't here.
+| | Unique partners | Unique opposing teams |
+|---|---|---|
+| **60% — reliable** | 2+ | 6+ |
+| **100%** | 4+ | 12+ |
 
 ```
-reliability_i = 0.60 * min(1, HL_i / 10)
-              + 0.40 * min(1, distinct_opponents_i / 8)
+partners = Σ over distinct partners of  weight(them) × 0.5^(days_ago / 90)
+teams    = Σ over distinct opposing pairs of weight(pair) × 0.5^(days_ago / 90)
+
+reliability = max(declared_floor, min(scale(partners, 2, 4), scale(teams, 6, 12)))
 ```
 
-Displayed as 0–100%. A player is **Provisional** if `HL < 3.0` OR
-`reliability < 0.60`, and their rating is shown with a `?` badge.
+`scale` is linear to 60% at the first waypoint, then linear to 100% at the
+second — two segments because DUPR publishes both points and the second half of
+the journey costs three times the first.
+
+**Distinct is the point.** Ten games with the same partner teach the system what
+one game does. Counting raw matches rewarded turning up; counting distinct
+partners and opposing pairs rewards *mixing*, which is what actually pins a
+rating down. A 9-player round robin produces 8 partners and 8 opposing pairs in
+one night, which is why a single session settles a newcomer.
+
+**`min`, not an average.** Both conditions must hold. Twelve different pairs
+while always partnering the same person still leaves that pairing unmeasured.
+
+**Weighting by who you played.**
+
+```
+weight(them) = 0.5 + 0.5 × min(1, their_reliability / 0.60)
+```
+
+DUPR weights results by the reliability of the people involved. Taken literally
+that never starts: a new group is all zeroes, so nobody can lift anybody. The
+floor fixes it without penalising anyone — someone already at 60% counts a full
+1.0, exactly as a head-count would, so an established group is unaffected and
+only a group of strangers takes longer. Measured:
+
+| | One night | Two nights |
+|---|---|---|
+| Joining established players | **71% — reliable** | 100% |
+| Everyone starting cold | 53% | **88% — reliable** |
+
+**Decay.** Each encounter fades on the same 90-day half-life as match evidence,
+measured against the most recent event in the *whole* timeline. An inactive
+player therefore fades only relative to a group that keeps playing, which is
+what makes a stale number honest: after a year away while the group carried on,
+90% falls to 5% and the `?` returns.
+
+A player is **provisional** — shown with a `?` after their rating — while
+reliability is under 60%.
 
 > **Deviation from real DUPR, on purpose.** Real DUPR includes *connectivity to the
 > global player pool*. In a closed group of 20 people that term is meaningless, so
@@ -440,23 +469,35 @@ history charts, "+0.043" next to each match), but it's a rebuildable cache.
 
 ### 5.7 Seeding from a real DUPR
 
-At signup a player enters **their current real DUPR** (2.000–8.000). This is a
-one-time typed-in starting point — nothing syncs, and we never contact DUPR.
+At signup a player enters **their current real DUPR** (2.000–8.000) and,
+optionally, **the reliability % from the same profile**. One-time typed-in
+starting points — nothing syncs, and we never contact DUPR.
 
 ```
-seed_rating = declared DUPR      # anchors where they start, nothing more
+seed_rating    = declared DUPR
+declared_floor = declared reliability / 100      # 0 when left blank
 ```
 
-**A seed is not evidence.** It moves the starting rating and contributes zero to
-half-life and zero to opponent variety, so a seeded player who has not played is
-`HL = 0`, `reliability = 0`, and **Provisional** — which puts them at the fast end
-of K (§5.3) so their first real matches carry them to their actual level quickly.
-That is the intended behaviour: an unverified number should be easy to correct,
-not hard.
+**The declaration is taken at face value.** A player who copies 85% off their
+DUPR profile starts reliable, with no `?`. This is a deliberate call for a group
+where everyone knows everyone: making an established player prove themselves
+again costs more than the risk of someone inflating a number their friends can
+see. Leaving it blank is not a penalty — it simply means starting unproven, and
+one session fixes it.
 
-We no longer collect a declared reliability %. It only ever fed the evidence terms
-above, and doing so inverted the incentive — see §5.4. The `declared_reliability`
-column is retained at 0 for historical rows rather than dropped.
+The floor does not decay. Taking a claim at face value means still taking it at
+face value a year later; only reliability *earned* by playing fades (§5.4).
+
+K still starts fast for the first five local matches regardless (§5.3), so trust
+decides the badge, not how quickly a wrong number can correct itself.
+
+**Changing your own rating later brings the `?` back** (§5.8). A new
+self-declared figure is unverified again whatever stood behind the old one, so
+the floor resets to zero and the partner and opponent evidence is cleared. The
+match record is untouched — those games happened; only the evidence for *this
+number* restarts. An **admin** correction does not do this, because someone
+other than the player vouched for it, and it is also how an existing player gets
+a reliability they never entered at signup.
 
 **Fallback for players with no DUPR** — the plain-language picker, seeded at
 reliability 0:

@@ -55,15 +55,35 @@ export const RATING = {
    */
   MATCH_HALF_LIFE_DAYS: 90,
 
-  /** Reliability inputs: full credit at 10 weighted matches / 8 distinct opponents. */
-  HL_FULL: 10,
-  OPPONENTS_FULL: 8,
-  /** Weights of the two reliability terms; must sum to 1. */
-  W_HALF_LIFE: 0.6,
-  W_OPPONENTS: 0.4,
+  /*
+   * Reliability follows DUPR's published doubles waypoints. They state that a
+   * reliable (60%) doubles rating needs 2+ unique partners and 6+ unique
+   * opposing teams, and that 100% needs 4+ and 12+.
+   *
+   * Counting distinct *partners* and *opposing teams* rather than raw matches
+   * is the whole point: ten games against the same three people teaches the
+   * system far less than six against six different pairs, and DUPR says so
+   * explicitly. A 9-player round robin gives 8 partners and 8 opposing teams in
+   * one night, which is why a single session settles a new player.
+   */
+  PARTNERS_AT_60: 2,
+  PARTNERS_AT_100: 4,
+  TEAMS_AT_60: 6,
+  TEAMS_AT_100: 12,
 
-  /** Below either of these, a rating is shown as Provisional. */
-  HL_RELIABLE: 3.0,
+  /**
+   * What a partner or opponent is worth when they aren't reliable themselves.
+   *
+   * DUPR weights results by who you played: a reliable opponent is better
+   * evidence than an unknown one. Taken literally that never starts — a new
+   * group is all zeroes, so nobody can ever lift anybody. A floor fixes it
+   * without penalising anyone: someone already at 60% counts a full 1.0,
+   * exactly as a plain head-count would, so an established group is unaffected
+   * and only a group of strangers takes longer.
+   */
+  UNKNOWN_WEIGHT: 0.5,
+
+  /** At or above this, a rating is reliable and loses its `?`. */
   RELIABILITY_PASS: 0.6,
 
   /** Ratings compress within this many points of the floor/ceiling. */

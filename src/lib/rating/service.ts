@@ -68,6 +68,9 @@ export async function recomputeAll(): Promise<RecomputeSummary> {
       rating: s.rating,
       declaredReliability: s.declaredReliability,
       isInitial,
+      // Self-service when the player created their own seed; an admin
+      // correction carries someone else's id and is trusted differently.
+      selfInitiated: s.createdBy === s.playerId,
     });
   }
 

@@ -157,49 +157,6 @@ describe("K factor and the seed floor (§5.3, §5.7)", () => {
 
 });
 
-describe("a self-declared rating is not evidence (§5.7)", () => {
-  const now = Date.now();
-
-  it("leaves a seeded player who has never played fully unreliable", () => {
-    // The bug this replaced: declaring 100% reliability bought 8 half-lives
-    // and 8 opponents, which computed to 88% — past the 60% threshold — so a
-    // player who had never hit a ball was treated as settled.
-    const { players } = recompute([seed("p1", 4.3, 100, now - day(1))]);
-    const p = players.get("p1")!;
-    expect(p.rating).toBeCloseTo(4.3, 6);
-    expect(p.reliability).toBe(0);
-    expect(p.provisional).toBe(true);
-  });
-
-  it("does not reward an ambitious claim over a conservative one", () => {
-    const bold = recompute([seed("p1", 4.3, 100, now - day(1))]).players.get("p1")!;
-    const shy = recompute([seed("p2", 4.3, 5, now - day(1))]).players.get("p2")!;
-    expect(bold.reliability).toBe(shy.reliability);
-    expect(bold.provisional).toBe(shy.provisional);
-  });
-
-  it("still anchors where the player starts", () => {
-    const high = recompute([seed("p1", 5.0, 0, now - day(1))]).players.get("p1")!;
-    const low = recompute([seed("p2", 2.5, 0, now - day(1))]).players.get("p2")!;
-    expect(high.rating).toBeGreaterThan(low.rating);
-  });
-
-  it("earns reliability only by playing", () => {
-    const events = [
-      seed("p1", 3.5, 100, now - day(30)),
-      seed("p2", 3.5, 100, now - day(30)),
-      seed("p3", 3.5, 100, now - day(30)),
-      seed("p4", 3.5, 100, now - day(30)),
-      match("m1", ["p1", "p2"], ["p3", "p4"], 11, 7, now - day(2)),
-    ];
-    const p1 = recompute(events).players.get("p1")!;
-    // One match against three opponents: real but nowhere near settled.
-    expect(p1.reliability).toBeGreaterThan(0);
-    expect(p1.reliability).toBeLessThan(RATING.RELIABILITY_PASS);
-    expect(p1.provisional).toBe(true);
-  });
-});
-
 describe("whole-history recompute (§5.6)", () => {
   const now = Date.now();
 
@@ -321,6 +278,7 @@ function seed(
   rating: number,
   declaredReliability: number,
   atMs: number,
+  opts: { isInitial?: boolean; selfInitiated?: boolean } = {},
 ): SeedEvent {
   return {
     kind: "seed",
@@ -328,7 +286,8 @@ function seed(
     playerId,
     rating,
     declaredReliability,
-    isInitial: true,
+    isInitial: opts.isInitial ?? true,
+    selfInitiated: opts.selfInitiated ?? true,
   };
 }
 
@@ -369,3 +328,209 @@ function roundRobin(now: number): TimelineEvent[] {
   }
   return events;
 }
+
+// ---------------------------------------------------------------------------
+// Reliability (§5.4) — DUPR's doubles waypoints: 2 partners + 6 opposing teams
+// reaches 60%, 4 + 12 reaches 100%.
+// ---------------------------------------------------------------------------
+
+/**
+ * One night for p0: eight games, a different partner each time and a different
+ * opposing pair each time. What a 9-player round robin actually produces.
+ */
+function session(atMs: number, tag: string, gap = 2): MatchEvent[] {
+  const out: MatchEvent[] = [];
+  const others = [1, 2, 3, 4, 5, 6, 7, 8];
+  for (let k = 0; k < 8; k++) {
+    // Rotating offsets, so all eight partners and all eight opposing pairs are
+    // distinct. Picking opponents ad hoc quietly repeats pairs, which lands the
+    // count on the 6-team boundary and makes the test depend on decay.
+    const partner = others[k];
+    const o1 = others[(k + 1) % 8];
+    const o2 = others[(k + gap) % 8];
+    out.push(
+      match(`${tag}${k}`, ["p0", `p${partner}`], [`p${o1}`, `p${o2}`], 11, k % 2 ? 7 : 9,
+        atMs + k * 600_000),
+    );
+  }
+  return out;
+}
+
+/** Nine players seeded at the same rating, with whatever reliability we choose. */
+const cast = (declared: number, atMs: number) =>
+  Array.from({ length: 9 }, (_, i) => seed(`p${i}`, 3.5, declared, atMs));
+
+describe("a trusted signup declaration (§5.7)", () => {
+  const now = Date.now();
+
+  it("takes a declared reliability at face value", () => {
+    // Deliberate: a small group where everyone knows everyone, so a copied
+    // DUPR reliability beats making an established player prove themselves.
+    const p = recompute([seed("p1", 4.3, 85, now - day(1))]).players.get("p1")!;
+    expect(p.reliability).toBeCloseTo(0.85, 6);
+    expect(p.provisional).toBe(false);
+  });
+
+  it("leaves someone who declares nothing unproven rather than penalised", () => {
+    const p = recompute([seed("p1", 4.3, 0, now - day(1))]).players.get("p1")!;
+    expect(p.reliability).toBe(0);
+    expect(p.provisional).toBe(true);
+  });
+
+  it("still anchors where the player starts", () => {
+    const high = recompute([seed("p1", 5.0, 0, now - day(1))]).players.get("p1")!;
+    const low = recompute([seed("p2", 2.5, 0, now - day(1))]).players.get("p2")!;
+    expect(high.rating).toBeGreaterThan(low.rating);
+  });
+
+  it("keeps a fast K for the first few matches even when fully trusted", () => {
+    // Trust decides the badge, not how quickly a wrong number can correct.
+    expect(kFactor(1, 0)).toBeGreaterThanOrEqual(RATING.K_SEED_FLOOR);
+  });
+});
+
+describe("reliability is earned from variety, not volume (§5.4)", () => {
+  const now = Date.now();
+
+  it("gains nothing from replaying the same two people", () => {
+    // Ten games, one partner, one opposing pair. DUPR counts distinct
+    // partners and distinct opposing teams, so this is worth one of each.
+    const events: TimelineEvent[] = [
+      ...cast(0, now - day(60)).slice(0, 4),
+      ...Array.from({ length: 10 }, (_, k) =>
+        match(`r${k}`, ["p0", "p1"], ["p2", "p3"], 11, 7, now - day(30) + k * 600_000),
+      ),
+    ];
+    const p = recompute(events).players.get("p0")!;
+    expect(p.localMatches).toBe(10);
+    expect(p.provisional).toBe(true);
+    // 1 partner and 1 team, both unknown: well short of 2 and 6.
+    expect(p.reliability).toBeLessThan(0.3);
+  });
+
+  it("settles a newcomer in one night among established players", () => {
+    // The case that actually matters: friends who already carry a real DUPR
+    // reliability, and someone new joining them.
+    const events: TimelineEvent[] = [
+      seed("p0", 3.5, 0, now - day(60)),
+      ...Array.from({ length: 8 }, (_, i) => seed(`p${i + 1}`, 3.5, 100, now - day(60))),
+      ...session(now - day(1), "a"),
+    ];
+    const p = recompute(events).players.get("p0")!;
+    expect(p.provisional).toBe(false);
+    expect(p.reliability).toBeGreaterThanOrEqual(RATING.RELIABILITY_PASS);
+  });
+
+  it("takes a second night when nobody in the group is established", () => {
+    // Everyone at zero: each partner is worth half, so one night lands short.
+    const one = recompute([...cast(0, now - day(60)), ...session(now - day(8), "a")]);
+    const after1 = one.players.get("p0")!;
+    expect(after1.provisional).toBe(true);
+
+    const two = recompute([
+      ...cast(0, now - day(60)),
+      ...session(now - day(8), "a"),
+      ...session(now - day(1), "b", 3),
+    ]);
+    const after2 = two.players.get("p0")!;
+    expect(after2.reliability).toBeGreaterThan(after1.reliability);
+    expect(after2.provisional).toBe(false);
+  });
+
+  it("bootstraps from an all-unknown group rather than deadlocking", () => {
+    // Taken literally, "weight by opponent reliability" never starts when
+    // everyone is zero. The floor is what stops that.
+    const r = recompute([...cast(0, now - day(60)), ...session(now - day(1), "a")])
+      .players.get("p0")!.reliability;
+    expect(r).toBeGreaterThan(0);
+  });
+
+  it("fades when you stop playing and the group carries on", () => {
+    /*
+     * Decay is measured against the last event in the timeline, so an inactive
+     * player only fades relative to a group that keeps going — the behaviour
+     * DUPR describes, and what makes a stale number honest.
+     *
+     * Nobody declares here on purpose. A declared reliability is a floor that
+     * does not decay: taking the claim at face value means still taking it at
+     * face value a year later. Only reliability *earned* by playing fades.
+     */
+    const events: TimelineEvent[] = [
+      ...cast(0, now - day(400)),
+      ...session(now - day(370), "a"),
+      ...session(now - day(365), "b", 3),
+      // A year of matches p0 is not part of.
+      ...Array.from({ length: 12 }, (_, k) =>
+        match(`late${k}`, ["p1", "p2"], ["p3", "p4"], 11, 7, now - day(60) + k * day(4)),
+      ),
+    ];
+    const p0 = recompute(events).players.get("p0")!;
+    expect(p0.provisional).toBe(true);
+  });
+
+  it("counts an established partner for more than an unknown one", () => {
+    const known = recompute([
+      seed("p0", 3.5, 0, now - day(60)),
+      ...Array.from({ length: 8 }, (_, i) => seed(`p${i + 1}`, 3.5, 100, now - day(60))),
+      ...session(now - day(1), "a"),
+    ]).players.get("p0")!.reliability;
+
+    const unknown = recompute([...cast(0, now - day(60)), ...session(now - day(1), "a")])
+      .players.get("p0")!.reliability;
+
+    expect(known).toBeGreaterThan(unknown);
+  });
+});
+
+describe("changing your own rating reopens the question (§5.8)", () => {
+  const now = Date.now();
+
+  const established = (): TimelineEvent[] => [
+    seed("p0", 3.5, 0, now - day(60)),
+    ...Array.from({ length: 8 }, (_, i) => seed(`p${i + 1}`, 3.5, 100, now - day(60))),
+    ...session(now - day(10), "a"),
+  ];
+
+  it("sends a self re-seed back to provisional", () => {
+    const before = recompute(established()).players.get("p0")!;
+    expect(before.provisional).toBe(false);
+
+    const after = recompute([
+      ...established(),
+      seed("p0", 4.6, 0, now - day(1), { isInitial: false, selfInitiated: true }),
+    ]).players.get("p0")!;
+
+    expect(after.rating).toBeCloseTo(4.6, 6);
+    expect(after.provisional).toBe(true);
+    expect(after.reliability).toBe(0);
+  });
+
+  it("leaves the match record alone when it does", () => {
+    // Those games really happened; only the evidence for *this figure* resets.
+    const after = recompute([
+      ...established(),
+      seed("p0", 4.6, 0, now - day(1), { isInitial: false, selfInitiated: true }),
+    ]).players.get("p0")!;
+    expect(after.localMatches).toBe(8);
+    expect(after.wins + after.losses).toBe(8);
+  });
+
+  it("does not punish an admin correction the same way", () => {
+    // Someone else vouched for this number, so it isn't self-serving.
+    const after = recompute([
+      ...established(),
+      seed("p0", 4.6, 0, now - day(1), { isInitial: false, selfInitiated: false }),
+    ]).players.get("p0")!;
+    expect(after.rating).toBeCloseTo(4.6, 6);
+    expect(after.provisional).toBe(false);
+  });
+
+  it("lets a re-seeded player earn it back by playing again", () => {
+    const after = recompute([
+      ...established(),
+      seed("p0", 4.6, 0, now - day(5), { isInitial: false, selfInitiated: true }),
+      ...session(now - day(1), "b", 3),
+    ]).players.get("p0")!;
+    expect(after.provisional).toBe(false);
+  });
+});

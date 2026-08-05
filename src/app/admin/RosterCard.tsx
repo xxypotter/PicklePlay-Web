@@ -172,6 +172,18 @@ export default function RosterCard({
                       required
                     />
                   </label>
+                  <label className="text-xs text-[var(--muted)]">
+                    Reliability % (optional)
+                    <input
+                      name="reliability"
+                      className="field mt-1 py-2 text-sm"
+                      type="number"
+                      step="1"
+                      min={0}
+                      max={100}
+                      placeholder="Leave blank to keep"
+                    />
+                  </label>
                   <input
                     name="note"
                     className="field py-2 text-sm"
@@ -187,10 +199,11 @@ export default function RosterCard({
                     {adjustPending ? "Saving…" : "Override rating"}
                   </button>
                   <p className="text-xs text-[var(--muted)]">
-                    Sets where their rating sits — win/loss comes from real matches and
-                    can&apos;t be typed in. Reliability is earned by playing, so it
-                    isn&apos;t settable. Recorded as a dated correction in their history,
-                    not a silent edit.
+                    Sets where their rating sits — win/loss comes from real matches
+                    and can&apos;t be typed in. Reliability is normally earned by
+                    playing; set it here only to enter a real DUPR reliability for
+                    someone who joined before the field existed. Recorded as a dated
+                    correction in their history, not a silent edit.
                   </p>
                 </form>
               </details>

@@ -23,10 +23,21 @@ export interface SeedEvent {
   playerId: string;
   /** Declared rating — a real DUPR, a skill-picker value, or an admin override. */
   rating: number;
-  /** Declared reliability, 0-100. Converts to imported evidence (§5.7). */
+  /**
+   * Declared reliability, 0-100, copied from the player's real DUPR profile at
+   * signup. Trusted on the initial seed and ignored on any later one (§5.7).
+   */
   declaredReliability: number;
-  /** True for the signup seed, false for a monthly re-seed (§5.8). Display only. */
+  /** True for the signup seed, false for any later re-seed (§5.8). */
   isInitial: boolean;
+  /**
+   * Did the player set this themselves, rather than an admin correcting them?
+   *
+   * Changing your own number reopens the question of whether it is right, so a
+   * self re-seed sends the rating back to provisional; an admin correction
+   * doesn't, because someone else vouched for it.
+   */
+  selfInitiated: boolean;
 }
 
 export interface MatchEvent {
@@ -157,12 +168,27 @@ export function ratingDelta(
 // Evidence and reliability (§5.4)
 // ---------------------------------------------------------------------------
 
+/** One remembered partner or opposing pair. */
+interface Encounter {
+  atMs: number;
+  weight: number;
+}
+
 interface State {
   rating: number;
   peak: number;
   /** Timestamps of local matches, used for the decayed half-life sum. */
   matchTimes: number[];
-  opponents: Set<string>;
+  /**
+   * Distinct partners and distinct opposing pairs, each remembered once with
+   * the most recent time we saw them and how much that person or pair was
+   * worth as evidence. Distinct is the point — a tenth game with the same
+   * partner adds nothing DUPR would count.
+   */
+  partners: Map<string, Encounter>;
+  teams: Map<string, Encounter>;
+  /** Trusted declared reliability from signup, 0-1. Zero once self-re-seeded. */
+  declaredFloor: number;
   localMatches: number;
   wins: number;
   losses: number;
@@ -213,16 +239,71 @@ function halfLifeAt(state: State, nowMs: number): number {
   return hl;
 }
 
-function reliabilityAt(state: State, nowMs: number): number {
-  const hl = halfLifeAt(state, nowMs);
+/**
+ * Map a count of distinct partners or teams onto DUPR's two waypoints.
+ *
+ * Linear to 60% at the first, then linear to 100% at the second. Two segments
+ * rather than one because DUPR publishes both points and they aren't
+ * proportional: the second half of the journey costs three times the first.
+ */
+function waypoint(x: number, at60: number, at100: number): number {
+  if (x <= 0) return 0;
+  if (x <= at60) return RATING.RELIABILITY_PASS * (x / at60);
   return (
-    RATING.W_HALF_LIFE * Math.min(1, hl / RATING.HL_FULL) +
-    RATING.W_OPPONENTS * Math.min(1, state.opponents.size / RATING.OPPONENTS_FULL)
+    RATING.RELIABILITY_PASS +
+    (1 - RATING.RELIABILITY_PASS) * Math.min(1, (x - at60) / (at100 - at60))
   );
 }
 
-const isProvisional = (halfLife: number, reliability: number) =>
-  halfLife < RATING.HL_RELIABLE || reliability < RATING.RELIABILITY_PASS;
+/** How much each remembered partner or team is still worth today. */
+function decayedTotal(book: Map<string, Encounter>, nowMs: number): number {
+  let total = 0;
+  for (const e of book.values()) {
+    total += e.weight * decayFactor(e.atMs, nowMs, RATING.MATCH_HALF_LIFE_DAYS);
+  }
+  return total;
+}
+
+/**
+ * Reliability: how much the number can be trusted, not how good the player is.
+ *
+ * Both conditions have to hold, so this takes the *lower* of the two scores.
+ * Playing twelve different pairs while always partnering the same person still
+ * leaves us guessing about that pairing, and DUPR treats the two requirements
+ * as a pair rather than a total.
+ *
+ * A trusted signup declaration acts as a floor rather than an addition: it says
+ * "DUPR already established this player", and playing here can only raise it.
+ */
+function reliabilityAt(state: State, nowMs: number): number {
+  const partners = waypoint(
+    decayedTotal(state.partners, nowMs),
+    RATING.PARTNERS_AT_60,
+    RATING.PARTNERS_AT_100,
+  );
+  const teams = waypoint(
+    decayedTotal(state.teams, nowMs),
+    RATING.TEAMS_AT_60,
+    RATING.TEAMS_AT_100,
+  );
+  return Math.max(state.declaredFloor, Math.min(partners, teams));
+}
+
+const isProvisional = (reliability: number) => reliability < RATING.RELIABILITY_PASS;
+
+/**
+ * What someone you played is worth as evidence.
+ *
+ * A reliable player counts fully; an unrated one counts half rather than
+ * nothing, so a group that all starts at zero can still bootstrap. See
+ * UNKNOWN_WEIGHT.
+ */
+function evidenceWeightOf(reliability: number): number {
+  return (
+    RATING.UNKNOWN_WEIGHT +
+    (1 - RATING.UNKNOWN_WEIGHT) * Math.min(1, reliability / RATING.RELIABILITY_PASS)
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Whole-history recompute (§5.6)
@@ -233,7 +314,9 @@ function newState(rating: number): State {
     rating,
     peak: rating,
     matchTimes: [],
-    opponents: new Set(),
+    partners: new Map(),
+    teams: new Map(),
+    declaredFloor: 0,
     localMatches: 0,
     wins: 0,
     losses: 0,
@@ -260,13 +343,43 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
   for (const event of events) {
     const atMs = event.at.getTime();
 
-    // A seed moves where a player starts. It buys no evidence — see
-    // halfLifeAt — so an unplayed player stays provisional with a fast K and
-    // their first real matches carry them to their actual level.
     if (event.kind === "seed") {
       const s = stateFor(event.playerId);
       s.rating = clamp(event.rating, RATING.MIN, RATING.MAX);
       s.peak = Math.max(s.peak, s.rating);
+
+      if (event.isInitial) {
+        /*
+         * The signup declaration is taken at face value. This is a small group
+         * where everyone knows everyone, so a copied DUPR reliability is worth
+         * more than the friction of making an established player prove
+         * themselves again. Left at 0 when they don't give one, which simply
+         * means they start unproven rather than penalised.
+         */
+        s.declaredFloor = clamp(event.declaredReliability, 0, 100) / 100;
+      } else if (!event.selfInitiated) {
+        /*
+         * An admin correction. Someone else vouched for the number, so it
+         * doesn't reopen anything — and it's the only way an existing player
+         * can be given a reliability they never entered at signup. A blank
+         * field leaves the current one alone rather than silently wiping it.
+         */
+        if (event.declaredReliability > 0) {
+          s.declaredFloor = clamp(event.declaredReliability, 0, 100) / 100;
+        }
+      } else {
+        /*
+         * Changing your own rating puts a new, unverified number on the board,
+         * so it goes back to provisional and has to be earned again — however
+         * much play stood behind the *previous* number.
+         *
+         * The match record is untouched: those games really happened. Only the
+         * evidence that this particular figure is right is reset.
+         */
+        s.declaredFloor = 0;
+        s.partners.clear();
+        s.teams.clear();
+      }
       continue;
     }
 
@@ -286,11 +399,18 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
       const reliability = reliabilityAt(s, atMs);
       const halfLife = halfLifeAt(s, atMs);
       const k = kFactor(reliability, s.localMatches);
-      const delta = ratingDelta(s.rating, k, surprise, isProvisional(halfLife, reliability));
-      return { surprise, reliability, k, delta, before: s.rating };
+      const delta = ratingDelta(s.rating, k, surprise, isProvisional(reliability));
+      return { surprise, reliability, halfLife, k, delta, before: s.rating };
     });
 
     const aWon = event.scoreA > event.scoreB;
+
+    /*
+     * Evidence weights are read from the pre-match reliabilities, exactly like
+     * the deltas, so nothing inside a match depends on the order we walk the
+     * four players.
+     */
+    const weights = pending.map((p) => evidenceWeightOf(p.reliability));
 
     st.forEach((s, i) => {
       const p = pending[i];
@@ -304,8 +424,19 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
       s.localMatches += 1;
       s.lastPlayedMs = atMs;
 
-      const opponents = onTeamA ? event.teamB : event.teamA;
-      for (const opp of opponents) s.opponents.add(opp);
+      /*
+       * Remember this partner and this opposing pair. Map.set overwrites, so a
+       * repeat encounter refreshes the date rather than counting twice — which
+       * is what makes ten games with one partner worth no more than one.
+       */
+      const partnerIdx = i % 2 === 0 ? i + 1 : i - 1;
+      const [o1, o2] = onTeamA ? [2, 3] : [0, 1];
+
+      s.partners.set(ids[partnerIdx], { atMs, weight: weights[partnerIdx] });
+      s.teams.set([ids[o1], ids[o2]].sort().join("|"), {
+        atMs,
+        weight: (weights[o1] + weights[o2]) / 2,
+      });
 
       if (won) {
         s.wins += 1;
@@ -350,7 +481,7 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
       pointsFor: s.pointsFor,
       pointsAgainst: s.pointsAgainst,
       streak: s.streak,
-      provisional: isProvisional(halfLife, reliability),
+      provisional: isProvisional(reliability),
       selfDeclared: s.localMatches < RATING.SEED_FLOOR_MATCHES,
       lastPlayedAt: s.lastPlayedMs === null ? null : new Date(s.lastPlayedMs),
     });

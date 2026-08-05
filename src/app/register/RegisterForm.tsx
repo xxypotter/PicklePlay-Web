@@ -142,28 +142,47 @@ export default function RegisterForm({
 
       {hasDupr ? (
         <div className="flex flex-col gap-4">
-          <div>
-            <label className="label" htmlFor="dupr">
-              Your DUPR
-            </label>
-            <input
-              id="dupr"
-              name="dupr"
-              className="field"
-              type="number"
-              inputMode="decimal"
-              step="0.001"
-              min={RATING.MIN}
-              max={RATING.MAX}
-              placeholder="3.750"
-              required={hasDupr}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="dupr">
+                Your DUPR
+              </label>
+              <input
+                id="dupr"
+                name="dupr"
+                className="field"
+                type="number"
+                inputMode="decimal"
+                step="0.001"
+                min={RATING.MIN}
+                max={RATING.MAX}
+                placeholder="3.750"
+                required={hasDupr}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="reliability">
+                Reliability %
+              </label>
+              <input
+                id="reliability"
+                name="reliability"
+                className="field"
+                type="number"
+                inputMode="numeric"
+                step="1"
+                min={0}
+                max={100}
+                placeholder="Optional"
+              />
+            </div>
           </div>
           <p className="hint">
-            Both are on your DUPR profile. Nothing connects to DUPR — this is a one-time
-            starting point, and it&apos;s replaced by your real results here as you play.
-            Reliability matters: a confident rating moves slowly, an uncertain one
-            settles fast.
+            Both are on your DUPR profile. Nothing connects to DUPR — this is a
+            one-time starting point, replaced by your real results here as you
+            play. Leave reliability blank if you&apos;d rather not say; your
+            rating then carries a <strong>?</strong> until you&apos;ve played a
+            session or two here.
           </p>
         </div>
       ) : (

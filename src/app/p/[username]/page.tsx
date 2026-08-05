@@ -2,6 +2,7 @@ import { asc, desc, eq, inArray, or } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
 import RatingChart from "@/components/RatingChart";
+import ReliabilityRing from "@/components/ReliabilityRing";
 import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { ROLE_LABELS, type Role } from "@/lib/auth/types";
@@ -181,11 +182,11 @@ export default async function ProfilePage({
           <Badge>{ROLE_LABELS[player.role as Role]}</Badge>
         </div>
 
-        <dl className="mt-4 grid grid-cols-4 gap-2 text-center">
-          <Stat
-            label="Reliability"
-            value={stats ? `${Math.round(stats.reliability * 100)}%` : "—"}
-          />
+        <dl className="mt-4 grid grid-cols-4 items-end gap-2 text-center">
+          <div className="flex flex-col items-center gap-1">
+            <ReliabilityRing value={stats?.reliability ?? 0} size={48} />
+            <dt className="text-[11px] text-[var(--muted)]">Reliability</dt>
+          </div>
           <Stat label="Played" value={careerMatches} />
           <Stat label="Won" value={careerWins} />
           <Stat label="Win rate" value={careerRate === null ? "—" : `${careerRate}%`} />
