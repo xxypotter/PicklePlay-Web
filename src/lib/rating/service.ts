@@ -68,9 +68,16 @@ export async function recomputeAll(): Promise<RecomputeSummary> {
       rating: s.rating,
       declaredReliability: s.declaredReliability,
       isInitial,
-      // Self-service when the player created their own seed; an admin
-      // correction carries someone else's id and is trusted differently.
-      selfInitiated: s.createdBy === s.playerId,
+      /*
+       * Which door it came through, not whose id is on it.
+       *
+       * `createdBy === playerId` looks equivalent and isn't: the super admin
+       * adjusting his own rating through the admin panel sets both, and that
+       * would be read as a self-override and wipe his reliability. The admin
+       * panel is the vouching path whoever walks through it; `source` is the
+       * only field that records which one was used.
+       */
+      selfInitiated: s.source !== "admin",
     });
   }
 

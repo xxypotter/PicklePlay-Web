@@ -525,6 +525,21 @@ describe("changing your own rating reopens the question (§5.8)", () => {
     expect(after.provisional).toBe(false);
   });
 
+  it("treats an owner adjusting their own rating as an admin correction", () => {
+    /*
+     * The super admin has both roles, so `createdBy === playerId` is true for
+     * an admin-panel adjustment he makes on himself. Reading that as a
+     * self-override wiped his reliability. The door it came through is what
+     * counts, and only `source` records that.
+     */
+    const after = recompute([
+      ...established(),
+      seed("p0", 4.6, 55, now - day(1), { isInitial: false, selfInitiated: false }),
+    ]).players.get("p0")!;
+    expect(after.provisional).toBe(false);
+    expect(after.reliability).toBeGreaterThan(0);
+  });
+
   it("lets a re-seeded player earn it back by playing again", () => {
     const after = recompute([
       ...established(),
