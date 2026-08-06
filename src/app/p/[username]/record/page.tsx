@@ -6,6 +6,9 @@ import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { matches, players } from "@/lib/db/schema";
+import type { DictKey } from "@/lib/i18n/dictionaries/en";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/translate";
 import {
   bestPartner,
   favouriteOpponent,
@@ -15,7 +18,9 @@ import {
   type HeadToHead,
 } from "@/lib/profile/record";
 
-export const metadata = { title: "Record · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
+
+export const generateMetadata = titleFor("record.title");
 
 export default async function RecordPage({
   params,
@@ -78,6 +83,7 @@ export default async function RecordPage({
       .orderBy(asc(matches.playedAt)),
   ]);
 
+  const t = await getT(me?.locale);
   const record = summariseRecord(player.id, played);
   const isMe = me?.id === player.id;
 
@@ -101,62 +107,73 @@ export default async function RecordPage({
   const careerRate = careerPlayed > 0 ? Math.round((careerWon / careerPlayed) * 100) : null;
 
   const facts = [
-    fact("Best with", bestPartner(record.partners), nameOf, "won"),
-    fact("Owns the head-to-head", favouriteOpponent(record.opponents), nameOf, "beaten"),
-    fact("Has their number", nemesis(record.opponents), nameOf, "lost to"),
-    fact("Most court time", mostPlayedWith(record.partners), nameOf, "together"),
-  ].filter(Boolean) as { label: string; name: string; detail: string }[];
+    fact(t, "record.bestWith", bestPartner(record.partners), nameOf, "record.verb.won"),
+    fact(t, "record.ownsHeadToHead", favouriteOpponent(record.opponents), nameOf, "record.verb.beaten"),
+    fact(t, "record.hasTheirNumber", nemesis(record.opponents), nameOf, "record.verb.lostTo"),
+    fact(t, "record.mostCourtTime", mostPlayedWith(record.partners), nameOf, null),
+  ].filter(Boolean) as { key: string; label: string; name: string; detail: string }[];
 
   return (
     <>
       <TopBar
-        title={isMe ? "My record" : `${player.displayName ?? player.username}'s record`}
+        title={
+          isMe
+            ? t("record.title")
+            : t("record.titleOther", { name: player.displayName ?? player.username })
+        }
         back={safeFrom(from, `/p/${player.username}`)}
       />
       <main className="screen pt-4">
         {/* Deliberately no rating on this screen — that lives on My rating. */}
         <section className="card">
           <dl className="grid grid-cols-4 gap-2 text-center">
-            <Stat label="Played" value={String(careerPlayed)} />
-            <Stat label="Won" value={String(careerWon)} />
-            <Stat label="Lost" value={String(careerPlayed - careerWon)} />
-            <Stat label="Win rate" value={careerRate === null ? "—" : `${careerRate}%`} />
+            <Stat label={t("common.played")} value={String(careerPlayed)} />
+            <Stat label={t("common.won")} value={String(careerWon)} />
+            <Stat label={t("common.lost")} value={String(careerPlayed - careerWon)} />
+            <Stat
+              label={t("common.winRate")}
+              value={careerRate === null ? t("common.none") : `${careerRate}%`}
+            />
           </dl>
 
           {player.importedMatches > 0 ? (
             <p className="hint mt-3">
-              Includes <strong>{player.importedMatches}</strong> brought in from
-              before PicklePlay. <strong>{record.played}</strong> played here.
+              {t("record.importedNote", {
+                imported: player.importedMatches,
+                here: record.played,
+              })}
             </p>
           ) : null}
 
           <div className="mt-4">
-            <MarginChart margins={record.matches.map((m) => m.margin)} />
+            <MarginChart margins={record.matches.map((m) => m.margin)} locale={me?.locale} />
           </div>
-          <p className="hint">
-            How the results were won and lost, oldest first — tall bars are
-            comfortable, short ones went to the wire.
-          </p>
+          <p className="hint">{t("record.marginHint")}</p>
         </section>
 
         {record.played > 0 ? (
           <section className="card mt-5">
-            <h2 className="text-sm font-medium text-[var(--muted)]">Points</h2>
+            <h2 className="text-sm font-medium text-[var(--muted)]">{t("record.points")}</h2>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <Stat label="Scored" value={String(record.pointsFor)} />
-              <Stat label="Conceded" value={String(record.pointsAgainst)} />
+              <Stat label={t("record.scored")} value={String(record.pointsFor)} />
+              <Stat label={t("record.conceded")} value={String(record.pointsAgainst)} />
               <Stat
-                label="Difference"
+                label={t("record.difference")}
                 value={`${record.pointsFor - record.pointsAgainst >= 0 ? "+" : ""}${
                   record.pointsFor - record.pointsAgainst
                 }`}
               />
             </dl>
             <p className="hint mt-3">
-              Best win {record.biggestWin ? `by ${record.biggestWin.margin}` : "—"} ·
-              heaviest loss{" "}
-              {record.heaviestLoss ? `by ${-record.heaviestLoss.margin}` : "—"} ·
-              longest winning run {record.longestWinStreak}
+              {t("record.bests", {
+                best: record.biggestWin
+                  ? t("record.by", { margin: record.biggestWin.margin })
+                  : t("common.none"),
+                worst: record.heaviestLoss
+                  ? t("record.by", { margin: -record.heaviestLoss.margin })
+                  : t("common.none"),
+                streak: record.longestWinStreak,
+              })}
             </p>
           </section>
         ) : null}
@@ -164,11 +181,11 @@ export default async function RecordPage({
         {facts.length > 0 ? (
           <section className="card mt-5">
             <h2 className="text-sm font-medium text-[var(--muted)]">
-              Who {isMe ? "you play" : "they play"}
+              {isMe ? t("record.whoYouPlay") : t("record.whoTheyPlay")}
             </h2>
             <ul className="mt-3 flex flex-col gap-3">
               {facts.map((f) => (
-                <li key={f.label} className="flex items-baseline justify-between gap-3">
+                <li key={f.key} className="flex items-baseline justify-between gap-3">
                   <span className="text-sm text-[var(--muted)]">{f.label}</span>
                   <span className="min-w-0 flex-1 truncate text-right font-medium">
                     {f.name}
@@ -179,20 +196,17 @@ export default async function RecordPage({
                 </li>
               ))}
             </ul>
-            <p className="hint mt-3">
-              From {MIN_TOGETHER_TEXT} or more games together, so one lucky night
-              doesn&apos;t decide it.
-            </p>
+            <p className="hint mt-3">{t("record.factsHint")}</p>
           </section>
         ) : null}
 
         <section className="card-tight mt-5 overflow-hidden">
           <h2 className="border-b border-[var(--border)] px-4 py-3 text-sm text-[var(--muted)]">
-            Matches ({record.matches.length})
+            {t("record.matches", { count: record.matches.length })}
           </h2>
           {record.matches.length === 0 ? (
             <p className="px-4 py-6 text-sm text-[var(--muted)]">
-              Nothing played here yet.
+              {t("record.matchesEmpty")}
             </p>
           ) : (
             <ul>
@@ -206,13 +220,17 @@ export default async function RecordPage({
                       m.won ? "text-[var(--success)]" : "text-[var(--danger)]"
                     }`}
                   >
-                    {m.won ? "W" : "L"}
+                    {m.won ? t("record.win") : t("record.loss")}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">
-                      with {nameOf.get(m.partnerId) ?? "—"}{" "}
-                      <span className="text-[var(--muted)]">v</span>{" "}
-                      {m.opponentIds.map((o) => nameOf.get(o) ?? "—").join(" & ")}
+                      {t("record.with", {
+                        partner: nameOf.get(m.partnerId) ?? t("common.none"),
+                      })}{" "}
+                      <span className="text-[var(--muted)]">{t("record.versus")}</span>{" "}
+                      {m.opponentIds
+                        .map((o) => nameOf.get(o) ?? t("common.none"))
+                        .join(" & ")}
                     </p>
                     <p className="text-xs text-[var(--muted)]">
                       <LocalDateTime iso={m.playedAt.toISOString()} withWeekday={false} />
@@ -231,22 +249,33 @@ export default async function RecordPage({
   );
 }
 
-const MIN_TOGETHER_TEXT = "three";
-
+/**
+ * One "fun fact" row, or nothing if there isn't enough history for it.
+ *
+ * `verbKey` is null for the most-played row, which counts games rather than
+ * results and so takes a different sentence entirely rather than a swapped-out
+ * word.
+ *
+ * The count is always the one the verb is about. `wins` on a head-to-head is
+ * the subject's wins, so the nemesis row — which says "lost to" — has to
+ * count the other side, or it reports three defeats to someone it just
+ * counted three wins against.
+ */
 function fact(
-  label: string,
+  t: T,
+  labelKey: DictKey,
   h: HeadToHead | null,
   nameOf: Map<string, string>,
-  verb: string,
+  verbKey: DictKey | null,
 ) {
   if (!h) return null;
   const name = nameOf.get(h.playerId);
   if (!name) return null;
-  const detail =
-    verb === "together"
-      ? `${h.games} game${h.games === 1 ? "" : "s"}`
-      : `${h.wins}/${h.games} ${verb}`;
-  return { label, name, detail };
+  const count = verbKey === "record.verb.lostTo" ? h.games - h.wins : h.wins;
+  const detail = verbKey
+    ? t("record.factRatio", { wins: count, games: h.games, verb: t(verbKey) })
+    : t.plural("record.factGames", h.games, { count: h.games });
+  return { key: labelKey, label: t(labelKey), name, detail };
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

@@ -8,6 +8,7 @@ import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
+import { getT } from "@/lib/i18n/server";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const num = (fd: FormData, key: string) => Number(str(fd, key));
@@ -24,17 +25,18 @@ export async function createSessionAction(
   formData: FormData,
 ): Promise<FormState> {
   const me = await requireAdmin();
+  const t = await getT();
 
   const title = str(formData, "title");
   if (!title || title.length > 80) {
-    return { error: "Give the session a title (80 characters or fewer).", field: "title" };
+    return { error: t("err.titleRequired"), field: "title" };
   }
 
   // The client converts the datetime-local value to a UTC ISO string before
   // submitting, because the server has no idea what timezone the phone is in.
   const startsAt = new Date(str(formData, "startsAt"));
   if (Number.isNaN(startsAt.getTime())) {
-    return { error: "Pick a date and time.", field: "startsAtLocal" };
+    return { error: t("err.pickDateTime"), field: "startsAtLocal" };
   }
 
   // "3, 4" or "Center, North" — whatever the venue actually calls them.
@@ -44,16 +46,16 @@ export async function createSessionAction(
     .filter(Boolean);
 
   if (courtNames.length === 0) {
-    return { error: "Name at least one court, e.g. 3, 4", field: "courtNames" };
+    return { error: t("err.nameCourt"), field: "courtNames" };
   }
   if (courtNames.length > MAX_COURTS) {
-    return { error: `${MAX_COURTS} courts maximum.`, field: "courtNames" };
+    return { error: t("err.maxCourts", { max: MAX_COURTS }), field: "courtNames" };
   }
   if (new Set(courtNames.map((c) => c.toLowerCase())).size !== courtNames.length) {
-    return { error: "Each court needs a different name.", field: "courtNames" };
+    return { error: t("err.courtsDistinct"), field: "courtNames" };
   }
   if (courtNames.some((c) => c.length > 16)) {
-    return { error: "Court names must be 16 characters or fewer.", field: "courtNames" };
+    return { error: t("err.courtNameLong"), field: "courtNames" };
   }
 
   const courtCount = courtNames.length;
@@ -62,15 +64,16 @@ export async function createSessionAction(
 
   if (!Number.isInteger(maxPlayers) || maxPlayers < 4 || maxPlayers > seatCap) {
     return {
-      error: `Max players must be between 4 and ${seatCap} for ${courtCount} court${
-        courtCount === 1 ? "" : "s"
-      }.`,
+      error: t.plural("err.maxPlayersRange", courtCount, {
+        cap: seatCap,
+        courts: courtCount,
+      }),
       field: "maxPlayers",
     };
   }
 
   const format = str(formData, "format") as Format;
-  if (!FORMATS.includes(format)) return { error: "Pick a format.", field: "format" };
+  if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
 
   const db = getDb();
 
@@ -130,6 +133,7 @@ export async function createSessionAction(
  * read-then-write in application code that both requests would win.
  */
 export async function rsvpAction(sessionId: string, going: boolean): Promise<void> {
+  const t = await getT();
   const me = await requireLogin();
   const db = getDb();
 
@@ -140,8 +144,8 @@ export async function rsvpAction(sessionId: string, going: boolean): Promise<voi
     .limit(1);
 
   const session = found[0];
-  if (!session) throw new Error("That session no longer exists.");
-  if (session.status === "closed") throw new Error("That session is closed.");
+  if (!session) throw new Error(t("err.sessionGone"));
+  if (session.status === "closed") throw new Error(t("err.sessionClosed"));
 
   if (!going) {
     await db
@@ -206,6 +210,7 @@ async function resequenceWaitlist(sessionId: string): Promise<void> {
  * rule as a self-RSVP, so an admin can't silently overfill the courts.
  */
 export async function addPlayerAction(sessionId: string, playerId: string): Promise<void> {
+  const t = await getT();
   await requireOrganizer(sessionId);
   const db = getDb();
 
@@ -215,7 +220,7 @@ export async function addPlayerAction(sessionId: string, playerId: string): Prom
     .where(eq(sessions.id, sessionId))
     .limit(1);
 
-  if (!found[0]) throw new Error("That session no longer exists.");
+  if (!found[0]) throw new Error(t("err.sessionGone"));
 
   await db.execute(sql`
     insert into ${signups} (session_id, player_id, state, added_by_organizer)

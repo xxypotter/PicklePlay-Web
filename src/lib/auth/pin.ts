@@ -11,6 +11,7 @@
  * every KDF given five attempts per fifteen minutes.
  */
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCb) as (
@@ -57,15 +58,15 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
 }
 
 /** 4-6 digits. Rejects trivially guessable PINs before they're ever hashed. */
-export function validatePin(pin: string): { ok: true } | { ok: false; error: string } {
+export function validatePin(pin: string): { ok: true } | { ok: false; error: DictKey } {
   if (!/^\d{4,6}$/.test(pin)) {
-    return { ok: false, error: "PIN must be 4 to 6 digits." };
+    return { ok: false, error: "err.pinDigits" };
   }
   if (/^(\d)\1*$/.test(pin)) {
-    return { ok: false, error: "That PIN is too easy to guess. Try another." };
+    return { ok: false, error: "err.pinGuessable" };
   }
   if ("0123456789".includes(pin) || "9876543210".includes(pin)) {
-    return { ok: false, error: "That PIN is too easy to guess. Try another." };
+    return { ok: false, error: "err.pinGuessable" };
   }
   return { ok: true };
 }

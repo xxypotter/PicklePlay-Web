@@ -1,11 +1,18 @@
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { matches, players, ratingEvents, rounds } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/translate";
 
-/** Courts are stored by index; the name comes from the session. */
-export function courtLabel(courtNames: string[], courtNo: number | null): string {
-  if (courtNo === null) return "Court";
-  return `Court ${courtNames[courtNo - 1] ?? courtNo}`;
+/**
+ * Courts are stored by index; the name comes from the session.
+ *
+ * The word "Court" is translated, the name isn't — an organizer who called a
+ * court "Center" meant that, in any language.
+ */
+export function courtLabel(t: T, courtNames: string[], courtNo: number | null): string {
+  if (courtNo === null) return t("session.courtOne");
+  return t("schedule.court", { name: courtNames[courtNo - 1] ?? courtNo });
 }
 
 export interface RoundPlayer {
@@ -40,7 +47,9 @@ export interface CurrentRound {
 export async function getAllRounds(
   sessionId: string,
   courtNames: string[],
+  locale?: string | null,
 ): Promise<CurrentRound[]> {
+  const t = await getT(locale);
   const db = getDb();
 
   const [roundRows, matchRows] = await Promise.all([
@@ -93,7 +102,7 @@ export async function getAllRounds(
       .map((r) => ({
         id: r.id,
         courtNo: r.courtNo,
-        courtLabel: courtLabel(courtNames, r.courtNo),
+        courtLabel: courtLabel(t, courtNames, r.courtNo),
         teamA: [person(r.a1), person(r.a2)],
         teamB: [person(r.b1), person(r.b2)],
         scoreA: r.scoreA,

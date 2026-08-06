@@ -5,13 +5,10 @@ import type { FormState } from "@/lib/auth/types";
 import { updateSessionAction } from "@/lib/sessions/edit-actions";
 import DateTimeField from "@/components/DateTimeField";
 import LocationField, { noteForVenue } from "@/components/LocationField";
+import { useT } from "@/lib/i18n/client";
 
-const FORMATS = [
-  { key: "regular", label: "Regular round robin", hint: "Partner with everyone once before anyone repeats." },
-  { key: "balanced", label: "Balanced round robin", hint: "Teams matched so both sides average a similar rating." },
-  { key: "fixed", label: "Fixed partners", hint: "Pairs stay together all night; opponents rotate." },
-  { key: "custom", label: "Custom", hint: "Rounds are still generated, but expect to rearrange courts yourself." },
-];
+/** Keys only — the labels and descriptions come from the dictionary. */
+const FORMAT_KEYS = ["regular", "balanced", "fixed", "custom"] as const;
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;
@@ -30,6 +27,7 @@ export interface EditableSession {
 }
 
 export default function EditForm({ session }: { session: EditableSession }) {
+  const t = useT();
   const [state, action, pending] = useActionState(updateSessionAction, {} as FormState);
   const [courts, setCourts] = useState(session.courtNames.join(", "));
   const [format, setFormat] = useState(session.format);
@@ -41,7 +39,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
      noteForVenue never touches anything the organizer typed themselves. */
   const changeLocation = (next: string) => {
     setLocation(next);
-    setNotes((current) => noteForVenue(next, current));
+    setNotes((current) => noteForVenue(next, current, t("form.locationKatyNote")));
   };
 
 
@@ -67,7 +65,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
 
       <div>
         <label className="label" htmlFor="title">
-          Title
+          {t("form.title")}
         </label>
         <input
           id="title"
@@ -81,14 +79,14 @@ export default function EditForm({ session }: { session: EditableSession }) {
 
       <div>
         <label className="label" htmlFor="location">
-          Location
+          {t("form.location")}
         </label>
         <LocationField name="location" value={location} onChange={changeLocation} />
       </div>
 
       <div>
         <label className="label" htmlFor="startsAtLocal">
-          Date &amp; time
+          {t("form.datetime")}
         </label>
         <DateTimeField
           id="startsAtLocal"
@@ -99,7 +97,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
 
       <div>
         <label className="label" htmlFor="courtNames">
-          Which courts?
+          {t("form.courts")}
         </label>
         <input
           id="courtNames"
@@ -109,12 +107,12 @@ export default function EditForm({ session }: { session: EditableSession }) {
           onChange={(e) => setCourts(e.target.value)}
           required
         />
-        <p className="hint">Separate with commas. Up to {MAX_COURTS}.</p>
+        <p className="hint">{t("form.courtsHint", { max: MAX_COURTS })}</p>
       </div>
 
       <div>
         <label className="label" htmlFor="maxPlayers">
-          Max players
+          {t("form.maxPlayers")}
         </label>
         <input
           id="maxPlayers"
@@ -129,28 +127,30 @@ export default function EditForm({ session }: { session: EditableSession }) {
         />
         {maxPlayersText !== "" && !maxPlayersValid ? (
           <p className="mt-1.5 text-sm font-medium text-[var(--danger)]">
-            Between {session.confirmed} and {seatCap} — {session.confirmed} are already in.
+            {t("form.maxPlayersFloor", { low: session.confirmed, cap: seatCap })}
           </p>
         ) : (
           <p className="hint">
-            Up to {PLAYERS_PER_COURT} per court, so {seatCap} for{" "}
-            {Math.min(MAX_COURTS, Math.max(1, courtCount))} court
-            {courtCount === 1 ? "" : "s"}.
+            {t("form.maxPlayersHint", {
+              perCourt: PLAYERS_PER_COURT,
+              total: seatCap,
+              courts: Math.min(MAX_COURTS, Math.max(1, courtCount)),
+            })}
           </p>
         )}
       </div>
 
       <div>
-        <span className="label">Format</span>
+        <span className="label">{t("form.formatLabel")}</span>
         <input type="hidden" name="format" value={format} />
         <div className="flex flex-col gap-2">
-          {FORMATS.map((f) => {
-            const on = f.key === format;
+          {FORMAT_KEYS.map((key) => {
+            const on = key === format;
             return (
               <button
-                key={f.key}
+                key={key}
                 type="button"
-                onClick={() => setFormat(f.key)}
+                onClick={() => setFormat(key)}
                 aria-pressed={on}
                 className={`rounded-xl border p-3 text-left transition ${
                   on
@@ -159,9 +159,11 @@ export default function EditForm({ session }: { session: EditableSession }) {
                 }`}
               >
                 <span className={`block text-sm font-semibold ${on ? "text-[var(--accent)]" : ""}`}>
-                  {f.label}
+                  {t(`format.short.${key}`)}
                 </span>
-                <span className="mt-0.5 block text-xs text-[var(--muted)]">{f.hint}</span>
+                <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                  {t(`form.desc.${key}`)}
+                </span>
               </button>
             );
           })}
@@ -170,7 +172,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
 
       <div>
         <label className="label" htmlFor="notes">
-          Notes
+          {t("form.notes")}
         </label>
         <textarea
           id="notes"
@@ -190,8 +192,8 @@ export default function EditForm({ session }: { session: EditableSession }) {
           className="size-5 accent-[var(--accent)]"
         />
         <span>
-          <span className="font-medium">Counts toward ratings</span>
-          <span className="hint block">Turn off for a casual event.</span>
+          <span className="font-medium">{t("form.rated")}</span>
+          <span className="hint block">{t("form.ratedHint")}</span>
         </span>
       </label>
 
@@ -202,7 +204,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
       ) : null}
 
       <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Saving…" : "Save changes"}
+        {pending ? t("common.saving") : t("form.saveChanges")}
       </button>
     </form>
   );

@@ -12,23 +12,17 @@ import { players, playerStats, sessions, signups } from "@/lib/db/schema";
 import { getInviteCode } from "@/lib/invite";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
+import type { DictKey } from "@/lib/i18n/dictionaries/en";
+import { getT } from "@/lib/i18n/server";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import Schedule from "./Schedule";
 import ShareLink from "./ShareLink";
 import Standings from "./Standings";
 import { DeleteSessionButton, EndSessionButton } from "./play/PlayControls";
 
-export const metadata = { title: "Session · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
 
-const FORMAT_LABEL: Record<string, string> = {
-  regular: "Regular round robin — partner with everyone once",
-  balanced: "Balanced round robin — even team ratings",
-  fixed: "Fixed partners",
-  custom: "Custom",
-  social: "Social",
-  manual: "Manual",
-  king: "King of the court",
-};
+export const generateMetadata = titleFor("session.title");
 
 type TabKey = "info" | "standings" | "schedule";
 
@@ -76,6 +70,8 @@ export default async function SessionPage({
     getInviteCode(),
   ]);
 
+  const t = await getT(me?.locale);
+
   const confirmed = roster.filter((r) => r.state === "in");
   const waiting = roster.filter((r) => r.state === "waitlist");
   const mine = me ? roster.find((r) => r.playerId === me.id) : undefined;
@@ -120,9 +116,9 @@ export default async function SessionPage({
       <Tabs
         active={active}
         items={[
-          { key: "info", label: "Session", href: here("info") },
-          { key: "standings", label: "Standings", href: here("standings") },
-          { key: "schedule", label: "Matchups", href: here("schedule") },
+          { key: "info", label: t("session.tab.info"), href: here("info") },
+          { key: "standings", label: t("session.tab.standings"), href: here("standings") },
+          { key: "schedule", label: t("session.tab.schedule"), href: here("schedule") },
         ]}
       />
 
@@ -133,7 +129,7 @@ export default async function SessionPage({
           live only on Matchups, where you find the match you actually played.
         */}
         {active === "standings" ? (
-          <Standings rows={standings} meId={me?.id} backHere={backHere} />
+          <Standings rows={standings} meId={me?.id} backHere={backHere} locale={me?.locale} />
         ) : active === "schedule" ? (
           <Schedule
             rounds={allRounds}
@@ -141,35 +137,36 @@ export default async function SessionPage({
             courtCount={session.courtNames.length}
             canScoreAny={canScoreAny}
             canScoreMine={canScoreMine}
+            locale={me?.locale}
           />
         ) : (
           <>
             <section className="card relative overflow-hidden">
-              {session.status === "closed" ? <span className="ribbon">Finished</span> : null}
+              {session.status === "closed" ? <span className="ribbon">{t("card.finished")}</span> : null}
 
               <dl className="flex flex-col gap-2 text-sm">
-                <InfoRow icon="🕐" label="When">
+                <InfoRow icon="🕐" label={t("session.when")}>
                   <LocalDateTime iso={session.startsAt.toISOString()} />
                 </InfoRow>
                 {session.location ? (
-                  <InfoRow icon="📍" label="Where">
+                  <InfoRow icon="📍" label={t("session.where")}>
                     {session.location}
                   </InfoRow>
                 ) : null}
-                <InfoRow icon="🏟" label="Courts">
+                <InfoRow icon="🏟" label={t("session.courts")}>
                   {session.courtNames.join(", ")}
                 </InfoRow>
-                <InfoRow icon="🎾" label="Format">
-                  {FORMAT_LABEL[session.format] ?? session.format}
+                <InfoRow icon="🎾" label={t("session.format")}>
+                  {t(`format.${session.format}` as DictKey)}
                 </InfoRow>
-                <InfoRow icon="👥" label="Signed up">
+                <InfoRow icon="👥" label={t("session.signedUp")}>
                   <span className="font-semibold text-[var(--accent)]">
                     {confirmed.length}/{session.maxPlayers}
                   </span>
-                  {waiting.length > 0 ? ` · ${waiting.length} waiting` : ""}
+                  {waiting.length > 0 ? ` · ${t("card.waiting", { count: waiting.length })}` : ""}
                 </InfoRow>
-                <InfoRow icon="⭐" label="Rated">
-                  {session.rated ? "Counts toward ratings" : "Casual — no rating change"}
+                <InfoRow icon="⭐" label={t("session.rated")}>
+                  {session.rated ? t("session.rated.yes") : t("session.rated.no")}
                 </InfoRow>
               </dl>
 
@@ -184,7 +181,7 @@ export default async function SessionPage({
               {me ? (
                 session.status === "closed" ? (
                   <p className="card text-center text-sm text-[var(--muted)]">
-                    This session is finished.
+                    {t("session.finished")}
                   </p>
                 ) : (
                   <RsvpButtons
@@ -209,13 +206,13 @@ export default async function SessionPage({
                     }`}
                     className="btn-primary block text-center"
                   >
-                    Create an account to join
+                    {t("session.join.create")}
                   </Link>
                   <Link
                     href={`/login?next=${encodeURIComponent(`/s/${id}`)}`}
                     className="btn-ghost block text-center"
                   >
-                    I already have an account
+                    {t("session.join.login")}
                   </Link>
                 </div>
               )}
@@ -226,14 +223,14 @@ export default async function SessionPage({
             </div>
 
             <Roster
-              title={`Playing (${confirmed.length})`}
+              title={t("session.playing", { count: confirmed.length })}
               rows={confirmed}
-              empty="Nobody yet — be first."
+              empty={t("session.roster.empty")}
               backHere={backHere}
             />
             {waiting.length > 0 ? (
               <Roster
-                title={`Waitlist (${waiting.length})`}
+                title={t("session.waitlist", { count: waiting.length })}
                 rows={waiting}
                 empty=""
                 backHere={backHere}
@@ -252,10 +249,10 @@ export default async function SessionPage({
                 {session.status === "open" ? (
                   <>
                     <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-accent block text-center">
-                      Set up &amp; start
+                      {t("session.setUpAndStart")}
                     </Link>
                     <Link href={`${base}/edit?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
-                      Edit details
+                      {t("session.editDetails")}
                     </Link>
                   </>
                 ) : session.status === "live" ? (
@@ -266,12 +263,12 @@ export default async function SessionPage({
                       className="w-full"
                     />
                     <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
-                      Manage matches &amp; players
+                      {t("session.manageMatches")}
                     </Link>
                   </>
                 ) : (
                   <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
-                    Manage session
+                    {t("session.manage")}
                   </Link>
                 )}
               </div>

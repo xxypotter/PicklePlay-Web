@@ -1,3 +1,5 @@
+import { getT } from "@/lib/i18n/server";
+
 /**
  * Rating history sparkline.
  *
@@ -5,11 +7,19 @@
  * data is a couple of dozen points and the shape is a single polyline, so a
  * dependency would cost more than it's worth.
  */
-export default function RatingChart({ points }: { points: number[] }) {
+export default async function RatingChart({
+  points,
+  locale,
+}: {
+  points: number[];
+  locale?: string | null;
+}) {
+  const t = await getT(locale);
+
   if (points.length < 2) {
     return (
       <p className="py-6 text-center text-sm text-[var(--muted)]">
-        Play a couple of matches and your rating history shows up here.
+        {t("rating.chartEmpty")}
       </p>
     );
   }
@@ -36,7 +46,10 @@ export default function RatingChart({ points }: { points: number[] }) {
       viewBox={`0 0 ${width} ${height}`}
       className="w-full"
       role="img"
-      aria-label={`Rating history, ${points.length} matches, currently ${last.toFixed(3)}`}
+      aria-label={t("rating.chartAria", {
+        count: points.length,
+        rating: last.toFixed(3),
+      })}
       preserveAspectRatio="none"
     >
       <polygon points={area} fill="var(--accent)" opacity="0.08" />

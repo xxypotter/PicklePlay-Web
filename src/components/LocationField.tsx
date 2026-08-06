@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/client";
 
 /** The courts this group actually plays at. Anything else is typed in. */
 export const VENUES = [
@@ -10,10 +11,21 @@ export const VENUES = [
   "Pickleball Village",
 ] as const;
 
-/** Katy takes bookings through its own app, so every session there says so. */
-export const KATY_NOTE = "Please register in Playbypoint App";
-
 const OTHER = "__other";
+
+/**
+ * Every language's version of the Katy booking note.
+ *
+ * Removal has to recognise all of them, not just the current one. The note is
+ * written into the session in whatever language the organizer had at the time;
+ * if they later switch language and change venue, matching only the new
+ * wording would leave the old note stranded on a session that isn't at Katy.
+ */
+const KATY_NOTES = new Set([
+  "Please register in Playbypoint App",
+  "请在 Playbypoint App 上登记",
+  "請在 Playbypoint App 上登記",
+]);
 
 /**
  * Adds the Katy booking note, or takes it away again, without ever touching
@@ -23,11 +35,11 @@ const OTHER = "__other";
  * Katy with an empty notes box, and disappears when you move away from Katy
  * *only* if the box still contains exactly that note and nothing else.
  */
-export function noteForVenue(venue: string, currentNotes: string): string {
+export function noteForVenue(venue: string, currentNotes: string, note: string): string {
   if (venue === "Pickleball Katy") {
-    return currentNotes.trim() === "" ? KATY_NOTE : currentNotes;
+    return currentNotes.trim() === "" ? note : currentNotes;
   }
-  return currentNotes.trim() === KATY_NOTE ? "" : currentNotes;
+  return KATY_NOTES.has(currentNotes.trim()) ? "" : currentNotes;
 }
 
 /**
@@ -47,6 +59,7 @@ export default function LocationField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const t = useT();
   const isVenue = (VENUES as readonly string[]).includes(value);
   // An existing session with a one-off location opens on Other, already filled.
   const [other, setOther] = useState(!isVenue && value.trim() !== "");
@@ -74,21 +87,21 @@ export default function LocationField({
         className="field"
         value={selected}
         onChange={(e) => choose(e.target.value)}
-        aria-label="Location"
+        aria-label={t("form.location")}
       >
-        <option value="">Choose a location…</option>
+        <option value="">{t("form.location.choose")}</option>
         {VENUES.map((v) => (
           <option key={v} value={v}>
             {v}
           </option>
         ))}
-        <option value={OTHER}>Other</option>
+        <option value={OTHER}>{t("form.location.other")}</option>
       </select>
 
       {other ? (
         <input
           className="field mt-2"
-          placeholder="Where are you playing?"
+          placeholder={t("form.location.otherPlaceholder")}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           maxLength={80}

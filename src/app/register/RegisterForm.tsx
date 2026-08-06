@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { registerAction } from "@/lib/auth/actions";
 import type { FormState } from "@/lib/auth/types";
+import { useT } from "@/lib/i18n/client";
 import { RATING, SKILL_PICKER } from "@/lib/rating/constants";
 
 const initial: FormState = {};
@@ -17,6 +18,7 @@ export default function RegisterForm({
   codePrefill: string;
   next?: string;
 }) {
+  const t = useT();
   const [state, action, pending] = useActionState(registerAction, initial);
   const [hasDupr, setHasDupr] = useState(true);
   const [gender, setGender] = useState("male");
@@ -27,7 +29,7 @@ export default function RegisterForm({
       {needsCode ? (
         <div>
           <label className="label" htmlFor="inviteCode">
-            Invite code
+            {t("auth.inviteCode")}
           </label>
           <input
             id="inviteCode"
@@ -37,16 +39,16 @@ export default function RegisterForm({
             autoCorrect="off"
             spellCheck={false}
             defaultValue={codePrefill}
-            placeholder="K7P2WM"
+            placeholder={t("auth.codePlaceholder")}
             required
           />
-          <p className="hint">From whoever runs your group.</p>
+          <p className="hint">{t("auth.inviteCodeHint")}</p>
         </div>
       ) : null}
 
       <div>
         <label className="label" htmlFor="username">
-          Pick a name
+          {t("auth.username")}
         </label>
         <input
           id="username"
@@ -60,16 +62,13 @@ export default function RegisterForm({
           required
           autoFocus
         />
-        <p className="hint">
-          3–20 characters. First person to claim a name keeps it, so pick something
-          your group will recognize.
-        </p>
+        <p className="hint">{t("auth.usernameHint")}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label" htmlFor="pin">
-            PIN
+            {t("auth.pin")}
           </label>
           <input
             id="pin"
@@ -86,7 +85,7 @@ export default function RegisterForm({
         </div>
         <div>
           <label className="label" htmlFor="pinConfirm">
-            Confirm PIN
+            {t("auth.pinConfirm")}
           </label>
           <input
             id="pinConfirm"
@@ -102,19 +101,16 @@ export default function RegisterForm({
           />
         </div>
       </div>
-      <p className="-mt-3 text-sm text-[var(--muted)]">
-        4–6 digits. There&apos;s no email here, so if you forget it an admin resets it
-        for you.
-      </p>
+      <p className="-mt-3 text-sm text-[var(--muted)]">{t("auth.pinHint")}</p>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="label">Gender</legend>
+        <legend className="label">{t("me.gender")}</legend>
         <input type="hidden" name="gender" value={gender} />
         <div className="grid grid-cols-3 gap-2">
           {[
-            { key: "male", label: "Boy" },
-            { key: "female", label: "Girl" },
-            { key: "unspecified", label: "Not listed" },
+            { key: "male", label: t("me.gender.male") },
+            { key: "female", label: t("me.gender.female") },
+            { key: "unspecified", label: t("me.gender.unspecified") },
           ].map((o) => (
             <Choice
               key={o.key}
@@ -124,18 +120,22 @@ export default function RegisterForm({
             />
           ))}
         </div>
-        <p className="hint">
-          Play is mostly coed mix. This only decides which ranking table you appear
-          in. Choose <span className="font-medium">Not listed</span> to stay out of
-          the rankings entirely.
-        </p>
+        <p className="hint">{t("me.genderHint")}</p>
       </fieldset>
 
       <fieldset className="flex flex-col gap-3">
-        <legend className="label">Do you have a DUPR rating?</legend>
+        <legend className="label">{t("auth.haveDupr")}</legend>
         <div className="grid grid-cols-2 gap-3">
-          <Choice checked={hasDupr} onSelect={() => setHasDupr(true)} label="Yes" />
-          <Choice checked={!hasDupr} onSelect={() => setHasDupr(false)} label="Not yet" />
+          <Choice
+            checked={hasDupr}
+            onSelect={() => setHasDupr(true)}
+            label={t("auth.yes")}
+          />
+          <Choice
+            checked={!hasDupr}
+            onSelect={() => setHasDupr(false)}
+            label={t("auth.notYet")}
+          />
         </div>
         <input type="hidden" name="ratingSource" value={hasDupr ? "dupr" : "picker"} />
       </fieldset>
@@ -145,7 +145,7 @@ export default function RegisterForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label" htmlFor="dupr">
-                Your DUPR
+                {t("auth.yourDupr")}
               </label>
               <input
                 id="dupr"
@@ -156,13 +156,13 @@ export default function RegisterForm({
                 step="0.001"
                 min={RATING.MIN}
                 max={RATING.MAX}
-                placeholder="3.750"
+                placeholder={t("auth.duprPlaceholder")}
                 required={hasDupr}
               />
             </div>
             <div>
               <label className="label" htmlFor="reliability">
-                Reliability %
+                {t("auth.reliabilityPercent")}
               </label>
               <input
                 id="reliability"
@@ -173,33 +173,25 @@ export default function RegisterForm({
                 step="1"
                 min={0}
                 max={100}
-                placeholder="Optional"
+                placeholder={t("common.optional")}
               />
             </div>
           </div>
-          <p className="hint">
-            Both are on your DUPR profile. Nothing connects to DUPR — this is a
-            one-time starting point, replaced by your real results here as you
-            play. Leave reliability blank if you&apos;d rather not say; your
-            rating then carries a <strong>?</strong> until you&apos;ve played a
-            session or two here.
-          </p>
+          <p className="hint">{t("auth.duprHint")}</p>
         </div>
       ) : (
         <div>
           <label className="label" htmlFor="skill">
-            Where are you roughly?
+            {t("auth.skillLevel")}
           </label>
           <select id="skill" name="skill" className="field" defaultValue="intermediate">
             {SKILL_PICKER.map((s) => (
               <option key={s.key} value={s.key}>
-                {s.label}
+                {t(`skill.${s.key}`)}
               </option>
             ))}
           </select>
-          <p className="hint">
-            A rough guess is fine. Your first handful of games will correct it.
-          </p>
+          <p className="hint">{t("auth.skillHint")}</p>
         </div>
       )}
 
@@ -210,16 +202,16 @@ export default function RegisterForm({
       ) : null}
 
       <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Creating…" : "Create account"}
+        {pending ? t("auth.creating") : t("auth.register")}
       </button>
 
       <p className="text-center text-sm text-[var(--muted)]">
-        Already have a name?{" "}
+        {t("auth.alreadyHaveName")}{" "}
         <Link
           href={`/login${next ? `?next=${encodeURIComponent(next)}` : ""}`}
           className="font-medium text-[var(--accent)] underline"
         >
-          Log in
+          {t("auth.login")}
         </Link>
       </p>
     </form>

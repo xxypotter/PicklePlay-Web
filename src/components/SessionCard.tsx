@@ -1,5 +1,7 @@
 import Link from "next/link";
 import LocalDateTime from "@/components/LocalDateTime";
+import type { DictKey } from "@/lib/i18n/dictionaries/en";
+import { getT } from "@/lib/i18n/server";
 
 export interface SessionCardData {
   id: string;
@@ -16,30 +18,29 @@ export interface SessionCardData {
   organizer?: string | null;
 }
 
-const FORMAT_LABEL: Record<string, string> = {
-  regular: "Regular round robin",
-  balanced: "Balanced round robin",
-  fixed: "Fixed partners",
-  custom: "Custom",
-  social: "Social",
-  manual: "Manual",
-  king: "King of the court",
-};
-
 /**
  * The event card from the home screen: title, then icon-led rows for when,
  * where and how, with a diagonal ribbon in the corner once it's over.
  */
-export default function SessionCard({
+export default async function SessionCard({
   session: s,
   /** Where back should return to — the list and tab this card was tapped from. */
   from,
+  /** The viewer's language, so the card doesn't re-read the cookie per card. */
+  locale,
 }: {
   session: SessionCardData;
   from?: string;
+  locale?: string | null;
 }) {
+  const t = await getT(locale);
+
   const ribbon =
-    s.status === "closed" ? "Finished" : s.status === "live" ? "Playing" : null;
+    s.status === "closed"
+      ? t("card.finished")
+      : s.status === "live"
+        ? t("card.playing")
+        : null;
 
   const href = from ? `/s/${s.id}?from=${encodeURIComponent(from)}` : `/s/${s.id}`;
 
@@ -62,23 +63,31 @@ export default function SessionCard({
         </Row>
         {s.location ? <Row icon="📍">{s.location}</Row> : null}
         <Row icon="🏟">
-          Court{s.courtNames.length === 1 ? "" : "s"} {s.courtNames.join(", ")} ·{" "}
-          {FORMAT_LABEL[s.format] ?? s.format}
+          {t("card.courtsFormat", {
+            courts: t.plural("card.courts", s.courtNames.length, {
+              names: s.courtNames.join(", "),
+            }),
+            format: t(`format.short.${s.format}` as DictKey),
+          })}
         </Row>
         <Row icon="👥">
-          <span className="font-semibold text-[var(--accent)]">
-            {s.signedUp}/{s.maxPlayers}
-          </span>{" "}
-          signed up
+          {t.rich("card.signedUp", {
+            count: (
+              <span key="n" className="font-semibold text-[var(--accent)]">
+                {s.signedUp}
+              </span>
+            ),
+            max: s.maxPlayers,
+          })}
           {/* Name alone read as another player rather than whose session it is. */}
-          {s.organizer ? ` · organizer ${s.organizer}` : ""}
-          {!s.rated ? " · casual" : ""}
+          {s.organizer ? ` · ${t("card.organizer", { name: s.organizer })}` : ""}
+          {!s.rated ? t("card.casual") : ""}
         </Row>
       </dl>
 
       {s.myState ? (
         <p className="mt-3 text-sm font-semibold text-[var(--accent)]">
-          {s.myState === "in" ? "You're in" : "You're on the waitlist"}
+          {s.myState === "in" ? t("card.youreIn") : t("card.onWaitlist")}
         </p>
       ) : null}
     </Link>

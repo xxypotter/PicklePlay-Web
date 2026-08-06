@@ -5,9 +5,12 @@ import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
 import SessionForm from "./SessionForm";
 
-export const metadata = { title: "New session · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
+
+export const generateMetadata = titleFor("form.newSession");
 
 export default async function NewSessionPage({
   searchParams,
@@ -18,6 +21,7 @@ export default async function NewSessionPage({
   const me = await getCurrentPlayer();
   if (!me || !canManageSessions(me.role)) notFound();
 
+  const t = await getT(me.locale);
   const roster = await getDb()
     .select({
       id: players.id,
@@ -32,7 +36,7 @@ export default async function NewSessionPage({
   return (
     <>
       {/* Reached from the centre button, which exists on every screen. */}
-      <TopBar title="New session" back={safeFrom(from, "/")} />
+      <TopBar title={t("form.newSession")} back={safeFrom(from, "/")} />
       <main className="screen pt-4">
         <SessionForm roster={roster} />
       </main>

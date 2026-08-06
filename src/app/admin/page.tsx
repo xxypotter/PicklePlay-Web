@@ -12,18 +12,22 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import type { Role } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { auditLog, players, playerStats } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
 import { getInviteCode } from "@/lib/invite";
 import BackupCard from "./BackupCard";
 import InviteCard from "./InviteCard";
 import RosterCard from "./RosterCard";
 
-export const metadata = { title: "Admin · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
+
+export const generateMetadata = titleFor("admin.title");
 
 export default async function AdminPage() {
   const me = await getCurrentPlayer();
   // 404 rather than 403: don't confirm the page exists to someone who can't use it.
   if (!me || (me.role !== "admin" && me.role !== "superadmin")) notFound();
 
+  const t = await getT(me.locale);
   const db = getDb();
   const [code, roster, headerList, lastBackupRow] = await Promise.all([
     getInviteCode(),
@@ -68,7 +72,7 @@ export default async function AdminPage() {
 
   return (
     <>
-      <TopBar title="Admin" back="/me" />
+      <TopBar title={t("admin.title")} back="/me" />
       <main className="screen pt-4">
       <InviteCard
         code={code}
@@ -89,11 +93,8 @@ export default async function AdminPage() {
         />
       ) : (
         <section className="card mt-5">
-          <h2 className="text-sm font-medium text-[var(--muted)]">Backup</h2>
-          <p className="hint">
-            Players, matches and rating history are backed up automatically every
-            Monday.
-          </p>
+          <h2 className="text-sm font-medium text-[var(--muted)]">{t("admin.backup")}</h2>
+          <p className="hint">{t("admin.backupPlayerNote")}</p>
         </section>
       )}
 

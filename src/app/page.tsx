@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
 import { canManageSessions } from "@/lib/auth/policy";
+import { getT } from "@/lib/i18n/server";
 
 /**
  * Split by time, not by kind.
@@ -25,24 +26,22 @@ export default async function HomePage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const me = await getCurrentPlayer();
+  const t = await getT(me?.locale);
 
   if (!me) {
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-10">
         <div className="mb-10 text-center">
           <p className="text-5xl">🏓</p>
-          <h1 className="mt-4 text-3xl font-bold">PicklePlay</h1>
-          <p className="mt-2 text-[var(--muted)]">
-            Organize your sessions, auto-build the matchups, and track everyone&apos;s
-            rating.
-          </p>
+          <h1 className="mt-4 text-3xl font-bold">{t("app.name")}</h1>
+          <p className="mt-2 text-[var(--muted)]">{t("home.tagline")}</p>
         </div>
         <div className="flex flex-col gap-3">
           <Link href="/register" className="btn-primary text-center">
-            Create an account
+            {t("auth.register")}
           </Link>
           <Link href="/login" className="btn-ghost text-center">
-            Log in
+            {t("auth.login")}
           </Link>
         </div>
       </main>
@@ -121,24 +120,25 @@ export default async function HomePage({
       <Tabs
         active={active}
         items={[
-          { key: "upcoming", label: "Upcoming", href: "/" },
-          { key: "history", label: "History", href: "/?tab=history" },
+          { key: "upcoming", label: t("home.tab.upcoming"), href: "/" },
+          { key: "history", label: t("home.tab.history"), href: "/?tab=history" },
         ]}
       />
 
       <main className="screen pt-4">
         <div className="mb-3 flex items-baseline justify-between px-1">
           <h2 className="text-sm text-[var(--muted)]">
-            {cards.length}{" "}
-            {active === "upcoming"
-              ? `session${cards.length === 1 ? "" : "s"} coming up`
-              : `finished session${cards.length === 1 ? "" : "s"}`}
+            {t.plural(
+              active === "upcoming" ? "home.comingUp" : "home.finished",
+              cards.length,
+              { count: cards.length },
+            )}
           </h2>
           <Link
             href={`/leaderboard?from=${encodeURIComponent(backHere)}`}
             className="text-sm text-[var(--muted)]"
           >
-            Rankings ›
+            {t("home.rankings")}
           </Link>
         </div>
 
@@ -146,7 +146,7 @@ export default async function HomePage({
           <div className="card py-14 text-center">
             {active === "upcoming" ? (
               <>
-                <p className="text-[var(--muted)]">Nothing scheduled.</p>
+                <p className="text-[var(--muted)]">{t("home.empty.upcoming")}</p>
                 {/*
                   This is the screen most of the group sees most of the time,
                   and it used to tell every player to tap a + that refuses them.
@@ -154,17 +154,14 @@ export default async function HomePage({
                 */}
                 <p className="hint">
                   {canCreate
-                    ? "Tap + below to set one up."
-                    : "Your organizer will post the next one here."}
+                    ? t("home.empty.upcoming.admin")
+                    : t("home.empty.upcoming.player")}
                 </p>
               </>
             ) : (
               <>
-                <p className="text-[var(--muted)]">No finished sessions yet.</p>
-                <p className="hint">
-                  Sessions move here once the organizer closes them, with their
-                  results kept.
-                </p>
+                <p className="text-[var(--muted)]">{t("home.empty.history")}</p>
+                <p className="hint">{t("home.empty.history.hint")}</p>
               </>
             )}
           </div>
@@ -174,11 +171,13 @@ export default async function HomePage({
             {myCards.length > 0 ? (
               <section className="mb-6">
                 <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                  {active === "upcoming" ? "You're in" : "You played"}
+                  {active === "upcoming"
+                    ? t("home.group.yourein")
+                    : t("home.group.youplayed")}
                 </h3>
                 <div className="flex flex-col gap-3">
                   {myCards.map((s) => (
-                    <SessionCard key={s.id} session={s} from={backHere} />
+                    <SessionCard key={s.id} session={s} from={backHere} locale={me.locale} />
                   ))}
                 </div>
               </section>
@@ -189,13 +188,13 @@ export default async function HomePage({
                 <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                   {active === "upcoming"
                     ? myCards.length > 0
-                      ? "Also open"
-                      : "Open to join"
-                    : "Other sessions"}
+                      ? t("home.group.alsoOpen")
+                      : t("home.group.openToJoin")
+                    : t("home.group.other")}
                 </h3>
                 <div className="flex flex-col gap-3">
                   {otherCards.map((s) => (
-                    <SessionCard key={s.id} session={s} from={backHere} />
+                    <SessionCard key={s.id} session={s} from={backHere} locale={me.locale} />
                   ))}
                 </div>
               </section>

@@ -8,6 +8,7 @@ import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
+import { getT } from "@/lib/i18n/server";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
@@ -28,6 +29,7 @@ export async function updateSessionAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const t = await getT();
   const db = getDb();
 
   const sessionId = str(formData, "sessionId");
@@ -39,19 +41,19 @@ export async function updateSessionAction(
     .where(eq(sessions.id, sessionId))
     .limit(1);
 
-  if (!found[0]) return { error: "That session no longer exists." };
+  if (!found[0]) return { error: t("err.sessionGone") };
   if (found[0].status !== "open") {
-    return { error: "This session has started, so its details are locked." };
+    return { error: t("err.sessionStarted") };
   }
 
   const title = str(formData, "title");
   if (!title || title.length > 80) {
-    return { error: "Give the session a title (80 characters or fewer).", field: "title" };
+    return { error: t("err.titleRequired"), field: "title" };
   }
 
   const startsAt = new Date(str(formData, "startsAt"));
   if (Number.isNaN(startsAt.getTime())) {
-    return { error: "Pick a date and time.", field: "startsAtLocal" };
+    return { error: t("err.pickDateTime"), field: "startsAtLocal" };
   }
 
   const courtNames = str(formData, "courtNames")
@@ -60,16 +62,16 @@ export async function updateSessionAction(
     .filter(Boolean);
 
   if (courtNames.length === 0) {
-    return { error: "Name at least one court, e.g. 3, 4", field: "courtNames" };
+    return { error: t("err.nameCourt"), field: "courtNames" };
   }
   if (courtNames.length > MAX_COURTS) {
-    return { error: `${MAX_COURTS} courts maximum.`, field: "courtNames" };
+    return { error: t("err.maxCourts", { max: MAX_COURTS }), field: "courtNames" };
   }
   if (new Set(courtNames.map((c) => c.toLowerCase())).size !== courtNames.length) {
-    return { error: "Each court needs a different name.", field: "courtNames" };
+    return { error: t("err.courtsDistinct"), field: "courtNames" };
   }
   if (courtNames.some((c) => c.length > 16)) {
-    return { error: "Court names must be 16 characters or fewer.", field: "courtNames" };
+    return { error: t("err.courtNameLong"), field: "courtNames" };
   }
 
   const courtCount = courtNames.length;
@@ -78,9 +80,10 @@ export async function updateSessionAction(
 
   if (!Number.isInteger(maxPlayers) || maxPlayers < 4 || maxPlayers > seatCap) {
     return {
-      error: `Max players must be between 4 and ${seatCap} for ${courtCount} court${
-        courtCount === 1 ? "" : "s"
-      }.`,
+      error: t.plural("err.maxPlayersRange", courtCount, {
+        cap: seatCap,
+        courts: courtCount,
+      }),
       field: "maxPlayers",
     };
   }
@@ -93,13 +96,13 @@ export async function updateSessionAction(
 
   if (maxPlayers < count) {
     return {
-      error: `${count} players are already in. Remove some before lowering the cap.`,
+      error: t("err.tooManyIn", { count }),
       field: "maxPlayers",
     };
   }
 
   const format = str(formData, "format") as Format;
-  if (!FORMATS.includes(format)) return { error: "Pick a format.", field: "format" };
+  if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
 
   await db
     .update(sessions)

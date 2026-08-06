@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/client";
 import { rotateInviteCodeAction } from "./actions";
 
 export default function InviteCard({
@@ -13,6 +14,7 @@ export default function InviteCard({
   /** Rotating locks out anyone mid-signup, so it belongs to the owner. */
   canRotate: boolean;
 }) {
+  const t = useT();
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const link = code ? `${origin}/register?code=${code}` : "";
 
@@ -28,7 +30,7 @@ export default function InviteCard({
 
   return (
     <section className="card">
-      <h2 className="text-sm font-medium text-[var(--muted)]">Group invite code</h2>
+      <h2 className="text-sm font-medium text-[var(--muted)]">{t("admin.inviteCode")}</h2>
 
       {code ? (
         <>
@@ -42,27 +44,22 @@ export default function InviteCard({
               onClick={() => copy(link, "link")}
               className="btn-primary"
             >
-              {copied === "link" ? "Copied!" : "Copy invite link"}
+              {copied === "link" ? t("admin.copiedBang") : t("admin.copyInviteLink")}
             </button>
             <button
               type="button"
               onClick={() => copy(code, "code")}
               className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-medium"
             >
-              {copied === "code" ? "Copied!" : "Copy just the code"}
+              {copied === "code" ? t("admin.copiedBang") : t("admin.copyJustCode")}
             </button>
           </div>
 
           <p className="hint mt-4 break-all">{link}</p>
-          <p className="hint">
-            Paste the link into your group chat — it fills the code in for them. Anyone
-            without it can&apos;t register.
-          </p>
+          <p className="hint">{t("admin.linkHint")}</p>
         </>
       ) : (
-        <p className="mt-2 text-[var(--danger)]">
-          No code set, so registration is closed. Generate one below.
-        </p>
+        <p className="mt-2 text-[var(--danger)]">{t("admin.noCode")}</p>
       )}
 
       {canRotate ? (
@@ -72,12 +69,10 @@ export default function InviteCard({
           className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-medium
             text-[var(--muted)]"
         >
-          {code ? "Generate a new code" : "Generate a code"}
+          {code ? t("admin.generateNewCode") : t("admin.generateCode")}
         </button>
         {code ? (
-          <p className="hint">
-            Rotating stops all new signups immediately. Existing accounts are unaffected.
-          </p>
+          <p className="hint">{t("admin.rotateHint")}</p>
         ) : null}
       </form>
       ) : null}

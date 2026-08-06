@@ -9,6 +9,7 @@ import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { matches, players, playerStats, rounds, sessions, signups } from "@/lib/db/schema";
 import { RATING } from "@/lib/rating/constants";
+import { getT } from "@/lib/i18n/server";
 import {
   applyRound,
   emptyHistory,
@@ -122,6 +123,7 @@ export async function createNextRound(sessionId: string): Promise<{
   round: Round;
   roundIndex: number;
 }> {
+  const t = await getT();
   const db = getDb();
 
   const found = await db
@@ -131,11 +133,11 @@ export async function createNextRound(sessionId: string): Promise<{
     .limit(1);
 
   const session = found[0];
-  if (!session) throw new Error("That session no longer exists.");
+  if (!session) throw new Error(t("err.sessionGone"));
 
   const attending = await getAttending(sessionId);
   if (attending.length < 4) {
-    throw new Error("Need at least 4 players marked present to build a round.");
+    throw new Error(t("err.needFourPresent"));
   }
 
   const history = await buildSessionHistory(sessionId);

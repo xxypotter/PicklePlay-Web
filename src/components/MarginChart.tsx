@@ -1,3 +1,5 @@
+import { getT } from "@/lib/i18n/server";
+
 /**
  * Result margins, most recent last.
  *
@@ -11,16 +13,20 @@
  * Server-rendered SVG for the same reason as RatingChart — a few dozen bars
  * don't justify a charting dependency.
  */
-export default function MarginChart({
+export default async function MarginChart({
   margins,
+  locale,
 }: {
   /** Points for minus points against, per match, oldest first. */
   margins: number[];
+  locale?: string | null;
 }) {
+  const t = await getT(locale);
+
   if (margins.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-[var(--muted)]">
-        Play a few matches and the shape of your results shows up here.
+        {t("record.marginEmpty")}
       </p>
     );
   }
@@ -42,7 +48,7 @@ export default function MarginChart({
       viewBox={`0 0 ${width} ${height}`}
       className="w-full"
       role="img"
-      aria-label={`Result margins for the last ${shown.length} matches, ${wins} won`}
+      aria-label={t("record.marginAria", { count: shown.length, wins })}
     >
       {/* The line results are measured against, not a decoration. */}
       <line

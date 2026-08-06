@@ -81,6 +81,12 @@ export const players = pgTable(
      */
     avatar: text("avatar"),
     /**
+     * Chosen language, so it follows the player to a new phone. Nullable
+     * because "never chose" is different from "chose English" — only the first
+     * lets the browser's own preference decide.
+     */
+    locale: text("locale"),
+    /**
      * Record carried over from wherever they played before. Display only — it
      * never touches the rating engine, which knows about matches played here
      * and nothing else. Losses are derived as matches minus wins.

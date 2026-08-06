@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useT } from "@/lib/i18n/client";
 import { addPlayerAction, removePlayerAction } from "@/lib/sessions/actions";
 
 export interface RosterRow {
@@ -34,6 +35,7 @@ export default function RosterEditor({
   candidates: { id: string; username: string }[];
   maxPlayers: number;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
 
   const remove = (playerId: string) =>
@@ -45,11 +47,11 @@ export default function RosterEditor({
   return (
     <section className="card mt-4">
       <h2 className="text-sm font-medium text-[var(--muted)]">
-        Who&apos;s playing ({playing.length}/{maxPlayers})
+        {t("form.whosPlaying", { count: playing.length, max: maxPlayers })}
       </h2>
 
       {playing.length === 0 ? (
-        <p className="hint">Nobody yet. Add people below, or let them RSVP themselves.</p>
+        <p className="hint">{t("roster.empty")}</p>
       ) : (
         <ul className="mt-3 flex flex-col gap-2">
           {playing.map((p) => (
@@ -64,11 +66,11 @@ export default function RosterEditor({
                 type="button"
                 disabled={pending}
                 onClick={() => remove(p.playerId)}
-                aria-label={`Remove ${p.username}`}
+                aria-label={t("roster.removeLabel", { name: p.username })}
                 className="shrink-0 rounded-lg px-2 py-1 text-sm text-[var(--danger)]
                   disabled:opacity-40"
               >
-                Remove
+                {t("roster.remove")}
               </button>
             </li>
           ))}
@@ -78,7 +80,7 @@ export default function RosterEditor({
       {waiting.length > 0 ? (
         <>
           <h3 className="mt-4 text-sm font-medium text-[var(--muted)]">
-            Waitlist ({waiting.length})
+            {t("session.waitlist", { count: waiting.length })}
           </h3>
           <ul className="mt-2 flex flex-col gap-2">
             {waiting.map((p) => (
@@ -95,11 +97,11 @@ export default function RosterEditor({
                   type="button"
                   disabled={pending}
                   onClick={() => remove(p.playerId)}
-                  aria-label={`Remove ${p.username}`}
+                  aria-label={t("roster.removeLabel", { name: p.username })}
                   className="shrink-0 rounded-lg px-2 py-1 text-sm text-[var(--danger)]
                     disabled:opacity-40"
                 >
-                  Remove
+                  {t("roster.remove")}
                 </button>
               </li>
             ))}
@@ -110,13 +112,11 @@ export default function RosterEditor({
       {candidates.length > 0 ? (
         <details className="mt-4">
           <summary className="cursor-pointer text-sm font-semibold text-[var(--accent)]">
-            Add players ({candidates.length})
+            {t("roster.add", { count: candidates.length })}
           </summary>
           {/* Past capacity people still get added — as waitlist, not as a refusal. */}
           {full ? (
-            <p className="hint">
-              This session is full, so anyone you add now joins the waitlist.
-            </p>
+            <p className="hint">{t("roster.fullNote")}</p>
           ) : null}
           <div className="mt-3 grid grid-cols-2 gap-2">
             {candidates.map((c) => (

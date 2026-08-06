@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import PaddleIcon from "@/components/PaddleIcon";
+import { useT } from "@/lib/i18n/client";
 
 /**
  * Three-slot bottom bar with an elevated centre button, lifted straight from
@@ -11,6 +12,7 @@ import PaddleIcon from "@/components/PaddleIcon";
  * the app is really about.
  */
 export default function BottomNav({ canCreate }: { canCreate: boolean }) {
+  const t = useT();
   const pathname = usePathname();
   const router = useRouter();
   const [denied, setDenied] = useState(false);
@@ -40,7 +42,7 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
           style={{ bottom: "calc(5.5rem + env(safe-area-inset-bottom))" }}
         >
           <p className="rounded-xl bg-black/85 px-4 py-3 text-center text-sm text-white shadow-lg">
-            Only an admin can create an event. Ask your organizer to set one up.
+            {t("nav.createDenied")}
           </p>
         </div>
       ) : null}
@@ -53,10 +55,11 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
           <Link href="/" className="flex flex-col items-center gap-0.5">
             <PaddleIcon
               size={22}
+              label={t("nav.paddle")}
               className={onHome ? "text-[var(--accent)]" : "text-[var(--muted)]"}
             />
             <span className={`text-[11px] ${onHome ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>
-              Home
+              {t("nav.home")}
             </span>
           </Link>
 
@@ -64,7 +67,7 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
             <button
               type="button"
               onClick={create}
-              aria-label="Create event"
+              aria-label={t("nav.createEvent")}
               className={`-mt-7 flex size-14 items-center justify-center rounded-full text-3xl
                 font-light text-white shadow-lg transition active:scale-95 ${
                   canCreate ? "bg-[var(--amber)]" : "bg-[var(--muted)]"
@@ -72,7 +75,7 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
             >
               +
             </button>
-            <span className="text-[11px] text-[var(--muted)]">Create</span>
+            <span className="text-[11px] text-[var(--muted)]">{t("nav.create")}</span>
           </div>
 
           <Link href="/me" className="flex flex-col items-center gap-0.5">
@@ -80,7 +83,7 @@ export default function BottomNav({ canCreate }: { canCreate: boolean }) {
               👤
             </span>
             <span className={`text-[11px] ${onMe ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>
-              Me
+              {t("nav.me")}
             </span>
           </Link>
         </div>

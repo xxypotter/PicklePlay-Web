@@ -163,8 +163,10 @@ export const MIN_TOGETHER = 3;
 const pickBy = (
   list: HeadToHead[],
   compare: (a: HeadToHead, b: HeadToHead) => number,
+  /** Extra condition the claim itself has to satisfy to be true. */
+  qualifies: (h: HeadToHead) => boolean = () => true,
 ): HeadToHead | null => {
-  const eligible = list.filter((h) => h.games >= MIN_TOGETHER);
+  const eligible = list.filter((h) => h.games >= MIN_TOGETHER && qualifies(h));
   if (eligible.length === 0) return null;
   return [...eligible].sort(compare)[0];
 };
@@ -173,13 +175,29 @@ const pickBy = (
 export const bestPartner = (partners: HeadToHead[]): HeadToHead | null =>
   pickBy(partners, (a, b) => b.winRate - a.winRate || b.games - a.games);
 
-/** The opponent you beat most often. */
-export const favouriteOpponent = (opponents: HeadToHead[]): HeadToHead | null =>
-  pickBy(opponents, (a, b) => b.winRate - a.winRate || b.games - a.games);
+/*
+ * These two are labelled "Owns the head-to-head" and "Has their number", and
+ * a label that names someone has to be true about them. Sorting alone isn't
+ * enough: an unbeaten player's *worst* opponent is still someone they have
+ * never lost to, and printing them as a nemesis states a defeat that never
+ * happened. Each therefore has to actually hold a winning record.
+ */
 
-/** The one with your number: lowest win rate against. */
+/** The opponent you beat most often — and do genuinely beat. */
+export const favouriteOpponent = (opponents: HeadToHead[]): HeadToHead | null =>
+  pickBy(
+    opponents,
+    (a, b) => b.winRate - a.winRate || b.games - a.games,
+    (h) => h.wins * 2 > h.games,
+  );
+
+/** The one with your number: they have to be ahead of you, not merely least behind. */
 export const nemesis = (opponents: HeadToHead[]): HeadToHead | null =>
-  pickBy(opponents, (a, b) => a.winRate - b.winRate || b.games - a.games);
+  pickBy(
+    opponents,
+    (a, b) => a.winRate - b.winRate || b.games - a.games,
+    (h) => h.wins * 2 < h.games,
+  );
 
 /**
  * Who you've shared a court with most, win or lose.

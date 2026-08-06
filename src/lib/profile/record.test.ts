@@ -113,6 +113,43 @@ describe("head to head", () => {
     expect(favouriteOpponent(r.opponents)?.playerId).toBe("soft");
   });
 
+  it("names no nemesis for someone who has never lost", () => {
+    /*
+     * "Has their number" claims a defeat. Sorting alone would hand an unbeaten
+     * player their *least* dominated opponent and label them a nemesis, which
+     * states a loss that never happened — the screen would be lying about a
+     * named person.
+     */
+    const r = summariseRecord(ME, [
+      match([ME, "a"], ["rival", "n1"], 11, 5),
+      match([ME, "a"], ["rival", "n2"], 11, 6),
+      match([ME, "a"], ["rival", "n3"], 11, 7),
+    ]);
+    expect(nemesis(r.opponents)).toBeNull();
+    expect(favouriteOpponent(r.opponents)?.playerId).toBe("rival");
+  });
+
+  it("names nobody they own when they lose to everyone", () => {
+    const r = summariseRecord(ME, [
+      match([ME, "a"], ["rival", "n1"], 5, 11),
+      match([ME, "a"], ["rival", "n2"], 6, 11),
+      match([ME, "a"], ["rival", "n3"], 7, 11),
+    ]);
+    expect(favouriteOpponent(r.opponents)).toBeNull();
+    expect(nemesis(r.opponents)?.playerId).toBe("rival");
+  });
+
+  it("ignores an even head-to-head, which settles nothing either way", () => {
+    const r = summariseRecord(ME, [
+      match([ME, "a"], ["even", "n1"], 11, 5),
+      match([ME, "a"], ["even", "n2"], 11, 6),
+      match([ME, "a"], ["even", "n3"], 5, 11),
+      match([ME, "a"], ["even", "n4"], 6, 11),
+    ]);
+    expect(favouriteOpponent(r.opponents)).toBeNull();
+    expect(nemesis(r.opponents)).toBeNull();
+  });
+
   it("stays quiet until there's enough to say", () => {
     // Two games together is a coincidence, and calling it a "best partner"
     // would be the screen making things up.

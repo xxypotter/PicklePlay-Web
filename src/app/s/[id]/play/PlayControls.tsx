@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useT } from "@/lib/i18n/client";
 import {
   planCasualRounds,
   planRegularRounds,
@@ -35,6 +36,7 @@ export function GenerateRoundButton({
   roundsSoFar: number;
   format: string;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const tooFew = attendingCount < 4;
 
@@ -59,7 +61,7 @@ export function GenerateRoundButton({
 
   if (tooFew) {
     return (
-      <p className="hint mt-4">Mark at least 4 players present to build the matches.</p>
+      <p className="hint mt-4">{t("play.tooFew")}</p>
     );
   }
 
@@ -67,7 +69,7 @@ export function GenerateRoundButton({
     return (
       <div className="mt-4">
         <label className="label" htmlFor="roundCount">
-          How many rounds?
+          {t("play.howManyRounds")}
         </label>
         <div className="flex items-center gap-3">
           <input
@@ -85,7 +87,7 @@ export function GenerateRoundButton({
             onClick={() => start(() => void generateAllRoundsAction(sessionId, rounds))}
             className="btn-primary flex-1 disabled:opacity-40"
           >
-            {pending ? "Building…" : "Create all matches"}
+            {pending ? t("play.building") : t("play.createAll")}
           </button>
         </div>
         <p
@@ -94,20 +96,25 @@ export function GenerateRoundButton({
           }`}
         >
           {!roundsValid ? (
-            "Enter a number of rounds between 1 and 20."
+            t("play.rounds.invalid")
           ) : uneven ? (
             <>
-              {rounds} rounds doesn&apos;t divide evenly across {attendingCount} players —{" "}
-              {Math.ceil(gamesEach!)} games for some, {Math.floor(gamesEach!)} for the rest.
-              {plan ? ` Use ${plan.rounds} to give everyone the same.` : ""}
+              {t("play.rounds.uneven", {
+                rounds,
+                players: attendingCount,
+                high: Math.ceil(gamesEach!),
+                low: Math.floor(gamesEach!),
+              })}
+              {plan ? t("play.rounds.unevenFix", { suggested: plan.rounds }) : ""}
             </>
           ) : (
             <>
-              {gamesEach} games each
-              {byesEach > 0 ? `, sitting out ${byesEach}` : ""}
+              {byesEach > 0
+                ? t("play.rounds.evenBye", { games: gamesEach!, byes: byesEach })
+                : t("play.rounds.even", { games: gamesEach! })}
               {plan && rounds === plan.rounds && plan.fullCoverage
-                ? " — and you partner everyone exactly once."
-                : ". You can add more rounds later."}
+                ? t("play.rounds.full")
+                : t("play.rounds.more")}
             </>
           )}
         </p>
@@ -124,13 +131,14 @@ export function GenerateRoundButton({
         className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-semibold
           disabled:opacity-50"
       >
-        {pending ? "Building…" : "Add another round"}
+        {pending ? t("play.building") : t("play.addRound")}
       </button>
     </div>
   );
 }
 
 export function DeleteSessionButton({ sessionId }: { sessionId: string }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const [armed, setArmed] = useState(false);
 
@@ -148,12 +156,14 @@ export function DeleteSessionButton({ sessionId }: { sessionId: string }) {
             : "border border-[var(--border)] text-[var(--muted)]"
         }`}
       >
-        {pending ? "Deleting…" : armed ? "Tap again to delete permanently" : "Delete session"}
+        {pending
+          ? t("play.deleting")
+          : armed
+            ? t("play.deleteConfirm")
+            : t("play.delete")}
       </button>
       {armed ? (
-        <p className="hint text-center">
-          Removes every match here and puts ratings back where they were.
-        </p>
+        <p className="hint text-center">{t("play.deleteHint")}</p>
       ) : null}
     </div>
   );
@@ -166,6 +176,7 @@ export function DiscardRoundButton({
   sessionId: string;
   roundId: string;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   return (
     <button
@@ -174,7 +185,7 @@ export function DiscardRoundButton({
       onClick={() => start(() => void discardRoundAction(sessionId, roundId))}
       className="text-xs font-semibold text-[var(--muted)] underline disabled:opacity-50"
     >
-      {pending ? "…" : "Regenerate"}
+      {pending ? "…" : t("play.regenerate")}
     </button>
   );
 }
@@ -190,6 +201,7 @@ export function AttendanceToggle({
   username: string;
   attended: boolean;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
 
   return (
@@ -205,7 +217,7 @@ export function AttendanceToggle({
         }`}
     >
       <span className="truncate">{username}</span>
-      <span className="shrink-0 text-xs">{attended ? "here" : "out"}</span>
+      <span className="shrink-0 text-xs">{attended ? t("play.here") : t("play.out")}</span>
     </button>
   );
 }
@@ -217,13 +229,14 @@ export function AddPlayers({
   sessionId: string;
   candidates: { id: string; username: string }[];
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   if (candidates.length === 0) return null;
 
   return (
     <details className="mt-4">
       <summary className="cursor-pointer text-sm font-semibold text-[var(--accent)]">
-        Add someone who didn&apos;t sign up ({candidates.length})
+        {t("play.addSomeone", { count: candidates.length })}
       </summary>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {candidates.map((c) => (
@@ -250,13 +263,14 @@ export function RemovePlayerButton({
   sessionId: string;
   playerId: string;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   return (
     <button
       type="button"
       disabled={pending}
       onClick={() => start(() => void removePlayerAction(sessionId, playerId))}
-      aria-label="Remove from session"
+      aria-label={t("play.removeFromSession")}
       className="shrink-0 px-1 text-xs text-[var(--muted)] disabled:opacity-50"
     >
       ✕
@@ -278,6 +292,7 @@ export function StartSessionButton({
   sessionId: string;
   attendingCount: number;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const tooFew = attendingCount < 4;
 
@@ -289,18 +304,17 @@ export function StartSessionButton({
         onClick={() => start(() => void startSessionAction(sessionId))}
         className="btn-primary disabled:opacity-40"
       >
-        {pending ? "Starting…" : "Start session"}
+        {pending ? t("play.starting") : t("play.start")}
       </button>
       <p className="hint">
-        {tooFew
-          ? "Mark at least 4 players present to start."
-          : "Locks the details and lets you build the matches. You can undo this until the first round exists."}
+        {tooFew ? t("play.tooFewToStart") : t("play.startHint")}
       </p>
     </div>
   );
 }
 
 export function ReopenSessionButton({ sessionId }: { sessionId: string }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -315,13 +329,13 @@ export function ReopenSessionButton({ sessionId }: { sessionId: string }) {
               await reopenSessionAction(sessionId);
               setError(null);
             } catch (e) {
-              setError(e instanceof Error ? e.message : "Couldn't reopen.");
+              setError(e instanceof Error ? e.message : t("play.reopenFailed"));
             }
           })
         }
         className="btn-ghost text-sm text-[var(--muted)]"
       >
-        {pending ? "…" : "Back to setup"}
+        {pending ? "…" : t("play.backToSetup")}
       </button>
       {error ? (
         <p role="alert" className="hint text-[var(--danger)]">
@@ -347,6 +361,7 @@ export function EndSessionButton({
   unscored: number;
   className?: string;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const [armed, setArmed] = useState(false);
 
@@ -357,26 +372,22 @@ export function EndSessionButton({
         onClick={() => setArmed(true)}
         className={`btn-accent ${className}`}
       >
-        End session
+        {t("play.end")}
       </button>
     );
   }
 
   return (
     <div className={`card ${className}`}>
-      <p className="font-semibold">End this session?</p>
+      <p className="font-semibold">{t("play.endTitle")}</p>
       {unscored > 0 ? (
         <p className="mt-1 text-sm font-medium text-[var(--danger)]">
-          {unscored} match{unscored === 1 ? " has" : "es have"} no score yet. Ending now
-          leaves {unscored === 1 ? "it" : "them"}{" "}
-          unrecorded and out of everyone&apos;s rating.
+          {t.plural("play.endUnscoredWarn", unscored, { count: unscored })}
         </p>
       ) : (
-        <p className="hint">
-          Every match is scored. Results and ratings stay exactly as they are.
-        </p>
+        <p className="hint">{t("play.endAllScored")}</p>
       )}
-      <p className="hint">No more scores can be entered afterwards.</p>
+      <p className="hint">{t("play.endFinal")}</p>
 
       <div className="mt-3 flex gap-2">
         <button
@@ -385,7 +396,7 @@ export function EndSessionButton({
           onClick={() => setArmed(false)}
           className="btn-ghost flex-1"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           type="button"
@@ -394,7 +405,7 @@ export function EndSessionButton({
           className="flex-1 rounded-full bg-[var(--danger)] px-4 py-3 text-base font-semibold
             text-white disabled:opacity-50"
         >
-          {pending ? "Ending…" : "End it"}
+          {pending ? t("play.ending") : t("play.endConfirm")}
         </button>
       </div>
     </div>

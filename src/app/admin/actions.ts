@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth/permissions";
 import { hashPin, validatePin } from "@/lib/auth/pin";
+import { getT } from "@/lib/i18n/server";
 import { canAdjustRating } from "@/lib/auth/policy";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/types";
@@ -39,15 +40,16 @@ export async function rotateInviteCodeAction(): Promise<void> {
  */
 export async function setRoleAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const me = await requireSuperAdmin();
+  const t = await getT(me.locale);
 
   const targetId = String(formData.get("playerId") ?? "");
   const nextRole = String(formData.get("role") ?? "");
 
   if (nextRole !== "player" && nextRole !== "admin") {
-    return { error: "Role must be player or admin." };
+    return { error: t("err.badRole") };
   }
   if (targetId === me.id) {
-    return { error: "You can't change your own role." };
+    return { error: t("err.ownRole") };
   }
 
   const db = getDb();
@@ -58,12 +60,12 @@ export async function setRoleAction(_prev: FormState, formData: FormData): Promi
     .limit(1);
 
   const target = rows[0];
-  if (!target) return { error: "That player no longer exists." };
+  if (!target) return { error: t("err.playerGone") };
 
   // There is exactly one superadmin and no UI creates another. Guard anyway, so
   // a crafted request can't demote the owner and orphan the group.
   if (target.role === "superadmin") {
-    return { error: "The super admin's role can't be changed here." };
+    return { error: t("err.superadminRole") };
   }
   if (target.role === nextRole) return {};
 
@@ -101,6 +103,7 @@ export async function adjustRatingAction(
   formData: FormData,
 ): Promise<FormState> {
   const me = await requireAdmin();
+  const t = await getT(me.locale);
 
   const targetId = String(formData.get("playerId") ?? "");
   const rating = Number(String(formData.get("rating") ?? ""));
@@ -108,10 +111,13 @@ export async function adjustRatingAction(
   const note = String(formData.get("note") ?? "").trim();
 
   if (!Number.isFinite(rating) || rating < RATING.MIN || rating > RATING.MAX) {
-    return { error: `Rating must be between ${RATING.MIN} and ${RATING.MAX}.`, field: "rating" };
+    return {
+      error: t("err.ratingRange", { min: RATING.MIN, max: RATING.MAX }),
+      field: "rating",
+    };
   }
   if (!Number.isFinite(reliability) || reliability < 0 || reliability > 100) {
-    return { error: "Reliability must be between 0 and 100.", field: "reliability" };
+    return { error: t("err.reliabilityRange"), field: "reliability" };
   }
 
   const db = getDb();
@@ -122,15 +128,15 @@ export async function adjustRatingAction(
     .limit(1);
 
   const target = rows[0];
-  if (!target) return { error: "That player no longer exists." };
+  if (!target) return { error: t("err.playerGone") };
 
   // Being an admin is not permission to rewrite another admin's rating.
   if (!canAdjustRating(me, { id: target.id, role: target.role })) {
     return {
       error:
         target.role === "superadmin"
-          ? "The super admin's rating can't be changed here."
-          : "Only the super admin can change another admin's rating.",
+          ? t("err.superadminRating")
+          : t("err.adminRatingNeedsSuper"),
     };
   }
 
@@ -173,12 +179,13 @@ export async function adjustRatingAction(
  */
 export async function resetPinAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const me = await requireAdmin();
+  const t = await getT(me.locale);
 
   const targetId = String(formData.get("playerId") ?? "");
   const pin = String(formData.get("pin") ?? "").trim();
 
   const valid = validatePin(pin);
-  if (!valid.ok) return { error: valid.error, field: "pin" };
+  if (!valid.ok) return { error: t(valid.error), field: "pin" };
 
   const db = getDb();
   const rows = await db
@@ -188,13 +195,13 @@ export async function resetPinAction(_prev: FormState, formData: FormData): Prom
     .limit(1);
 
   const target = rows[0];
-  if (!target) return { error: "That player no longer exists." };
+  if (!target) return { error: t("err.playerGone") };
 
   if (target.role === "superadmin") {
-    return { error: "The super admin's PIN can't be reset here." };
+    return { error: t("err.superadminPin") };
   }
   if (target.role === "admin" && me.role !== "superadmin") {
-    return { error: "Only the super admin can reset another admin's PIN." };
+    return { error: t("err.adminPinNeedsSuper") };
   }
 
   await db.update(players).set({ pinHash: await hashPin(pin) }).where(eq(players.id, targetId));

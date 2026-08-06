@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getT } from "@/lib/i18n/server";
 
 /** Only same-site paths; a `from` value off a URL is otherwise a redirect hole. */
 export function safeFrom(value: string | undefined, fallback: string): string {
@@ -17,8 +18,8 @@ export function safeFrom(value: string | undefined, fallback: string): string {
  * from a shared link, which is exactly the entry point most likely to be
  * someone's first visit.
  */
-export default function TopBar({
-  title = "PicklePlay",
+export default async function TopBar({
+  title,
   back,
   action,
 }: {
@@ -26,20 +27,21 @@ export default function TopBar({
   back?: string;
   action?: React.ReactNode;
 }) {
+  const t = await getT();
   return (
     <header className="sticky top-0 z-20 bg-[var(--surface)]">
       <div className="relative mx-auto flex h-12 w-full max-w-md items-center justify-center px-4">
         {back ? (
           <Link
             href={back}
-            aria-label="Back"
+            aria-label={t("common.back")}
             className="absolute left-2 flex size-9 items-center justify-center text-xl
               active:opacity-60"
           >
             ‹
           </Link>
         ) : null}
-        <h1 className="truncate text-base font-semibold">{title}</h1>
+        <h1 className="truncate text-base font-semibold">{title ?? t("app.name")}</h1>
         {action ? <div className="absolute right-3">{action}</div> : null}
       </div>
     </header>

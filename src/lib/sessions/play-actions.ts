@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
 import { createNextRound } from "@/lib/matchmaking/service";
 import { requireOrganizer, requireScorer } from "./guards";
+import { getT } from "@/lib/i18n/server";
 import { recomputeAll } from "@/lib/rating/service";
 
 /**
@@ -42,6 +43,7 @@ export async function startSessionAction(sessionId: string): Promise<void> {
  * night in progress.
  */
 export async function reopenSessionAction(sessionId: string): Promise<void> {
+  const t = await getT();
   await requireOrganizer(sessionId);
   const db = getDb();
 
@@ -52,7 +54,7 @@ export async function reopenSessionAction(sessionId: string): Promise<void> {
     .limit(1);
 
   if (existing.length > 0) {
-    throw new Error("Matches have been created. Discard them before reopening.");
+    throw new Error(t("err.matchesExist"));
   }
 
   await db
@@ -67,6 +69,7 @@ export async function reopenSessionAction(sessionId: string): Promise<void> {
 
 /** Matches only exist once play has started. */
 async function requireLive(sessionId: string): Promise<void> {
+  const t = await getT();
   const found = await getDb()
     .select({ status: sessions.status })
     .from(sessions)
@@ -74,7 +77,7 @@ async function requireLive(sessionId: string): Promise<void> {
     .limit(1);
 
   if (found[0]?.status !== "live") {
-    throw new Error("Start the session before creating matches.");
+    throw new Error(t("err.startFirst"));
   }
 }
 
@@ -186,6 +189,7 @@ export async function deleteSessionAction(sessionId: string): Promise<void> {
 
 /** Throw away a round that hasn't been played — regenerating is one tap. */
 export async function discardRoundAction(sessionId: string, roundId: string): Promise<void> {
+  const t = await getT();
   await requireOrganizer(sessionId);
   const db = getDb();
 
@@ -196,7 +200,7 @@ export async function discardRoundAction(sessionId: string, roundId: string): Pr
     .limit(1);
 
   if (played.length > 0) {
-    throw new Error("That round already has scores. Void the matches instead.");
+    throw new Error(t("err.roundScored"));
   }
 
   await db.delete(matches).where(eq(matches.roundId, roundId));
@@ -217,6 +221,7 @@ export async function saveScoreAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
+  const t = await getT();
   const db = getDb();
 
   const matchId = String(formData.get("matchId") ?? "");
@@ -231,14 +236,14 @@ export async function saveScoreAction(
   try {
     ({ me, sessionId } = await requireScorer(matchId));
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Not authorized." };
+    return { error: error instanceof Error ? error.message : t("err.notAuthorized") };
   }
 
   if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0) {
-    return { error: "Scores must be whole numbers." };
+    return { error: t("schedule.error.whole") };
   }
-  if (scoreA === scoreB) return { error: "Pickleball has no ties." };
-  if (scoreA > 99 || scoreB > 99) return { error: "That score looks wrong." };
+  if (scoreA === scoreB) return { error: t("schedule.error.tie") };
+  if (scoreA > 99 || scoreB > 99) return { error: t("schedule.error.range") };
 
   await db
     .update(matches)

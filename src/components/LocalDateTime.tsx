@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { useT } from "@/lib/i18n/client";
 
 /** Never changes — we only care about server snapshot vs. client snapshot. */
 const subscribe = () => () => {};
@@ -22,6 +23,9 @@ export default function LocalDateTime({
   iso: string;
   withWeekday?: boolean;
 }) {
+  // Not the browser's locale: someone reading the app in Chinese on an
+  // en-US phone should get Chinese dates too.
+  const t = useT();
   const hydrated = useSyncExternalStore(
     subscribe,
     () => true,
@@ -44,7 +48,7 @@ export default function LocalDateTime({
    * and React updates it. It also makes the server output deterministic
    * instead of depending on the server's own timezone.
    */
-  const text = new Date(iso).toLocaleString(undefined, {
+  const text = new Date(iso).toLocaleString(t.locale, {
     weekday: withWeekday ? "short" : undefined,
     month: "short",
     day: "numeric",

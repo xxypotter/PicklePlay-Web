@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n/client";
 
 export default function ShareLink({ url, title }: { url: string; title: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   async function share() {
@@ -31,7 +33,7 @@ export default function ShareLink({ url, title }: { url: string; title: string }
       onClick={share}
       className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-medium"
     >
-      {copied ? "Link copied!" : "Share this session"}
+      {copied ? t("session.linkCopied") : t("session.share")}
     </button>
   );
 }

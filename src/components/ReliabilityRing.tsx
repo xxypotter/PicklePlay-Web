@@ -9,6 +9,8 @@
  * Colour carries the same message as the `?` elsewhere, so the two agree: amber
  * and red while it is still filling, green once it passes the 60% mark.
  */
+import { getT } from "@/lib/i18n/server";
+
 const PASS = 0.6;
 
 function colourFor(value: number): string {
@@ -17,14 +19,17 @@ function colourFor(value: number): string {
   return "var(--danger)";
 }
 
-export default function ReliabilityRing({
+export default async function ReliabilityRing({
   value,
   size = 48,
+  locale,
 }: {
   /** 0–1. */
   value: number;
   size?: number;
+  locale?: string | null;
 }) {
+  const t = await getT(locale);
   const v = Math.min(1, Math.max(0, value));
   const pct = Math.round(v * 100);
 
@@ -38,7 +43,7 @@ export default function ReliabilityRing({
       className="relative inline-flex shrink-0 items-center justify-center"
       style={{ width: size, height: size }}
       role="img"
-      aria-label={`Reliability ${pct} percent`}
+      aria-label={t("common.reliabilityAria", { percent: pct })}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         {/* The unfilled remainder, so the ring reads as a proportion. */}

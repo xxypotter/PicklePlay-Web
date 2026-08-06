@@ -7,13 +7,18 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { matches, sessions, signups } from "@/lib/db/schema";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/translate";
 
-export const metadata = { title: "Sessions · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
+
+export const generateMetadata = titleFor("sessions.title");
 
 export default async function SessionsPage() {
   const me = await getCurrentPlayer();
   if (!me) redirect("/login");
 
+  const t = await getT(me.locale);
   const db = getDb();
   await closeStaleSessions();
 
@@ -65,30 +70,51 @@ export default async function SessionsPage() {
 
   return (
     <>
-      <TopBar title="My sessions" back="/me" />
+      <TopBar title={t("sessions.title")} back="/me" />
       <main className="screen pt-4">
-        <Group title="Upcoming & in progress" rows={mineUpcoming} matchesBy={matchesBy} mine>
+        <Group
+          title={
+            mineUpcoming.length > 0
+              ? t("sessions.count", {
+                  title: t("sessions.upcoming"),
+                  count: mineUpcoming.length,
+                })
+              : t("sessions.upcoming")
+          }
+          rows={mineUpcoming}
+          matchesBy={matchesBy}
+          t={t}
+          mine
+        >
           {otherUpcoming > 0 ? (
             <p className="card text-sm text-[var(--muted)]">
-              You&apos;re not in any upcoming session.{" "}
+              {t("sessions.notIn")}{" "}
               <Link href="/" className="font-medium text-[var(--accent)] underline">
-                {otherUpcoming} open on Home
+                {t("sessions.openOnHome", { count: otherUpcoming })}
               </Link>
-              .
             </p>
           ) : (
-            <p className="card text-sm text-[var(--muted)]">Nothing scheduled.</p>
+            <p className="card text-sm text-[var(--muted)]">{t("home.empty.upcoming")}</p>
           )}
         </Group>
 
-        <Group title="My past sessions" rows={minePast} matchesBy={matchesBy} mine>
-          <p className="card text-sm text-[var(--muted)]">
-            None yet. Sessions you played land here once they finish.
-          </p>
+        <Group
+          title={t("sessions.mine", { count: minePast.length })}
+          rows={minePast}
+          matchesBy={matchesBy}
+          t={t}
+          mine
+        >
+          <p className="card text-sm text-[var(--muted)]">{t("sessions.noneYet")}</p>
         </Group>
 
-        <Group title="Other past sessions" rows={otherPast} matchesBy={matchesBy}>
-          <p className="card text-sm text-[var(--muted)]">Nothing else in the archive.</p>
+        <Group
+          title={t("sessions.others", { count: otherPast.length })}
+          rows={otherPast}
+          matchesBy={matchesBy}
+          t={t}
+        >
+          <p className="card text-sm text-[var(--muted)]">{t("sessions.archiveEmpty")}</p>
         </Group>
       </main>
     </>
@@ -108,21 +134,20 @@ function Group({
   title,
   rows,
   matchesBy,
+  t,
   mine = false,
   children,
 }: {
   title: string;
   rows: Row[];
   matchesBy: Map<string | null, number>;
+  t: T;
   mine?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <section className="mb-7">
-      <h2 className="mb-2 px-1 text-sm text-[var(--muted)]">
-        {title}
-        {rows.length > 0 ? ` (${rows.length})` : ""}
-      </h2>
+      <h2 className="mb-2 px-1 text-sm text-[var(--muted)]">{title}</h2>
 
       {rows.length === 0 ? (
         children
@@ -140,7 +165,7 @@ function Group({
                     <span className="truncate font-semibold">{s.title}</span>
                     {mine ? (
                       <span className="shrink-0 text-xs font-semibold text-[var(--accent)]">
-                        {s.status === "closed" ? "Played" : "You're in"}
+                        {s.status === "closed" ? t("card.played") : t("card.youreIn")}
                       </span>
                     ) : null}
                   </div>
@@ -149,9 +174,11 @@ function Group({
                     {s.location ? ` · ${s.location}` : ""}
                   </p>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    {played > 0 ? `${played} match${played === 1 ? "" : "es"}` : "No matches"}
-                    {s.status === "live" ? " · in progress" : ""}
-                    {!s.rated ? " · casual" : ""}
+                    {played > 0
+                      ? t.plural("card.matches", played, { count: played })
+                      : t("card.noMatches")}
+                    {s.status === "live" ? ` · ${t("card.inProgress")}` : ""}
+                    {!s.rated ? t("card.casual") : ""}
                   </p>
                 </Link>
               </li>

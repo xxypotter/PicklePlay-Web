@@ -7,6 +7,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
 import { getAttending } from "@/lib/matchmaking/service";
+import { getT } from "@/lib/i18n/server";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import MatchCard from "../MatchCard";
 import Standings from "../Standings";
@@ -21,7 +22,9 @@ import {
   StartSessionButton,
 } from "./PlayControls";
 
-export const metadata = { title: "Run session · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
+
+export const generateMetadata = titleFor("play.title");
 
 export default async function PlayPage({
   params,
@@ -36,6 +39,7 @@ export default async function PlayPage({
   const me = await getCurrentPlayer();
   if (!me) notFound();
 
+  const t = await getT(me.locale);
   const db = getDb();
   const found = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const session = found[0];
@@ -57,7 +61,7 @@ export default async function PlayPage({
       .innerJoin(players, eq(players.id, signups.playerId))
       .where(and(eq(signups.sessionId, id), eq(signups.state, "in")))
       .orderBy(asc(players.username)),
-    getAllRounds(id, session.courtNames),
+    getAllRounds(id, session.courtNames, me.locale),
     getSessionStandings(id),
     getAttending(id),
   ]);
@@ -84,23 +88,23 @@ export default async function PlayPage({
   return (
     <>
       <TopBar
-        title="Run session"
+        title={t("play.title")}
         back={backTo}
         action={
           <Link
             href={`/s/${id}?from=${encodeURIComponent(here)}`}
             className="text-sm text-[var(--link)]"
           >
-            Player view
+            {t("play.playerView")}
           </Link>
         }
       />
       <main className="screen pt-4">
       <section className="card">
         <h2 className="text-sm font-medium text-[var(--muted)]">
-          Who&apos;s here ({attendingCount}/{roster.length})
+          {t("play.whosHere", { here: attendingCount, total: roster.length })}
         </h2>
-        <p className="hint">Tap anyone who didn&apos;t show up.</p>
+        <p className="hint">{t("play.whosHereHint")}</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {roster.map((r) => (
             <AttendanceToggle
@@ -132,7 +136,7 @@ export default async function PlayPage({
               href={`/s/${id}/edit?from=${encodeURIComponent(here)}`}
               className="btn-ghost mt-2 block text-center text-sm"
             >
-              Edit session details
+              {t("play.editDetails")}
             </Link>
           </>
         ) : session.status === "live" ? (
@@ -147,23 +151,25 @@ export default async function PlayPage({
             {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
           </>
         ) : (
-          <p className="hint mt-4">
-            This session is finished. Scores can still be corrected below.
-          </p>
+          <p className="hint mt-4">{t("play.closedNote")}</p>
         )}
 
         <p className="hint">
-          Court{session.courtNames.length === 1 ? "" : "s"} {session.courtNames.join(", ")} ·
-          seats {session.courtNames.length * 4}
+          {t("play.seats", {
+            names: session.courtNames.join(", "),
+            seats: session.courtNames.length * 4,
+          })}
           {attendingCount > session.courtNames.length * 4
-            ? ` · ${attendingCount - session.courtNames.length * 4} sit out each round`
+            ? t("play.sitOut", {
+                count: attendingCount - session.courtNames.length * 4,
+              })
             : ""}
         </p>
       </section>
 
       {allRounds.length === 0 ? (
         <p className="mt-6 text-center text-sm text-[var(--muted)]">
-          No matches yet. Confirm who&apos;s here, then create them all at once.
+          {t("play.noMatchesYet")}
         </p>
       ) : (
         <section className="mt-6 flex flex-col gap-6">
@@ -178,7 +184,9 @@ export default async function PlayPage({
             return (
               <div key={round.id}>
                 <div className="mb-2 flex items-baseline justify-between">
-                  <h2 className="text-lg font-semibold">Round {round.index}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {t("play.roundHeading", { index: round.index })}
+                  </h2>
                   {unplayed && round.index === allRounds.length ? (
                     <DiscardRoundButton sessionId={id} roundId={round.id} />
                   ) : null}
@@ -192,7 +200,9 @@ export default async function PlayPage({
 
                 {sittingOut.length > 0 ? (
                   <p className="mt-2 text-sm text-[var(--muted)]">
-                    Sitting out: {sittingOut.map((p) => p.username).join(", ")}
+                    {t("schedule.sittingOut", {
+                      names: sittingOut.map((p) => p.username).join(", "),
+                    })}
                   </p>
                 ) : null}
               </div>
@@ -201,7 +211,7 @@ export default async function PlayPage({
         </section>
       )}
 
-      <Standings rows={standings} meId={me.id} backHere={here} />
+      <Standings rows={standings} meId={me.id} backHere={here} locale={me.locale} />
 
       {session.status === "live" ? (
         <EndSessionButton sessionId={id} unscored={unscored} />

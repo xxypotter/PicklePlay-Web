@@ -8,9 +8,12 @@
 export default function PaddleIcon({
   className = "",
   size = 24,
+  /** Accessible name. Passed in so this stays usable from any tree. */
+  label = "Pickleball",
 }: {
   className?: string;
   size?: number;
+  label?: string;
 }) {
   return (
     <svg
@@ -20,7 +23,7 @@ export default function PaddleIcon({
       className={className}
       fill="none"
       role="img"
-      aria-label="Pickleball"
+      aria-label={label}
     >
       {/* Paddle face: tall rounded rectangle, tilted like a held paddle. */}
       <g transform="rotate(-20 13 14)">

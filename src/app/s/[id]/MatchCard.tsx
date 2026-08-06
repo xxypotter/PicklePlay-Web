@@ -3,6 +3,8 @@
 import { useActionState, useState, useTransition } from "react";
 import Avatar from "@/components/Avatar";
 import type { FormState } from "@/lib/auth/types";
+import { useT } from "@/lib/i18n/client";
+import type { T } from "@/lib/i18n/translate";
 import type { RoundPlayer } from "@/lib/sessions/queries";
 import { saveScoreAction, voidMatchAction } from "@/lib/sessions/play-actions";
 
@@ -45,6 +47,7 @@ export default function MatchCard({
   canVoid?: boolean;
   highlight?: boolean;
 }) {
+  const t = useT();
   const [state, action, pending] = useActionState(saveScoreAction, {} as FormState);
   const [voiding, startVoid] = useTransition();
   const [a, setA] = useState(String(match.scoreA ?? 0));
@@ -74,7 +77,7 @@ export default function MatchCard({
       <div className="flex items-baseline justify-between">
         <h3 className="text-base font-bold">{match.courtLabel}</h3>
         {match.completed ? (
-          <span className="text-xs font-semibold text-[var(--accent)]">Recorded</span>
+          <span className="text-xs font-semibold text-[var(--accent)]">{t("schedule.recorded")}</span>
         ) : null}
       </div>
 
@@ -92,6 +95,7 @@ export default function MatchCard({
             onChange={(v) => side.set(clampText(v))}
             onStep={(d) => side.set((prev) => stepFrom(prev, d))}
             highlight={mine(side.players)}
+            t={t}
           />
         ))}
       </div>
@@ -107,14 +111,18 @@ export default function MatchCard({
         disabled={pending || !bothEntered || tied}
         className="btn-primary mt-4 disabled:opacity-40"
       >
-        {pending ? "Saving…" : match.completed ? "Update score" : "Save score"}
+        {pending
+          ? t("common.saving")
+          : match.completed
+            ? t("schedule.updateScore")
+            : t("schedule.saveScore")}
       </button>
 
       {/* Only once someone has actually scored — 0–0 is a fresh card, not a tie. */}
       {tied && na > 0 ? (
-        <p className="hint text-center">Pickleball has no ties.</p>
+        <p className="hint text-center">{t("schedule.error.tie")}</p>
       ) : !bothEntered ? (
-        <p className="hint text-center">Enter both scores.</p>
+        <p className="hint text-center">{t("schedule.error.bothScores")}</p>
       ) : null}
 
       {canVoid && match.completed ? (
@@ -125,7 +133,7 @@ export default function MatchCard({
           className="mt-3 w-full text-xs font-semibold text-[var(--muted)] underline
             disabled:opacity-50"
         >
-          {voiding ? "Voiding…" : "Void this match"}
+          {voiding ? t("schedule.voiding") : t("schedule.void")}
         </button>
       ) : null}
     </form>
@@ -139,6 +147,7 @@ function Side({
   onChange,
   onStep,
   highlight,
+  t,
 }: {
   players: RoundPlayer[];
   meId?: string;
@@ -146,8 +155,10 @@ function Side({
   onChange: (value: string) => void;
   onStep: (delta: number) => void;
   highlight: boolean;
+  t: T;
 }) {
-  const label = players.map((p) => (p.id === meId ? "You" : p.username)).join(" & ");
+  const names = players.map((p) => (p.id === meId ? t("common.you") : p.username));
+  const label = t("schedule.teamJoin", { a: names[0] ?? "", b: names[1] ?? "" });
 
   return (
     <div className="flex items-center gap-2">
@@ -174,13 +185,13 @@ function Side({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        <Step label="−" onClick={() => onStep(-1)} />
+        <Step label="−" onClick={() => onStep(-1)} t={t} />
         {/* Tappable and typeable: eleven taps to record an 11 is absurd. */}
         <input
           type="text"
           inputMode="numeric"
           autoComplete="off"
-          aria-label={`Score for ${label}`}
+          aria-label={t("schedule.scoreFor", { team: label })}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={(e) => e.target.select()}
@@ -188,18 +199,18 @@ function Side({
             text-center font-mono text-xl font-bold tabular-nums outline-none
             focus:border-[var(--accent)]"
         />
-        <Step label="+" onClick={() => onStep(1)} />
+        <Step label="+" onClick={() => onStep(1)} t={t} />
       </div>
     </div>
   );
 }
 
-function Step({ label, onClick }: { label: string; onClick: () => void }) {
+function Step({ label, onClick, t }: { label: string; onClick: () => void; t: T }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={label === "+" ? "Increase" : "Decrease"}
+      aria-label={label === "+" ? t("schedule.increase") : t("schedule.decrease")}
       className="size-11 shrink-0 rounded-xl border border-[var(--border)] text-xl font-semibold
         active:bg-[var(--accent-soft)]"
     >

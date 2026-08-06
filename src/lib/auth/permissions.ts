@@ -9,6 +9,7 @@
  * This module reaches into the session and therefore cannot be imported from a
  * client component. Import from ./policy for the pure predicates.
  */
+import { getT } from "@/lib/i18n/server";
 import { getCurrentPlayer, type CurrentPlayer } from "./session";
 import { isAtLeast, PermissionError } from "./policy";
 import type { Role } from "./types";
@@ -17,7 +18,7 @@ export * from "./policy";
 
 export async function requireLogin(): Promise<CurrentPlayer> {
   const me = await getCurrentPlayer();
-  if (!me) throw new PermissionError("You need to be logged in.");
+  if (!me) throw new PermissionError((await getT())("err.needLogin"));
   return me;
 }
 

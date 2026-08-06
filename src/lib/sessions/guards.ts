@@ -22,6 +22,7 @@ import {
 } from "@/lib/auth/policy";
 import { getDb } from "@/lib/db";
 import { matches, sessions } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
 
 /** The ownership and status of a session, or null if it's gone. */
 export async function loadSessionScope(sessionId: string): Promise<SessionScope | null> {
@@ -44,11 +45,12 @@ export async function requireOrganizer(
   sessionId: string,
 ): Promise<{ me: Actor; session: SessionScope }> {
   const me = await requireLogin();
+  const t = await getT(me.locale);
   const session = await loadSessionScope(sessionId);
 
-  if (!session) throw new Error("That session no longer exists.");
+  if (!session) throw new Error(t("err.sessionGone"));
   if (!canOrganizeSession(me, session)) {
-    throw new PermissionError("Only the organizer of this session can change it.");
+    throw new PermissionError(t("err.notOrganizer"));
   }
 
   return { me, session };
@@ -71,6 +73,7 @@ export async function requireScorer(
   sessionId: string | null;
 }> {
   const me = await requireLogin();
+  const t = await getT(me.locale);
   const db = getDb();
 
   const found = await db
@@ -86,7 +89,7 @@ export async function requireScorer(
     .limit(1);
 
   const match = found[0];
-  if (!match) throw new Error("That match no longer exists.");
+  if (!match) throw new Error(t("err.matchGone"));
 
   // A match with no session can't be closed, so treat it as open play.
   const scope: SessionScope = match.sessionId
@@ -99,8 +102,8 @@ export async function requireScorer(
   if (!canScoreMatch(me, scope, playedInIt)) {
     throw new PermissionError(
       scope.status === "closed"
-        ? "This session is finished — only its organizer can change a score now."
-        : "Only players in this match can record it.",
+        ? t("schedule.error.closed")
+        : t("schedule.error.notYours"),
     );
   }
 

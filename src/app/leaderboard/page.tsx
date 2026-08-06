@@ -6,8 +6,12 @@ import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/translate";
 
-export const metadata = { title: "Rankings · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
+
+export const generateMetadata = titleFor("rank.title");
 
 type TabKey = "all" | "male" | "female";
 
@@ -49,6 +53,8 @@ export default async function LeaderboardPage({
    * picked it stays out of every ranking table, which is the promise the
    * signup and profile copy makes.
    */
+  const t = await getT(me?.locale);
+
   const listed = all.filter((r) => r.gender !== "unspecified");
   const rows = active === "all" ? listed : listed.filter((r) => r.gender === active);
   const meOptedOut = !!me && all.some((r) => r.id === me.id && r.gender === "unspecified");
@@ -83,41 +89,34 @@ export default async function LeaderboardPage({
 
   return (
     <>
-      <TopBar title="Rankings" back={backTo} />
+      <TopBar title={t("rank.title")} back={backTo} />
       <Tabs
         active={active}
         items={[
-          { key: "all", label: "All", href: here("all") },
-          { key: "male", label: "Boy", href: here("male") },
-          { key: "female", label: "Girl", href: here("female") },
+          { key: "all", label: t("rank.tab.all"), href: here("all") },
+          { key: "male", label: t("rank.tab.male"), href: here("male") },
+          { key: "female", label: t("rank.tab.female"), href: here("female") },
         ]}
       />
 
       <main className="screen pt-4">
         {/* Explain the absence rather than letting them wonder where they went. */}
         {meOptedOut ? (
-          <p className="card mb-3 text-sm text-[var(--muted)]">
-            You&apos;ve chosen <span className="font-medium">Not listed</span>, so you
-            don&apos;t appear in these tables. Change it under Me.
-          </p>
+          <p className="card mb-3 text-sm text-[var(--muted)]">{t("rank.optedOut")}</p>
         ) : null}
 
         {rows.length === 0 ? (
           <div className="card py-12 text-center">
-            <p className="text-[var(--muted)]">Nobody in this list yet.</p>
-            <p className="hint">
-              Players choose their list under Me, or when they sign up.
-            </p>
+            <p className="text-[var(--muted)]">{t("rank.empty")}</p>
+            <p className="hint">{t("rank.emptyHint")}</p>
           </div>
         ) : (
           <>
-            <Table rows={rows} meId={me?.id} startRank={1} backHere={backHere} />
+            <Table rows={rows} meId={me?.id} startRank={1} backHere={backHere} t={t} />
 
             {rows.some((r) => r.provisional) ? (
               <p className="mt-3 px-1 text-xs text-[var(--muted)]">
-                <span className="font-mono font-semibold">?</span> means the
-                rating is still settling — not enough matches here yet for it to
-                be dependable. It clears after a full session or two.
+                {t("rank.questionMark")}
               </p>
             ) : null}
           </>
@@ -148,15 +147,17 @@ function Table({
   meId,
   startRank,
   backHere,
+  t,
 }: {
   rows: Row[];
   meId?: string;
   startRank?: number;
   backHere: string;
+  t: T;
 }) {
   if (rows.length === 0) {
     return (
-      <div className="card py-8 text-center text-sm text-[var(--muted)]">Nobody here yet.</div>
+      <div className="card py-8 text-center text-sm text-[var(--muted)]">{t("rank.empty")}</div>
     );
   }
 
@@ -192,9 +193,11 @@ function Table({
               <span className="block truncate font-medium">{r.username}</span>
               <p className="text-xs text-[var(--muted)]">
                 {matches === 0
-                  ? "No matches yet"
-                  : `${matches} played · ${rate}% won`}
-                {r.importedMatches > 0 ? ` · ${r.importedMatches} imported` : ""}
+                  ? t("rank.noMatches")
+                  : t("rank.summary", { played: matches, rate: rate ?? 0 })}
+                {r.importedMatches > 0
+                  ? t("rank.imported", { count: r.importedMatches })
+                  : ""}
               </p>
             </div>
 

@@ -5,29 +5,10 @@ import { createSessionAction } from "@/lib/sessions/actions";
 import type { FormState } from "@/lib/auth/types";
 import DateTimeField from "@/components/DateTimeField";
 import LocationField, { noteForVenue } from "@/components/LocationField";
+import { useT } from "@/lib/i18n/client";
 
-const FORMATS = [
-  {
-    key: "regular",
-    label: "Regular round robin",
-    hint: "Partner with everyone once before anyone repeats.",
-  },
-  {
-    key: "balanced",
-    label: "Balanced round robin",
-    hint: "Teams matched so both sides average a similar rating.",
-  },
-  {
-    key: "fixed",
-    label: "Fixed partners",
-    hint: "Pairs stay together all night; opponents rotate.",
-  },
-  {
-    key: "custom",
-    label: "Custom",
-    hint: "Rounds are still generated, but expect to rearrange courts yourself.",
-  },
-];
+/** Keys only — the labels and descriptions come from the dictionary. */
+const FORMAT_KEYS = ["regular", "balanced", "fixed", "custom"] as const;
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;
@@ -39,6 +20,7 @@ export interface PickablePlayer {
 }
 
 export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
+  const t = useT();
   const [state, action, pending] = useActionState(createSessionAction, {} as FormState);
   const [courts, setCourts] = useState("1, 2");
   const [format, setFormat] = useState("regular");
@@ -50,7 +32,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
      noteForVenue never touches anything the organizer typed themselves. */
   const changeLocation = (next: string) => {
     setLocation(next);
-    setNotes((current) => noteForVenue(next, current));
+    setNotes((current) => noteForVenue(next, current, t("form.locationKatyNote")));
   };
 
   /*
@@ -94,14 +76,14 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
     >
       <div>
         <label className="label" htmlFor="title">
-          Title
+          {t("form.title")}
         </label>
         <input
           id="title"
           name="title"
           className="field"
           maxLength={80}
-          defaultValue="Saturday Round Robin"
+          defaultValue={t("form.defaultTitle")}
           required
           autoFocus
         />
@@ -109,14 +91,14 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
 
       <div>
         <label className="label" htmlFor="location">
-          Location
+          {t("form.location")}
         </label>
         <LocationField name="location" value={location} onChange={changeLocation} />
       </div>
 
       <div>
         <label className="label" htmlFor="startsAtLocal">
-          Date &amp; time
+          {t("form.datetime")}
         </label>
         <DateTimeField id="startsAtLocal" name="startsAtLocal" />
         <input type="hidden" name="startsAt" />
@@ -124,7 +106,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
 
       <div>
         <label className="label" htmlFor="courtNames">
-          Which courts?
+          {t("form.courts")}
         </label>
         <input
           id="courtNames"
@@ -132,23 +114,23 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
           className="field"
           value={courts}
           onChange={(e) => setCourts(e.target.value)}
-          placeholder="3, 4"
+          placeholder={t("form.courtsPlaceholder")}
           required
         />
         <p className="hint">
-          Separate with commas — court numbers or names, whatever the venue calls
-          them. Up to {MAX_COURTS}. Players see these on their matchup.
+          {t("form.courtsHint", { max: MAX_COURTS })}
+          {t("form.courtsSeen")}
         </p>
         {courtCount > MAX_COURTS ? (
           <p className="mt-1 text-sm font-medium text-[var(--danger)]">
-            {MAX_COURTS} courts maximum.
+            {t("err.maxCourts", { max: MAX_COURTS })}
           </p>
         ) : null}
       </div>
 
       <div>
         <label className="label" htmlFor="maxPlayers">
-          Max players
+          {t("form.maxPlayers")}
         </label>
         <input
           id="maxPlayers"
@@ -163,13 +145,15 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
         />
         {maxPlayersText !== "" && !maxPlayersValid ? (
           <p className="mt-1.5 text-sm font-medium text-[var(--danger)]">
-            Pick a number between 4 and {seatCap}.
+            {t("form.maxPlayersBad", { cap: seatCap })}
           </p>
         ) : (
           <p className="hint">
-            Up to {PLAYERS_PER_COURT} per court, so {seatCap} for{" "}
-            {Math.min(MAX_COURTS, Math.max(1, courtCount))} court
-            {courtCount === 1 ? "" : "s"}. Anyone after that joins the waitlist.
+            {t("form.maxPlayersHint", {
+              perCourt: PLAYERS_PER_COURT,
+              total: seatCap,
+              courts: Math.min(MAX_COURTS, Math.max(1, courtCount)),
+            })}
           </p>
         )}
       </div>
@@ -177,16 +161,16 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
       {/* Format cards rather than a dropdown: the descriptions are the whole
           point, and a <select> hides them behind a tap. */}
       <div>
-        <span className="label">Format</span>
+        <span className="label">{t("form.formatLabel")}</span>
         <input type="hidden" name="format" value={format} />
         <div className="flex flex-col gap-2">
-          {FORMATS.map((f) => {
-            const on = f.key === format;
+          {FORMAT_KEYS.map((key) => {
+            const on = key === format;
             return (
               <button
-                key={f.key}
+                key={key}
                 type="button"
-                onClick={() => setFormat(f.key)}
+                onClick={() => setFormat(key)}
                 aria-pressed={on}
                 className={`rounded-xl border p-3 text-left transition ${
                   on
@@ -197,9 +181,11 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
                 <span
                   className={`block text-sm font-semibold ${on ? "text-[var(--accent)]" : ""}`}
                 >
-                  {f.label}
+                  {t(`format.short.${key}`)}
                 </span>
-                <span className="mt-0.5 block text-xs text-[var(--muted)]">{f.hint}</span>
+                <span className="mt-0.5 block text-xs text-[var(--muted)]">
+                  {t(`form.desc.${key}`)}
+                </span>
               </button>
             );
           })}
@@ -208,14 +194,14 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
 
       <div>
         <label className="label" htmlFor="notes">
-          Notes
+          {t("form.notes")}
         </label>
         <textarea
           id="notes"
           name="notes"
           className="field"
           rows={2}
-          placeholder="Bring a yellow ball, gate code 1234…"
+          placeholder={t("form.notesPlaceholder")}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
@@ -225,7 +211,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="label mb-0">
-              Who&apos;s playing ({invited.length}/{cap})
+              {t("form.whosPlaying", { count: invited.length, max: cap })}
             </span>
             <button
               type="button"
@@ -236,7 +222,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
               }
               className="text-xs font-semibold text-[var(--accent)] underline"
             >
-              {invited.length > 0 ? "Clear all" : "Select all"}
+              {invited.length > 0 ? t("form.clearAll") : t("form.selectAll")}
             </button>
           </div>
 
@@ -272,10 +258,10 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
 
           <p className="hint">
             {invited.length === 0
-              ? "Optional — leave empty and people RSVP themselves."
+              ? t("form.invitedHint")
               : atCap
-                ? `Full at ${cap}. Raise max players to add more.`
-                : `${invited.length} added and marked in. They can opt out themselves from the session page.`}
+                ? t("form.invitedFull", { cap })
+                : t("form.invitedAdded", { count: invited.length })}
           </p>
         </div>
       ) : null}
@@ -283,8 +269,8 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
       <label className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-4">
         <input type="checkbox" name="rated" defaultChecked className="size-5 accent-[var(--accent)]" />
         <span>
-          <span className="font-medium">Counts toward ratings</span>
-          <span className="hint block">Turn off for a casual event.</span>
+          <span className="font-medium">{t("form.rated")}</span>
+          <span className="hint block">{t("form.ratedHint")}</span>
         </span>
       </label>
 
@@ -295,7 +281,7 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
       ) : null}
 
       <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Creating…" : "Create session"}
+        {pending ? t("form.creating") : t("form.create")}
       </button>
     </form>
   );

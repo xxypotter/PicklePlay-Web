@@ -7,17 +7,23 @@ import TopBar from "@/components/TopBar";
 import { logoutAction } from "@/lib/auth/actions";
 import { isAtLeast } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
-import { ROLE_LABELS } from "@/lib/auth/types";
+import { getT } from "@/lib/i18n/server";
+import { getLocale } from "@/lib/i18n/server";
+import LanguageCard from "@/components/LanguageCard";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
 import { AvatarCard, GenderCard, ImportRecordCard } from "./ProfileCards";
 
-export const metadata = { title: "Me · PicklePlay" };
+import { titleFor } from "@/lib/i18n/metadata";
+
+export const generateMetadata = titleFor("me.title");
 
 export default async function MePage() {
   const me = await getCurrentPlayer();
   if (!me) redirect("/login");
 
+  const t = await getT(me.locale);
+  const locale = await getLocale(me.locale);
   const db = getDb();
   const [statsRow, profileRow] = await Promise.all([
     db.select().from(playerStats).where(eq(playerStats.playerId, me.id)).limit(1),
@@ -46,7 +52,7 @@ export default async function MePage() {
 
   return (
     <>
-      <TopBar title="PicklePlay" />
+      <TopBar title={t("app.name")} />
 
       <main className="screen pt-4">
         {/*
@@ -61,7 +67,7 @@ export default async function MePage() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-lg font-bold">{me.displayName ?? me.username}</p>
               <span className="mt-0.5 inline-block rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]">
-                {ROLE_LABELS[me.role]}
+                {t(`role.${me.role}` as const)}
               </span>
             </div>
             {/* A bare number beside a name doesn't say what it is. */}
@@ -70,27 +76,27 @@ export default async function MePage() {
                 {stats ? stats.rating.toFixed(3) : "—"}
                 {stats?.provisional ? <span className="text-xl">?</span> : null}
               </p>
-              <p className="text-[11px] text-[var(--muted)]">PicklePlay Rating</p>
+              <p className="text-[11px] text-[var(--muted)]">{t("common.rating")}</p>
             </div>
           </div>
 
           <div className="mt-4 grid grid-cols-4 items-end gap-2 border-t border-[var(--border)] pt-4 text-center">
             <div className="flex flex-col items-center gap-1">
-              <ReliabilityRing value={stats?.reliability ?? 0} size={44} />
-              <p className="text-[11px] text-[var(--muted)]">Reliability</p>
+              <ReliabilityRing value={stats?.reliability ?? 0} size={44} locale={me.locale} />
+              <p className="text-[11px] text-[var(--muted)]">{t("common.reliability")}</p>
             </div>
-            <Stat label="Played" value={String(careerMatches)} />
-            <Stat label="Won" value={String(careerWins)} />
-            <Stat label="Win rate" value={careerMatches > 0 ? `${winRate}%` : "—"} />
+            <Stat label={t("common.played")} value={String(careerMatches)} />
+            <Stat label={t("common.won")} value={String(careerWins)} />
+            <Stat label={t("common.winRate")} value={careerMatches > 0 ? `${winRate}%` : t("common.none")} />
           </div>
         </section>
 
         {/* Shortcut grid, as in the mini-program's profile tab. */}
         <section className="card mt-3">
           <div className="grid grid-cols-3 gap-y-5">
-            <Shortcut href={`/p/${me.username}/record?from=/me`} icon="📈" label="My record" />
-            <Shortcut href="/sessions" icon="📅" label="My sessions" />
-            <Shortcut href="/leaderboard?from=/me" icon="🏆" label="Rankings" />
+            <Shortcut href={`/p/${me.username}/record?from=/me`} icon="📈" label={t("me.myRecord")} />
+            <Shortcut href="/sessions" icon="📅" label={t("me.mySessions")} />
+            <Shortcut href="/leaderboard?from=/me" icon="🏆" label={t("me.rankings")} />
           </div>
         </section>
 
@@ -98,15 +104,16 @@ export default async function MePage() {
           <RowLink
             href={`/p/${me.username}?from=/me`}
             icon="⭐"
-            label="My rating"
-            hint="Details, history, update"
+            label={t("me.myRating")}
+            hint={t("me.myRatingHint")}
             last={!isAtLeast(me.role, "admin")}
           />
           {isAtLeast(me.role, "admin") ? (
-            <RowLink href="/admin" icon="🛠" label="Admin" hint="Invite code, players" last />
+            <RowLink href="/admin" icon="🛠" label={t("me.admin")} hint={t("me.adminHint")} last />
           ) : null}
         </section>
 
+        <LanguageCard current={locale} />
         <AvatarCard username={me.username} avatar={profile?.avatar ?? null} />
         <GenderCard gender={profile?.gender ?? "unspecified"} />
         <ImportRecordCard
@@ -118,7 +125,7 @@ export default async function MePage() {
 
         <form action={logoutAction} className="mt-6">
           <button type="submit" className="btn-ghost text-[var(--muted)]">
-            Log out
+            {t("me.logout")}
           </button>
         </form>
       </main>

@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction } from "@/lib/auth/actions";
 import type { FormState } from "@/lib/auth/types";
+import { useT } from "@/lib/i18n/client";
 
 const initial: FormState = {};
 
 export default function LoginForm({ next = "" }: { next?: string }) {
+  const t = useT();
   const [state, action, pending] = useActionState(loginAction, initial);
 
   return (
@@ -15,7 +17,7 @@ export default function LoginForm({ next = "" }: { next?: string }) {
       <input type="hidden" name="next" value={next} />
       <div>
         <label className="label" htmlFor="username">
-          Your name
+          {t("auth.usernameLogin")}
         </label>
         <input
           id="username"
@@ -32,7 +34,7 @@ export default function LoginForm({ next = "" }: { next?: string }) {
 
       <div>
         <label className="label" htmlFor="pin">
-          PIN
+          {t("auth.pin")}
         </label>
         <input
           id="pin"
@@ -55,16 +57,16 @@ export default function LoginForm({ next = "" }: { next?: string }) {
       ) : null}
 
       <button type="submit" className="btn-primary" disabled={pending}>
-        {pending ? "Checking…" : "Log in"}
+        {pending ? t("auth.checking") : t("auth.login")}
       </button>
 
       <p className="text-center text-sm text-[var(--muted)]">
-        New here?{" "}
+        {t("auth.needAccount")}{" "}
         <Link
           href={`/register${next ? `?next=${encodeURIComponent(next)}` : ""}`}
           className="font-medium text-[var(--accent)] underline"
         >
-          Create an account
+          {t("auth.register")}
         </Link>
       </p>
     </form>

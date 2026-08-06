@@ -6,12 +6,14 @@ import { requireLogin, requireSuperAdmin } from "@/lib/auth/permissions";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { auditLog, players, playerStats } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
 
 /** Roughly a 160px JPEG; anything larger means the client resize didn't run. */
 const MAX_AVATAR_BYTES = 80_000;
 
 export async function setAvatarAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const me = await requireLogin();
+  const t = await getT();
   const value = String(formData.get("avatar") ?? "").trim();
 
   if (value === "") {
@@ -20,11 +22,11 @@ export async function setAvatarAction(_prev: FormState, formData: FormData): Pro
     await getDb().update(players).set({ avatar: value }).where(eq(players.id, me.id));
   } else if (value.startsWith("data:image/")) {
     if (value.length > MAX_AVATAR_BYTES) {
-      return { error: "That image is too large. Try a smaller photo." };
+      return { error: t("err.imageTooLarge") };
     }
     await getDb().update(players).set({ avatar: value }).where(eq(players.id, me.id));
   } else {
-    return { error: "That doesn't look like an image." };
+    return { error: t("err.notAnImage") };
   }
 
   revalidatePath("/me");
@@ -34,10 +36,11 @@ export async function setAvatarAction(_prev: FormState, formData: FormData): Pro
 
 export async function setGenderAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const me = await requireLogin();
+  const t = await getT();
   const value = String(formData.get("gender") ?? "");
 
   if (value !== "male" && value !== "female" && value !== "unspecified") {
-    return { error: "Pick one of the options." };
+    return { error: t("err.pickOption") };
   }
 
   await getDb().update(players).set({ gender: value }).where(eq(players.id, me.id));
@@ -62,16 +65,17 @@ export async function importRecordAction(
   formData: FormData,
 ): Promise<FormState> {
   const me = await requireLogin();
+  const t = await getT();
   const db = getDb();
 
   const matches = Number(String(formData.get("matches") ?? ""));
   const winRate = Number(String(formData.get("winRate") ?? ""));
 
   if (!Number.isInteger(matches) || matches < 1 || matches > 10_000) {
-    return { error: "Matches must be a whole number between 1 and 10,000.", field: "matches" };
+    return { error: t("err.matchesRange"), field: "matches" };
   }
   if (!Number.isFinite(winRate) || winRate < 0 || winRate > 100) {
-    return { error: "Win rate must be between 0 and 100.", field: "winRate" };
+    return { error: t("err.winRateRange"), field: "winRate" };
   }
 
   const existing = await db
@@ -81,7 +85,7 @@ export async function importRecordAction(
     .limit(1);
 
   if (existing[0]?.importedAt) {
-    return { error: "You've already imported a record. Ask the owner if it needs fixing." };
+    return { error: t("err.alreadyImported") };
   }
 
   const stats = await db
@@ -91,7 +95,7 @@ export async function importRecordAction(
     .limit(1);
 
   if ((stats[0]?.localMatches ?? 0) > 0) {
-    return { error: "You've already played here, so your record is set from real results." };
+    return { error: t("err.alreadyPlayed") };
   }
 
   const wins = Math.round((matches * winRate) / 100);

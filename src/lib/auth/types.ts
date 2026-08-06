@@ -8,16 +8,10 @@
 
 export type Role = "player" | "admin" | "superadmin";
 
-/**
- * Display labels live here, not in permissions.ts, because client components
- * need them — and permissions.ts reaches into session.ts, which uses
- * next/headers and therefore cannot be pulled into a client bundle.
+/*
+ * The display labels used to live here. They're `role.player` and friends in
+ * the dictionary now, so a role reads in whatever language the viewer chose.
  */
-export const ROLE_LABELS: Record<Role, string> = {
-  player: "Player",
-  admin: "Admin",
-  superadmin: "Super admin",
-};
 
 export interface FormState {
   error?: string;

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import LocalDateTime from "@/components/LocalDateTime";
+import { useT } from "@/lib/i18n/client";
 
 interface BackupResult {
   ok?: boolean;
@@ -32,6 +33,7 @@ export default function BackupCard({
   /** Most recent successful run, or null if it has never completed. */
   lastBackup: { iso: string; automatic: boolean } | null;
 }) {
+  const t = useT();
   const [result, setResult] = useState<BackupResult | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -44,7 +46,7 @@ export default function BackupCard({
       });
       setResult((await res.json()) as BackupResult);
     } catch (e) {
-      setResult({ error: e instanceof Error ? e.message : "Request failed." });
+      setResult({ error: e instanceof Error ? e.message : t("admin.requestFailed") });
     } finally {
       setRunning(false);
     }
@@ -52,29 +54,27 @@ export default function BackupCard({
 
   return (
     <section className="card mt-5">
-      <h2 className="text-sm font-medium text-[var(--muted)]">Backup</h2>
+      <h2 className="text-sm font-medium text-[var(--muted)]">{t("admin.backup")}</h2>
 
       <p className="hint">
-        {configured
-          ? "Runs automatically every Monday, and commits players, matches, and rating history to your private repo."
-          : "Not switched on yet. Add BACKUP_GITHUB_REPO and BACKUP_GITHUB_TOKEN in Vercel, then redeploy."}
+        {configured ? t("admin.backupOn") : t("admin.backupOff")}
       </p>
 
       <p className="mt-2 text-sm">
         {lastBackup ? (
           <>
-            <span className="text-[var(--muted)]">Last backup </span>
+            <span className="text-[var(--muted)]">{t("admin.lastBackup")}</span>
             <span className="font-medium">
               <LocalDateTime iso={lastBackup.iso} />
             </span>
             <span className="text-[var(--muted)]">
-              {lastBackup.automatic ? " · automatic" : " · run by hand"}
+              {lastBackup.automatic
+                ? t("admin.lastBackupAuto")
+                : t("admin.lastBackupManual")}
             </span>
           </>
         ) : (
-          <span className="text-[var(--muted)]">
-            No backup has completed yet.
-          </span>
+          <span className="text-[var(--muted)]">{t("admin.neverBackedUp")}</span>
         )}
       </p>
 
@@ -87,7 +87,7 @@ export default function BackupCard({
           className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-sm
             font-semibold disabled:opacity-50"
         >
-          {running ? "…" : "Check setup"}
+          {running ? "…" : t("admin.checkSetup")}
         </button>
         <button
           type="button"
@@ -96,7 +96,7 @@ export default function BackupCard({
           className="flex-1 rounded-xl border border-[var(--border)] px-4 py-3 text-sm
             font-semibold disabled:opacity-50"
         >
-          {running ? "…" : "Back up now"}
+          {running ? "…" : t("admin.backupNow")}
         </button>
       </div>
 
@@ -104,45 +104,39 @@ export default function BackupCard({
         <div className="mt-3 text-sm">
           {result.stored ? (
             <p className="font-medium text-[var(--success)]">
-              Saved to {result.repo} · {result.path}
+              {t("admin.savedTo", { repo: result.repo ?? "", path: result.path ?? "" })}
             </p>
           ) : result.checkOnly ? (
             <>
               <p className="font-medium text-[var(--success)]">
-                {result.repo} is reachable and private.
+                {t("admin.checkOk", { repo: result.repo ?? "" })}
               </p>
               {/* "Nothing was written" read as a failure. Say what a check is. */}
-              <p className="hint">
-                That was a check, not a backup — it confirms the repo and token
-                work without saving anything. Use <strong>Back up now</strong> to
-                actually save a copy.
-              </p>
+              <p className="hint">{t("admin.checkOnlyNote")}</p>
             </>
           ) : (
             <>
               <p className="font-medium text-[var(--danger)]">
-                {result.hint ?? result.warning ?? result.error ?? "Nothing was uploaded."}
+                {result.hint ?? result.warning ?? result.error ?? t("admin.nothingUploaded")}
               </p>
               {result.detail ? (
-                <p className="hint break-all">GitHub said: {result.detail}</p>
+                <p className="hint break-all">
+                  {t("admin.githubSaid", { detail: result.detail })}
+                </p>
               ) : null}
             </>
           )}
           {result.counts ? (
             <p className="hint">
               {Object.entries(result.counts)
-                .map(([k, v]) => `${v} ${k}`)
+                .map(([k, v]) => t("admin.countEntry", { count: v, name: k }))
                 .join(" · ")}
             </p>
           ) : null}
         </div>
       ) : null}
 
-      <p className="hint mt-3">
-        PIN hashes are never exported. A 4–6 digit PIN is trivially crackable
-        offline, so restoring means admins reset PINs — ratings and match history
-        are the irreplaceable part.
-      </p>
+      <p className="hint mt-3">{t("admin.pinNote")}</p>
     </section>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useT } from "@/lib/i18n/client";
 import { rsvpAction } from "@/lib/sessions/actions";
 
 export type MyState = "in" | "waitlist" | "out";
@@ -16,6 +17,7 @@ export default function RsvpButtons({
   full: boolean;
   addedByOrganizer?: boolean;
 }) {
+  const t = useT();
   const [pending, start] = useTransition();
   const go = (going: boolean) => start(() => void rsvpAction(sessionId, going));
 
@@ -27,7 +29,7 @@ export default function RsvpButtons({
         disabled={pending}
         className="btn-primary"
       >
-        {pending ? "…" : full ? "Join the waitlist" : "I'm in"}
+        {pending ? "…" : full ? t("rsvp.joinWaitlist") : t("rsvp.in")}
       </button>
     );
   }
@@ -43,15 +45,13 @@ export default function RsvpButtons({
       >
         {state === "in"
           ? addedByOrganizer
-            ? "You've been added"
-            : "You're in"
-          : "You're on the waitlist"}
+            ? t("rsvp.added")
+            : t("card.youreIn")
+          : t("card.onWaitlist")}
       </div>
       {/* Someone who never signed up needs telling that opting out is on them. */}
       {addedByOrganizer && state === "in" ? (
-        <p className="hint -mt-1 text-center">
-          The organizer put you on this one. Can&apos;t make it? Tap below.
-        </p>
+        <p className="hint -mt-1 text-center">{t("rsvp.addedHint")}</p>
       ) : null}
       <button
         type="button"
@@ -60,7 +60,7 @@ export default function RsvpButtons({
         className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-medium
           text-[var(--muted)] disabled:opacity-50"
       >
-        {pending ? "…" : "Can't make it"}
+        {pending ? "…" : t("rsvp.out")}
       </button>
     </div>
   );

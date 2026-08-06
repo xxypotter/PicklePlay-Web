@@ -3,7 +3,9 @@
 import { useActionState, useRef, useState } from "react";
 import Avatar, { PRESET_COLORS, initialsOf } from "@/components/Avatar";
 import type { FormState } from "@/lib/auth/types";
+import { useT } from "@/lib/i18n/client";
 import { importRecordAction, setAvatarAction, setGenderAction } from "@/lib/profile/actions";
+import type { T } from "@/lib/i18n/translate";
 
 /**
  * Resize in the browser before upload.
@@ -17,7 +19,7 @@ import { importRecordAction, setAvatarAction, setGenderAction } from "@/lib/prof
  * refuses it. The <img> path also applies EXIF orientation, so pictures taken
  * sideways don't come out sideways.
  */
-function toSquareDataUrl(file: File, size = 160): Promise<string> {
+function toSquareDataUrl(file: File, t: T, size = 160): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -25,13 +27,13 @@ function toSquareDataUrl(file: File, size = 160): Promise<string> {
     img.onload = () => {
       URL.revokeObjectURL(url);
       const side = Math.min(img.naturalWidth, img.naturalHeight);
-      if (!side) return reject(new Error("Empty image."));
+      if (!side) return reject(new Error(t("err.emptyImage")));
 
       const canvas = document.createElement("canvas");
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext("2d");
-      if (!ctx) return reject(new Error("Canvas unavailable."));
+      if (!ctx) return reject(new Error(t("err.canvasUnavailable")));
 
       ctx.drawImage(
         img,
@@ -49,7 +51,7 @@ function toSquareDataUrl(file: File, size = 160): Promise<string> {
 
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("That image couldn't be read."));
+      reject(new Error(t("err.imageUnreadable")));
     };
 
     img.src = url;
@@ -63,6 +65,7 @@ export function AvatarCard({
   username: string;
   avatar: string | null;
 }) {
+  const t = useT();
   const [state, action, pending] = useActionState(setAvatarAction, {} as FormState);
   const [choice, setChoice] = useState<string>(avatar ?? "");
   const [busy, setBusy] = useState(false);
@@ -73,9 +76,9 @@ export function AvatarCard({
     setBusy(true);
     setReadError(null);
     try {
-      setChoice(await toSquareDataUrl(file));
+      setChoice(await toSquareDataUrl(file, t));
     } catch {
-      setReadError("That image couldn't be read. Try a different photo.");
+      setReadError(t("me.imageUnreadable"));
     } finally {
       setBusy(false);
     }
@@ -83,7 +86,7 @@ export function AvatarCard({
 
   return (
     <form action={action} className="card mt-3">
-      <h2 className="text-sm text-[var(--muted)]">Your picture</h2>
+      <h2 className="text-sm text-[var(--muted)]">{t("me.picture")}</h2>
 
       <div className="relative mt-3 flex items-center gap-4">
         <Avatar username={username} avatar={choice || null} size={64} />
@@ -95,7 +98,7 @@ export function AvatarCard({
             disabled={busy}
             className="btn-ghost text-sm disabled:opacity-50"
           >
-            {busy ? "Resizing…" : "Upload a photo"}
+            {busy ? t("me.resizing") : t("me.upload")}
           </button>
           {/*
             iOS decides what the picker offers from `accept`. Bare "image/*"
@@ -122,7 +125,7 @@ export function AvatarCard({
         </div>
       </div>
 
-      <p className="hint mt-3">Or pick a colour:</p>
+      <p className="hint mt-3">{t("me.pickColour")}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {PRESET_COLORS.map((color, i) => {
           const value = `preset:${i}`;
@@ -132,7 +135,7 @@ export function AvatarCard({
               key={value}
               type="button"
               onClick={() => setChoice(value)}
-              aria-label={`Colour ${i + 1}`}
+              aria-label={t("me.colourN", { n: i + 1 })}
               aria-pressed={on}
               style={{ background: color }}
               className={`flex size-10 items-center justify-center rounded-full text-sm
@@ -153,30 +156,27 @@ export function AvatarCard({
       ) : null}
 
       <button type="submit" disabled={pending || busy} className="btn-primary mt-4">
-        {pending ? "Saving…" : "Save picture"}
+        {pending ? t("common.saving") : t("me.savePicture")}
       </button>
     </form>
   );
 }
 
 export function GenderCard({ gender }: { gender: string }) {
+  const t = useT();
   const [state, action, pending] = useActionState(setGenderAction, {} as FormState);
   const [value, setValue] = useState(gender);
 
   const options = [
-    { key: "male", label: "Boy" },
-    { key: "female", label: "Girl" },
-    { key: "unspecified", label: "Not listed" },
+    { key: "male", label: t("me.gender.male") },
+    { key: "female", label: t("me.gender.female") },
+    { key: "unspecified", label: t("me.gender.unspecified") },
   ];
 
   return (
     <form action={action} className="card mt-3">
-      <h2 className="text-sm text-[var(--muted)]">Gender</h2>
-      <p className="hint">
-        Play is mostly coed mix. This only decides which ranking table you appear in.
-        Choose <span className="font-medium">Not listed</span> to stay out of the
-        rankings entirely.
-      </p>
+      <h2 className="text-sm text-[var(--muted)]">{t("me.gender")}</h2>
+      <p className="hint">{t("me.genderHint")}</p>
 
       <input type="hidden" name="gender" value={value} />
       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -207,7 +207,7 @@ export function GenderCard({ gender }: { gender: string }) {
       ) : null}
 
       <button type="submit" disabled={pending} className="btn-primary mt-4">
-        {pending ? "Saving…" : "Save"}
+        {pending ? t("common.saving") : t("common.save")}
       </button>
     </form>
   );
@@ -224,6 +224,7 @@ export function ImportRecordCard({
   locked: boolean;
   playedHere: number;
 }) {
+  const t = useT();
   const [state, action, pending] = useActionState(importRecordAction, {} as FormState);
 
   if (locked) {
@@ -231,14 +232,26 @@ export function ImportRecordCard({
     const rate = importedMatches > 0 ? Math.round((importedWins / importedMatches) * 100) : 0;
     return (
       <section className="card mt-3">
-        <h2 className="text-sm text-[var(--muted)]">Record before PicklePlay</h2>
+        <h2 className="text-sm text-[var(--muted)]">{t("import.title")}</h2>
         <p className="mt-2 text-lg font-bold">
-          <span className="text-[var(--accent)]">{importedMatches}</span> matches ·{" "}
-          <span className="text-[var(--accent)]">{rate}%</span> win rate
+          {t.rich("import.summary", {
+            matches: (
+              <span key="m" className="text-[var(--accent)]">
+                {importedMatches}
+              </span>
+            ),
+            rate: (
+              <span key="r" className="text-[var(--accent)]">
+                {rate}
+              </span>
+            ),
+          })}
         </p>
         <p className="hint">
-          {importedWins} won, {losses} lost. Counts toward your career totals but not your
-          PicklePlay rating, which only follows matches played here.
+          {t("import.detail", {
+            won: importedWins,
+            lost: losses,
+          })}
         </p>
       </section>
     );
@@ -247,26 +260,20 @@ export function ImportRecordCard({
   if (playedHere > 0) {
     return (
       <section className="card mt-3">
-        <h2 className="text-sm text-[var(--muted)]">Record before PicklePlay</h2>
-        <p className="hint mt-2">
-          You&apos;ve already played here, so your record now comes from real results.
-          Importing is only available before your first match.
-        </p>
+        <h2 className="text-sm text-[var(--muted)]">{t("import.title")}</h2>
+        <p className="hint mt-2">{t("import.playedHere")}</p>
       </section>
     );
   }
 
   return (
     <form action={action} className="card mt-3">
-      <h2 className="text-sm text-[var(--muted)]">Bring your record across</h2>
-      <p className="hint">
-        Played elsewhere? Enter your totals once, before your first match here. Shown on
-        your profile; it doesn&apos;t affect your PicklePlay rating.
-      </p>
+      <h2 className="text-sm text-[var(--muted)]">{t("import.formTitle")}</h2>
+      <p className="hint">{t("import.formHint")}</p>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="text-xs text-[var(--muted)]">
-          Matches played
+          {t("import.matches")}
           <input
             name="matches"
             className="field mt-1"
@@ -279,7 +286,7 @@ export function ImportRecordCard({
           />
         </label>
         <label className="text-xs text-[var(--muted)]">
-          Win rate %
+          {t("import.winRatePercent")}
           <input
             name="winRate"
             className="field mt-1"
@@ -300,9 +307,9 @@ export function ImportRecordCard({
       ) : null}
 
       <button type="submit" disabled={pending} className="btn-primary mt-4">
-        {pending ? "Saving…" : "Import my record"}
+        {pending ? t("common.saving") : t("import.save")}
       </button>
-      <p className="hint text-center">You can only do this once.</p>
+      <p className="hint text-center">{t("import.onceOnly")}</p>
     </form>
   );
 }

@@ -1,4 +1,6 @@
 import Avatar from "@/components/Avatar";
+import { getT } from "@/lib/i18n/server";
+import type { T } from "@/lib/i18n/translate";
 import type { CurrentRound, RoundPlayer } from "@/lib/sessions/queries";
 import MatchCard from "./MatchCard";
 
@@ -14,12 +16,13 @@ import MatchCard from "./MatchCard";
  * because being in a match stops being enough once the session closes — a
  * finished night is a record, and only its organizer may still amend it.
  */
-export default function Schedule({
+export default async function Schedule({
   rounds,
   meId,
   courtCount,
   canScoreAny = false,
   canScoreMine = false,
+  locale,
 }: {
   rounds: CurrentRound[];
   meId?: string;
@@ -28,14 +31,15 @@ export default function Schedule({
   canScoreAny?: boolean;
   /** May score a match you played in. False once the session is closed. */
   canScoreMine?: boolean;
+  locale?: string | null;
 }) {
+  const t = await getT(locale);
+
   if (rounds.length === 0) {
     return (
       <div className="card py-12 text-center">
-        <p className="text-[var(--muted)]">No matches yet.</p>
-        <p className="hint">
-          The organizer starts the session and builds the schedule when play begins.
-        </p>
+        <p className="text-[var(--muted)]">{t("schedule.empty")}</p>
+        <p className="hint">{t("schedule.emptyHint")}</p>
       </div>
     );
   }
@@ -45,7 +49,10 @@ export default function Schedule({
       {rounds.map((round) => (
         <section key={round.id}>
           <p className="round-chip w-fit">
-            Round {round.index} · {courtCount} court{courtCount === 1 ? "" : "s"}
+            {t.plural("schedule.round", courtCount, {
+              index: round.index,
+              count: courtCount,
+            })}
           </p>
 
           <div className="mt-3 flex flex-col gap-2.5">
@@ -79,9 +86,9 @@ export default function Schedule({
                   }`}
                 >
                   <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center gap-2">
-                    <Team players={m.teamA} meId={meId} />
-                    <span className="text-xs text-[var(--muted)]">vs</span>
-                    <Team players={m.teamB} meId={meId} align="right" />
+                    <Team players={m.teamA} meId={meId} t={t} />
+                    <span className="text-xs text-[var(--muted)]">{t("schedule.vs")}</span>
+                    <Team players={m.teamB} meId={meId} t={t} align="right" />
                   </div>
 
                   <div className="shrink-0 border-l border-[var(--border)] pl-3 text-right">
@@ -118,10 +125,12 @@ export default function Schedule({
 function Team({
   players,
   meId,
+  t,
   align = "left",
 }: {
   players: RoundPlayer[];
   meId?: string;
+  t: T;
   align?: "left" | "right";
 }) {
   const mirrored = align === "right";
@@ -138,7 +147,7 @@ function Team({
               p.id === meId ? "font-bold text-[var(--accent)]" : ""
             }`}
           >
-            {p.id === meId ? "You" : p.username}
+            {p.id === meId ? t("common.you") : p.username}
           </span>
         </div>
       ))}

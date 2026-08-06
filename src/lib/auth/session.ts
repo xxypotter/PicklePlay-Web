@@ -9,6 +9,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, eq, gt } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { getDb } from "@/lib/db";
 import { authTokens, players } from "@/lib/db/schema";
 import type { Role } from "./types";
@@ -27,6 +28,8 @@ export interface CurrentPlayer {
   username: string;
   displayName: string | null;
   role: Role;
+  /** Chosen language, or null if they've never picked one. */
+  locale: string | null;
 }
 
 export async function createSession(playerId: string): Promise<void> {
@@ -45,8 +48,14 @@ export async function createSession(playerId: string): Promise<void> {
   });
 }
 
-/** Returns null when logged out. Safe to call from any server component. */
-export async function getCurrentPlayer(): Promise<CurrentPlayer | null> {
+/**
+ * Returns null when logged out. Safe to call from any server component.
+ *
+ * Memoized for the life of one request: the layout, the page and its
+ * generateMetadata all want the signed-in player, and without this that is
+ * three identical round trips to answer the same question.
+ */
+export const getCurrentPlayer = cache(async (): Promise<CurrentPlayer | null> => {
   const jar = await cookies();
   const token = jar.get(COOKIE_NAME)?.value;
   if (!token) return null;
@@ -57,6 +66,7 @@ export async function getCurrentPlayer(): Promise<CurrentPlayer | null> {
       username: players.username,
       displayName: players.displayName,
       role: players.role,
+      locale: players.locale,
       active: players.active,
     })
     .from(authTokens)
@@ -72,8 +82,9 @@ export async function getCurrentPlayer(): Promise<CurrentPlayer | null> {
     username: row.username,
     displayName: row.displayName,
     role: row.role,
+    locale: row.locale,
   };
-}
+});
 
 export async function destroySession(): Promise<void> {
   const jar = await cookies();

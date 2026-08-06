@@ -2,7 +2,9 @@
 
 import { useActionState, useState, useTransition } from "react";
 import type { RecomputeSummary } from "@/lib/rating/service";
-import { ROLE_LABELS, type FormState, type Role } from "@/lib/auth/types";
+import type { FormState, Role } from "@/lib/auth/types";
+import type { DictKey } from "@/lib/i18n/dictionaries/en";
+import { useT } from "@/lib/i18n/client";
 import { clearImportedRecordAction } from "@/lib/profile/actions";
 import { adjustRatingAction, recomputeAction, resetPinAction, setRoleAction } from "./actions";
 
@@ -33,6 +35,7 @@ export default function RosterCard({
   meRole: Role;
   meId: string;
 }) {
+  const t = useT();
   /** Mirrors resetPinAction's rule; the server is what actually enforces it. */
   const canResetPin = (role: Role) =>
     role !== "superadmin" && (role !== "admin" || meRole === "superadmin");
@@ -56,7 +59,9 @@ export default function RosterCard({
   return (
     <section className="card mt-5">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-[var(--muted)]">Players ({roster.length})</h2>
+        <h2 className="text-sm font-medium text-[var(--muted)]">
+          {t("admin.players", { count: roster.length })}
+        </h2>
         {canRecompute ? (
           <button
             type="button"
@@ -69,7 +74,7 @@ export default function RosterCard({
             disabled={recomputing}
             className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
           >
-            {recomputing ? "Recomputing…" : "Recompute ratings"}
+            {recomputing ? t("admin.recomputing") : t("admin.recompute")}
           </button>
         ) : null}
       </div>
@@ -85,21 +90,14 @@ export default function RosterCard({
       {canRecompute ? (
         recomputed ? (
           <p className="mt-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">
-            Rebuilt <strong>{recomputed.players}</strong> player
-            {recomputed.players === 1 ? "" : "s"} from{" "}
-            <strong>{recomputed.matches}</strong> match
-            {recomputed.matches === 1 ? "" : "es"} and{" "}
-            <strong>{recomputed.seeds}</strong> starting rating
-            {recomputed.seeds === 1 ? "" : "s"}. Numbers not moving means they were
-            already right.
+            {t("admin.recomputeDone", {
+              players: recomputed.players,
+              matches: recomputed.matches,
+              seeds: recomputed.seeds,
+            })}
           </p>
         ) : (
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            Ratings rebuild themselves after every score, edit, void or deletion,
-            so you rarely need this. Press it if a rating looks out of date, or
-            after anyone is added outside the app. It only recalculates — it never
-            changes a match result, and it can&apos;t lose anything.
-          </p>
+          <p className="mt-2 text-xs text-[var(--muted)]">{t("admin.recomputeHint")}</p>
         )
       ) : null}
 
@@ -120,9 +118,11 @@ export default function RosterCard({
                 <div className="min-w-0">
                   <p className="truncate font-medium">{p.username}</p>
                   <p className="text-xs text-[var(--muted)]">
-                    {ROLE_LABELS[p.role]}
-                    {isMe ? " · you" : ""}
-                    {p.localMatches !== null ? ` · ${p.localMatches} matches` : ""}
+                    {t(`role.${p.role}` as DictKey)}
+                    {isMe ? t("admin.you") : ""}
+                    {p.localMatches !== null
+                      ? t("admin.matchCount", { count: p.localMatches })
+                      : ""}
                   </p>
                 </div>
 
@@ -145,7 +145,7 @@ export default function RosterCard({
                         className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs
                           font-semibold disabled:opacity-50"
                       >
-                        {p.role === "admin" ? "− admin" : "+ admin"}
+                        {p.role === "admin" ? t("admin.removeAdmin") : t("admin.makeAdmin")}
                       </button>
                     </form>
                   ) : null}
@@ -155,12 +155,12 @@ export default function RosterCard({
               {canAdjust(p) ? (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs font-semibold text-[var(--accent)]">
-                  Adjust rating
+                  {t("admin.adjustRating")}
                 </summary>
                 <form action={adjustAction} className="mt-3 flex flex-col gap-2">
                   <input type="hidden" name="playerId" value={p.id} />
                   <label className="text-xs text-[var(--muted)]">
-                    Rating
+                    {t("admin.ratingLabel")}
                     <input
                       name="rating"
                       className="field mt-1 py-2 text-sm"
@@ -173,7 +173,7 @@ export default function RosterCard({
                     />
                   </label>
                   <label className="text-xs text-[var(--muted)]">
-                    Reliability % (optional)
+                    {t("admin.reliabilityOptional")}
                     <input
                       name="reliability"
                       className="field mt-1 py-2 text-sm"
@@ -181,13 +181,13 @@ export default function RosterCard({
                       step="1"
                       min={0}
                       max={100}
-                      placeholder="Leave blank to keep"
+                      placeholder={t("admin.reliabilityPlaceholder")}
                     />
                   </label>
                   <input
                     name="note"
                     className="field py-2 text-sm"
-                    placeholder="Why? (optional, kept in the log)"
+                    placeholder={t("admin.whyOptional")}
                     maxLength={120}
                   />
                   <button
@@ -196,15 +196,9 @@ export default function RosterCard({
                     className="rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-semibold
                       disabled:opacity-50"
                   >
-                    {adjustPending ? "Saving…" : "Override rating"}
+                    {adjustPending ? t("common.saving") : t("admin.overrideRating")}
                   </button>
-                  <p className="text-xs text-[var(--muted)]">
-                    Sets where their rating sits — win/loss comes from real matches
-                    and can&apos;t be typed in. Reliability is normally earned by
-                    playing; set it here only to enter a real DUPR reliability for
-                    someone who joined before the field existed. Recorded as a dated
-                    correction in their history, not a silent edit.
-                  </p>
+                  <p className="text-xs text-[var(--muted)]">{t("admin.adjustNote")}</p>
                 </form>
               </details>
               ) : null}
@@ -218,8 +212,11 @@ export default function RosterCard({
               {canManageRoles && p.importedMatches > 0 ? (
                 <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2">
                   <span className="text-xs text-[var(--muted)]">
-                    Imported {p.importedWins}/{p.importedMatches} (
-                    {Math.round((p.importedWins / p.importedMatches) * 100)}%)
+                    {t("admin.importedLine", {
+                      wins: p.importedWins,
+                      matches: p.importedMatches,
+                      rate: Math.round((p.importedWins / p.importedMatches) * 100),
+                    })}
                   </span>
                   <button
                     type="button"
@@ -228,7 +225,7 @@ export default function RosterCard({
                     className="shrink-0 text-xs font-semibold text-[var(--danger)] underline
                       disabled:opacity-50"
                   >
-                    {clearing ? "…" : "Clear"}
+                    {clearing ? "…" : t("admin.clear")}
                   </button>
                 </div>
               ) : null}
@@ -236,7 +233,7 @@ export default function RosterCard({
               {canResetPin(p.role) ? (
                 <details className="mt-1.5">
                   <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
-                    Reset PIN
+                    {t("admin.resetPin")}
                   </summary>
                   <form action={pinAction} className="mt-3 flex gap-2">
                     <input type="hidden" name="playerId" value={p.id} />
@@ -245,7 +242,7 @@ export default function RosterCard({
                       className="field py-2 text-sm"
                       inputMode="numeric"
                       pattern="\d{4,6}"
-                      placeholder="New 4–6 digit PIN"
+                      placeholder={t("admin.newPinPlaceholder")}
                       required
                     />
                     <button
@@ -254,11 +251,11 @@ export default function RosterCard({
                       className="shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs
                         font-semibold disabled:opacity-50"
                     >
-                      Set
+                      {t("admin.setPin")}
                     </button>
                   </form>
                   <p className="mt-1.5 text-xs text-[var(--muted)]">
-                    Signs them out everywhere. Tell them the new PIN in person.
+                    {t("admin.pinResetNote")}
                   </p>
                 </details>
               ) : null}
@@ -268,10 +265,7 @@ export default function RosterCard({
       </ul>
 
       {canManageRoles ? (
-        <p className="hint mt-4">
-          Admins create sessions, run matchups, and share the invite code. Only you can
-          grant or remove admin.
-        </p>
+        <p className="hint mt-4">{t("admin.roleNote")}</p>
       ) : null}
     </section>
   );

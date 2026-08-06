@@ -6,6 +6,8 @@
  * a name.
  */
 
+import type { DictKey } from "@/lib/i18n/dictionaries/en";
+
 const PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{2,19}$/;
 
 const RESERVED = new Set([
@@ -32,29 +34,26 @@ export function normalizeUsername(username: string): string {
 
 export function validateUsername(
   username: string,
-): { ok: true; username: string; normalized: string } | { ok: false; error: string } {
+): { ok: true; username: string; normalized: string } | { ok: false; error: DictKey } {
   const trimmed = username.trim();
 
   if (trimmed.length < 3) {
-    return { ok: false, error: "Name must be at least 3 characters." };
+    return { ok: false, error: "err.nameShort" };
   }
   if (trimmed.length > 20) {
-    return { ok: false, error: "Name must be 20 characters or fewer." };
+    return { ok: false, error: "err.nameLong" };
   }
   if (!PATTERN.test(trimmed)) {
-    return {
-      ok: false,
-      error: "Use letters, numbers, hyphens, and underscores only, starting with a letter or number.",
-    };
+    return { ok: false, error: "err.nameChars" };
   }
 
   const normalized = normalizeUsername(trimmed);
   if (RESERVED.has(normalized)) {
-    return { ok: false, error: "That name is reserved. Try another." };
+    return { ok: false, error: "err.nameReserved" };
   }
 
   return { ok: true, username: trimmed, normalized };
 }
 
 /** Shown when a name is taken. Deliberately says nothing about who has it. */
-export const NAME_TAKEN_MESSAGE = "That name is taken. Try another.";
+export const NAME_TAKEN_KEY: DictKey = "err.nameTaken";

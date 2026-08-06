@@ -6,6 +6,7 @@ import { requireLogin } from "@/lib/auth/permissions";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { players, ratingSeeds } from "@/lib/db/schema";
+import { getT } from "@/lib/i18n/server";
 import { RATING, RESEED_COOLDOWN_DAYS } from "./constants";
 import { recomputeAll } from "./service";
 
@@ -21,16 +22,20 @@ import { recomputeAll } from "./service";
  */
 export async function reseedAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const me = await requireLogin();
+  const t = await getT();
   const db = getDb();
 
   const rating = Number(String(formData.get("rating") ?? ""));
   const reliability = Number(String(formData.get("reliability") ?? "0"));
 
   if (!Number.isFinite(rating) || rating < RATING.MIN || rating > RATING.MAX) {
-    return { error: `Rating must be between ${RATING.MIN} and ${RATING.MAX}.`, field: "rating" };
+    return {
+      error: t("err.ratingRange", { min: RATING.MIN, max: RATING.MAX }),
+      field: "rating",
+    };
   }
   if (!Number.isFinite(reliability) || reliability < 0 || reliability > 100) {
-    return { error: "Reliability must be between 0 and 100.", field: "reliability" };
+    return { error: t("err.reliabilityRange"), field: "reliability" };
   }
 
   const last = await db
@@ -46,7 +51,7 @@ export async function reseedAction(_prev: FormState, formData: FormData): Promis
     if (days < RESEED_COOLDOWN_DAYS) {
       const wait = Math.ceil(RESEED_COOLDOWN_DAYS - days);
       return {
-        error: `You can update your rating again in ${wait} day${wait === 1 ? "" : "s"}.`,
+        error: t.plural("reseed.locked", wait, { days: wait }),
         field: "rating",
       };
     }
