@@ -192,12 +192,16 @@ function Table({
             <div className="min-w-0 flex-1">
               <span className="block truncate font-medium">{r.username}</span>
               <p className="text-xs text-[var(--muted)]">
+                {/*
+                  Career totals only. Where they came from is a detail about
+                  one player, and a ranking table is for comparing players —
+                  "· 162 imported" beside one name and not the next invites a
+                  comparison of provenance rather than of results. The record
+                  screen is where that breakdown belongs.
+                */}
                 {matches === 0
                   ? t("rank.noMatches")
                   : t("rank.summary", { played: matches, rate: rate ?? 0 })}
-                {r.importedMatches > 0
-                  ? t("rank.imported", { count: r.importedMatches })
-                  : ""}
               </p>
             </div>
 

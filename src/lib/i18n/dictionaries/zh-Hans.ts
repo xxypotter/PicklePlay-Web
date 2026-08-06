@@ -195,6 +195,8 @@ export const zhHans: Dict = {
   "play.deleteHint": "会删除这里的所有比赛，并把评分还原到之前的状态。",
   "play.out": "缺席",
   "play.removeFromSession": "从本次活动移除",
+  "play.dropLabel": "把 {name} 从本次活动中移除",
+  "play.outFreesPlace": "标记为缺席会腾出名额，就可以加临时来的人。点 ✕ 可以把他们完全移出名单。",
   "play.starting": "开始中…",
   "play.tooFewToStart": "至少要标记 4 名到场球员才能开始。",
   "play.reopenFailed": "无法重新开放。",
@@ -269,7 +271,6 @@ export const zhHans: Dict = {
   "rank.optedOut": "你选择了「不公开」，所以不会出现在榜单里。可以在「我的」里修改。",
   "rank.noMatches": "还没有比赛",
   "rank.summary": "{played} 场 · 胜率 {rate}%",
-  "rank.imported": " · {count} 场为导入",
   "rank.questionMark": "? 表示评分还没稳定 —— 在这里打的场次还不够，暂时不够可靠。打完一到两场完整活动就会消失。",
 
   "me.title": "我的",

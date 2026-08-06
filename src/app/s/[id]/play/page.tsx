@@ -105,6 +105,8 @@ export default async function PlayPage({
           {t("play.whosHere", { here: attendingCount, total: roster.length })}
         </h2>
         <p className="hint">{t("play.whosHereHint")}</p>
+        {/* Say what marking someone out now buys you, or nobody will find it. */}
+        <p className="hint">{t("play.outFreesPlace")}</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           {roster.map((r) => (
             <AttendanceToggle

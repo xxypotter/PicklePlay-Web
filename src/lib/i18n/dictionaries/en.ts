@@ -213,6 +213,9 @@ export const en = {
   "play.deleteHint": "Removes every match here and puts ratings back where they were.",
   "play.out": "out",
   "play.removeFromSession": "Remove from session",
+  "play.dropLabel": "Drop {name} from this session",
+  "play.outFreesPlace":
+    "Marking someone out frees their place, so you can add a walk-in. Tap ✕ to take them off the list entirely.",
   "play.starting": "Starting…",
   "play.tooFewToStart": "Mark at least 4 players present to start.",
   "play.reopenFailed": "Couldn't reopen.",
@@ -298,7 +301,6 @@ export const en = {
     "You've chosen Not listed, so you don't appear in these tables. Change it under Me.",
   "rank.noMatches": "No matches yet",
   "rank.summary": "{played} played · {rate}% won",
-  "rank.imported": " · {count} imported",
   "rank.questionMark":
     "? means the rating is still settling — not enough matches here yet for it to be dependable. It clears after a full session or two.",
 

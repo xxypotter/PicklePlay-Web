@@ -20,6 +20,23 @@ type Format = (typeof FORMATS)[number];
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;
 
+/**
+ * How many of a session's places are actually taken.
+ *
+ * Counts people who are confirmed *and* expected to play. Before the night
+ * those are the same set, because `attended` defaults to true — the two only
+ * diverge once an organizer marks a no-show, and at that moment the place
+ * genuinely is free.
+ *
+ * Counting raw signups instead is what made the play console lie: a player who
+ * never turned up kept their seat, so tapping "+ walk-in" silently filed them
+ * on the waitlist and they were never scheduled.
+ */
+const occupiedPlaces = (sessionId: string) => sql`(
+  select count(*) from ${signups}
+  where session_id = ${sessionId}::uuid and state = 'in' and attended = true
+)`;
+
 export async function createSessionAction(
   _prev: FormState,
   formData: FormData,
@@ -160,10 +177,8 @@ export async function rsvpAction(sessionId: string, going: boolean): Promise<voi
   await db.execute(sql`
     insert into ${signups} (session_id, player_id, state)
     select ${sessionId}::uuid, ${me.id}::uuid,
-      case when (
-        select count(*) from ${signups}
-        where session_id = ${sessionId}::uuid and state = 'in'
-      ) < ${session.maxPlayers} then 'in'::signup_state else 'waitlist'::signup_state end
+      case when ${occupiedPlaces(sessionId)} < ${session.maxPlayers}
+        then 'in'::signup_state else 'waitlist'::signup_state end
     on conflict (session_id, player_id) do nothing
   `);
 
@@ -180,10 +195,7 @@ async function promoteFromWaitlist(sessionId: string, maxPlayers: number): Promi
       select id from ${signups}
       where session_id = ${sessionId}::uuid and state = 'waitlist'
       order by created_at asc
-      limit greatest(0, ${maxPlayers} - (
-        select count(*) from ${signups}
-        where session_id = ${sessionId}::uuid and state = 'in'
-      ))
+      limit greatest(0, ${maxPlayers} - ${occupiedPlaces(sessionId)})
     )
   `);
   await resequenceWaitlist(sessionId);
@@ -225,10 +237,8 @@ export async function addPlayerAction(sessionId: string, playerId: string): Prom
   await db.execute(sql`
     insert into ${signups} (session_id, player_id, state, added_by_organizer)
     select ${sessionId}::uuid, ${playerId}::uuid,
-      case when (
-        select count(*) from ${signups}
-        where session_id = ${sessionId}::uuid and state = 'in'
-      ) < ${found[0].maxPlayers} then 'in'::signup_state else 'waitlist'::signup_state end,
+      case when ${occupiedPlaces(sessionId)} < ${found[0].maxPlayers}
+        then 'in'::signup_state else 'waitlist'::signup_state end,
       true
     on conflict (session_id, player_id) do nothing
   `);
@@ -258,6 +268,17 @@ export async function removePlayerAction(sessionId: string, playerId: string): P
   revalidatePath(`/s/${sessionId}`);
 }
 
+/**
+ * Mark someone present or absent on the night.
+ *
+ * Marking a no-show frees their place, so anyone waiting is pulled in straight
+ * away rather than the organizer having to notice and do it by hand.
+ *
+ * Marking someone back in is deliberately not capped. If ten people are
+ * standing on the court, refusing the tenth because the sign-up sheet said
+ * nine helps nobody — the round builder already handles more players than
+ * seats by rotating who sits out.
+ */
 export async function setAttendanceAction(
   sessionId: string,
   playerId: string,
@@ -268,6 +289,17 @@ export async function setAttendanceAction(
     .update(signups)
     .set({ attended })
     .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, playerId)));
+
+  if (!attended) {
+    const found = await getDb()
+      .select({ maxPlayers: sessions.maxPlayers })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
+    if (found[0]) await promoteFromWaitlist(sessionId, found[0].maxPlayers);
+  }
+
+  revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);
 }
 

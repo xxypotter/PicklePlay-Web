@@ -190,6 +190,16 @@ export function DiscardRoundButton({
   );
 }
 
+/**
+ * One name on the night, with here/out and — once they're out — a way off the
+ * list entirely.
+ *
+ * The ✕ appears only for someone already marked absent. That is the moment it
+ * is useful, and keeping it off the other rows means a destructive control is
+ * never sitting under your thumb beside a name you meant to tap. Dropping
+ * someone is recoverable in one tap anyway: they reappear under "Add someone
+ * who didn't sign up".
+ */
 export function AttendanceToggle({
   sessionId,
   playerId,
@@ -203,22 +213,39 @@ export function AttendanceToggle({
 }) {
   const t = useT();
   const [pending, start] = useTransition();
+  const [dropping, startDrop] = useTransition();
+  const busy = pending || dropping;
 
   return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => start(() => void setAttendanceAction(sessionId, playerId, !attended))}
-      className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left
-        text-sm transition disabled:opacity-50 ${
-          attended
-            ? "border-[var(--accent)] bg-[var(--accent)]/10 font-medium"
-            : "border-[var(--border)] text-[var(--muted)] line-through"
-        }`}
-    >
-      <span className="truncate">{username}</span>
-      <span className="shrink-0 text-xs">{attended ? t("play.here") : t("play.out")}</span>
-    </button>
+    <div className="flex items-stretch gap-1.5">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => start(() => void setAttendanceAction(sessionId, playerId, !attended))}
+        className={`flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border
+          px-3 py-2.5 text-left text-sm transition disabled:opacity-50 ${
+            attended
+              ? "border-[var(--accent)] bg-[var(--accent)]/10 font-medium"
+              : "border-[var(--border)] text-[var(--muted)] line-through"
+          }`}
+      >
+        <span className="truncate">{username}</span>
+        <span className="shrink-0 text-xs">{attended ? t("play.here") : t("play.out")}</span>
+      </button>
+
+      {attended ? null : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => startDrop(() => void removePlayerAction(sessionId, playerId))}
+          aria-label={t("play.dropLabel", { name: username })}
+          className="shrink-0 rounded-xl border border-[var(--border)] px-3 text-sm
+            text-[var(--muted)] transition active:bg-[var(--surface-2)] disabled:opacity-50"
+        >
+          ✕
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -253,28 +280,6 @@ export function AddPlayers({
         ))}
       </div>
     </details>
-  );
-}
-
-export function RemovePlayerButton({
-  sessionId,
-  playerId,
-}: {
-  sessionId: string;
-  playerId: string;
-}) {
-  const t = useT();
-  const [pending, start] = useTransition();
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => start(() => void removePlayerAction(sessionId, playerId))}
-      aria-label={t("play.removeFromSession")}
-      className="shrink-0 px-1 text-xs text-[var(--muted)] disabled:opacity-50"
-    >
-      ✕
-    </button>
   );
 }
 

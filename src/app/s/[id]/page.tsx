@@ -56,6 +56,7 @@ export default async function SessionPage({
         state: signups.state,
         waitlistPos: signups.waitlistPos,
         addedByOrganizer: signups.addedByOrganizer,
+        attended: signups.attended,
         rating: playerStats.rating,
         provisional: playerStats.provisional,
       })
@@ -72,7 +73,17 @@ export default async function SessionPage({
 
   const t = await getT(me?.locale);
 
+  /*
+   * Everyone confirmed, and separately everyone still expected to play.
+   *
+   * These are the same set until the organizer marks a no-show, at which point
+   * that person's place is free — so the counts have to follow attendance, or
+   * the page reads "5/4" and the RSVP button claims a full session with an
+   * empty court. The absent player stays listed, struck through, rather than
+   * vanishing from a night they signed up for.
+   */
   const confirmed = roster.filter((r) => r.state === "in");
+  const playing = confirmed.filter((r) => r.attended);
   const waiting = roster.filter((r) => r.state === "waitlist");
   const mine = me ? roster.find((r) => r.playerId === me.id) : undefined;
   const myState: MyState = (mine?.state as MyState) ?? "out";
@@ -90,7 +101,7 @@ export default async function SessionPage({
   const organizer = !!me && canOrganizeSession(me, session);
   const canScoreAny = !!me && canScoreMatch(me, session, false);
   const canScoreMine = !!me && canScoreMatch(me, session, true);
-  const spotsLeft = Math.max(0, session.maxPlayers - confirmed.length);
+  const spotsLeft = Math.max(0, session.maxPlayers - playing.length);
 
   const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed).length;
   const base = `/s/${id}`;
@@ -161,7 +172,7 @@ export default async function SessionPage({
                 </InfoRow>
                 <InfoRow icon="👥" label={t("session.signedUp")}>
                   <span className="font-semibold text-[var(--accent)]">
-                    {confirmed.length}/{session.maxPlayers}
+                    {playing.length}/{session.maxPlayers}
                   </span>
                   {waiting.length > 0 ? ` · ${t("card.waiting", { count: waiting.length })}` : ""}
                 </InfoRow>
@@ -223,7 +234,7 @@ export default async function SessionPage({
             </div>
 
             <Roster
-              title={t("session.playing", { count: confirmed.length })}
+              title={t("session.playing", { count: playing.length })}
               rows={confirmed}
               empty={t("session.roster.empty")}
               backHere={backHere}
@@ -306,6 +317,7 @@ interface Row {
   waitlistPos: number | null;
   rating: number | null;
   provisional: boolean | null;
+  attended?: boolean;
 }
 
 function Roster({
@@ -342,7 +354,9 @@ function Roster({
               ) : null}
               <Link
                 href={`/p/${r.username}?from=${encodeURIComponent(backHere)}`}
-                className="min-w-0 flex-1 truncate font-medium"
+                className={`min-w-0 flex-1 truncate font-medium ${
+                  r.attended === false ? "text-[var(--muted)] line-through" : ""
+                }`}
               >
                 {r.username}
               </Link>

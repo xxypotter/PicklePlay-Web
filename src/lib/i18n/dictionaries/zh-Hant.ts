@@ -193,6 +193,8 @@ export const zhHant: Dict = {
   "play.deleteHint": "會刪除這裡的所有比賽，並把評分還原到之前的狀態。",
   "play.out": "缺席",
   "play.removeFromSession": "從本次活動移除",
+  "play.dropLabel": "把 {name} 從本次活動中移除",
+  "play.outFreesPlace": "標記為缺席會騰出名額，就可以加臨時來的人。點 ✕ 可以把他們完全移出名單。",
   "play.starting": "開始中…",
   "play.tooFewToStart": "至少要標記 4 名到場球員才能開始。",
   "play.reopenFailed": "無法重新開放。",
@@ -267,7 +269,6 @@ export const zhHant: Dict = {
   "rank.optedOut": "你選擇了「不公開」，所以不會出現在榜單裡。可以在「我的」裡修改。",
   "rank.noMatches": "還沒有比賽",
   "rank.summary": "{played} 場 · 勝率 {rate}%",
-  "rank.imported": " · {count} 場為匯入",
   "rank.questionMark": "? 表示評分還沒穩定 —— 在這裡打的場次還不夠，暫時不夠可靠。打完一到兩場完整活動就會消失。",
 
   "me.title": "我的",
