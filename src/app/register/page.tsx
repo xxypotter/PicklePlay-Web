@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players } from "@/lib/db/schema";
-import { getT } from "@/lib/i18n/server";
+import { LanguageSwitch } from "@/components/LanguageCard";
+import { getLocale, getT } from "@/lib/i18n/server";
 import RegisterForm from "./RegisterForm";
 
 import { titleFor } from "@/lib/i18n/metadata";
@@ -19,6 +20,7 @@ export default async function RegisterPage({
   if (await getCurrentPlayer()) redirect(next?.startsWith("/") ? next : "/");
 
   const t = await getT();
+  const locale = await getLocale();
   const [{ count }] = await getDb()
     .select({ count: sql<number>`count(*)::int` })
     .from(players);
@@ -26,7 +28,8 @@ export default async function RegisterPage({
   return (
     <main className="mx-auto w-full max-w-md px-5 py-10">
       <h1 className="text-2xl font-bold">{t("auth.registerTitle")}</h1>
-      <p className="mt-2 mb-8 text-[var(--muted)]">{t("auth.registerLead")}</p>
+      <p className="mt-2 mb-5 text-[var(--muted)]">{t("auth.registerLead")}</p>
+      <LanguageSwitch current={locale} />
       <RegisterForm
         needsCode={count > 0}
         codePrefill={code ?? ""}
