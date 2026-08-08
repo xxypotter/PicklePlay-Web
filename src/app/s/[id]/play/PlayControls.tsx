@@ -38,6 +38,7 @@ export function GenerateRoundButton({
 }) {
   const t = useT();
   const [pending, start] = useTransition();
+  const [armed, setArmed] = useState(false);
   const tooFew = attendingCount < 4;
 
   // A round robin has an exact right length; other formats get a rule of
@@ -122,17 +123,59 @@ export function GenerateRoundButton({
     );
   }
 
+  /*
+   * Two taps, like ending or deleting a session.
+   *
+   * Adding a round is easy to read as harmless, so it sat as a single tap next
+   * to the score cards — and an organizer put an unwanted round on a live night
+   * with one stray press. It isn't destructive, but it does change the schedule
+   * everyone is playing to, and undoing it means finding Discard on the last
+   * round. Cheaper to ask first.
+   */
   return (
     <div className="mt-4">
       <button
         type="button"
         disabled={pending}
-        onClick={() => start(() => void generateRoundAction(sessionId))}
-        className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-semibold
-          disabled:opacity-50"
+        onClick={() => {
+          if (!armed) {
+            setArmed(true);
+            return;
+          }
+          // Disarm after it lands, or the button sits in its confirmed state
+          // and the *next* stray tap adds another round with no second chance.
+          start(async () => {
+            await generateRoundAction(sessionId);
+            setArmed(false);
+          });
+        }}
+        className={`w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 ${
+          armed
+            ? "bg-[var(--accent)] text-white"
+            : "border border-[var(--border)]"
+        }`}
       >
-        {pending ? t("play.building") : t("play.addRound")}
+        {pending
+          ? t("play.building")
+          : armed
+            ? t("play.addRoundConfirm", { index: roundsSoFar + 1 })
+            : t("play.addRound")}
       </button>
+
+      {armed && !pending ? (
+        <>
+          <p className="hint text-center">
+            {t("play.addRoundHint", { count: roundsSoFar })}
+          </p>
+          <button
+            type="button"
+            onClick={() => setArmed(false)}
+            className="mt-1 w-full text-xs font-semibold text-[var(--muted)] underline"
+          >
+            {t("common.nevermind")}
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }
