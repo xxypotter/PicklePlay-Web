@@ -145,7 +145,6 @@ export default async function SessionPage({
           <Schedule
             rounds={allRounds}
             meId={me?.id}
-            courtCount={session.courtNames.length}
             canScoreAny={canScoreAny}
             canScoreMine={canScoreMine}
             locale={me?.locale}

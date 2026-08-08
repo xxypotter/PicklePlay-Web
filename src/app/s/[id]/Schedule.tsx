@@ -19,14 +19,12 @@ import MatchCard from "./MatchCard";
 export default async function Schedule({
   rounds,
   meId,
-  courtCount,
   canScoreAny = false,
   canScoreMine = false,
   locale,
 }: {
   rounds: CurrentRound[];
   meId?: string;
-  courtCount: number;
   /** May score a match you weren't in — an admin on the night, or the organizer. */
   canScoreAny?: boolean;
   /** May score a match you played in. False once the session is closed. */
@@ -49,9 +47,15 @@ export default async function Schedule({
       {rounds.map((round) => (
         <section key={round.id}>
           <p className="round-chip w-fit">
-            {t.plural("schedule.round", courtCount, {
+            {/*
+              Courts in use this round, which is one per match — not the
+              session's court count. A round can hold fewer matches than the
+              venue has courts, and saying "2 courts" over a single game is
+              simply untrue.
+            */}
+            {t.plural("schedule.round", round.matches.length, {
               index: round.index,
-              count: courtCount,
+              count: round.matches.length,
             })}
           </p>
 
