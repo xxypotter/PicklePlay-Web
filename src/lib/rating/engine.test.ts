@@ -34,8 +34,10 @@ describe("expectation curves (§5.3 step 1)", () => {
     expect(expectedShare(4, 4, RATING.D_WIN)).toBeCloseTo(0.5, 10);
   });
 
-  it("calibrates a 1.00 gap to ~11-3 on points and ~90% on wins", () => {
-    expect(expectedShare(4.5, 3.5, RATING.D_POINTS)).toBeCloseTo(0.788, 3);
+  it("calibrates a 1.00 gap to ~11-2 on points and ~90% on wins", () => {
+    // D_POINTS came down to 1.33 in v1.1 to match the expected score DUPR's
+    // Forecast actually predicts, which is more lopsided than we assumed.
+    expect(expectedShare(4.5, 3.5, RATING.D_POINTS)).toBeCloseTo(0.85, 2);
     expect(expectedShare(4.5, 3.5, RATING.D_WIN)).toBeCloseTo(0.909, 3);
   });
 
@@ -51,16 +53,19 @@ describe("expectation curves (§5.3 step 1)", () => {
 /*
  * Worked examples for an established player.
  *
- * The surprise values are properties of the curves and did not move in the
- * v1.1 recalibration. The deltas did: K_RELIABLE went 0.06 -> 0.017 so an
- * ordinary result now shifts a settled rating by well under a hundredth,
- * which is the scale DUPR actually moves at.
+ * Rewritten for v1.1. Both the shape and the scale moved: ALPHA went 0.35 ->
+ * 1.0 and D_POINTS 1.75 -> 1.33, because DUPR's own Forecast turned out to
+ * score a match on the point margin alone (see dupr-forecast.test.ts), and
+ * K_RELIABLE went 0.06 -> 0.017 so a settled rating moves by thousandths.
+ *
+ * The visible consequence: "up in a loss" and "down in a win" are now much
+ * stronger than they were, because nothing is being paid for the win itself.
  */
 describe("worked examples (§5.5)", () => {
-  it("even teams, win 11-9 → +0.0058", () => {
+  it("even teams, win 11-9 → +0.0009 (barely better than expected)", () => {
     const s = matchSurprise(MID, MID, 11, 9);
-    expect(s).toBeCloseTo(0.3425, 4);
-    expect(delta(s)).toBeCloseTo(0.0058, 4);
+    expect(s).toBeCloseTo(0.05, 4);
+    expect(delta(s)).toBeCloseTo(0.0009, 4);
   });
 
   it("even teams, win 11-0 → +0.0085", () => {
@@ -69,28 +74,28 @@ describe("worked examples (§5.5)", () => {
     expect(delta(s)).toBeCloseTo(0.0085, 4);
   });
 
-  it("underdog by 1.00, wins 11-9 → +0.0121", () => {
+  it("underdog by 1.00, wins 11-9 → +0.0068", () => {
     const s = matchSurprise(3.5, 4.5, 11, 9);
-    expect(s).toBeCloseTo(0.7094, 4);
-    expect(delta(s)).toBeCloseTo(0.0121, 4);
+    expect(s).toBeCloseTo(0.3996, 4);
+    expect(delta(s)).toBeCloseTo(0.0068, 4);
   });
 
-  it("favorite by 1.00, wins 11-2 → +0.0013", () => {
+  it("favorite by 1.00, wins 11-2 → about nothing (that is the expected score)", () => {
     const s = matchSurprise(4.5, 3.5, 11, 2);
-    expect(s).toBeCloseTo(0.0793, 4);
-    expect(delta(s, 4.5)).toBeCloseTo(0.0013, 4);
+    expect(s).toBeCloseTo(-0.0034, 4);
+    expect(delta(s, 4.5)).toBeCloseTo(0, 3);
   });
 
-  it("favorite by 1.00, wins 11-9 → -0.0004 (down in a win)", () => {
+  it("favorite by 1.00, wins 11-9 → -0.0051 (down in a win)", () => {
     const s = matchSurprise(4.5, 3.5, 11, 9);
     expect(s).toBeLessThan(0);
-    expect(delta(s, 4.5)).toBeCloseTo(-0.0004, 4);
+    expect(delta(s, 4.5)).toBeCloseTo(-0.0051, 4);
   });
 
-  it("underdog by 1.00, loses 9-11 → +0.0004 (up in a loss)", () => {
+  it("underdog by 1.00, loses 9-11 → +0.0051 (up in a loss)", () => {
     const s = matchSurprise(3.5, 4.5, 9, 11);
     expect(s).toBeGreaterThan(0);
-    expect(delta(s)).toBeCloseTo(0.0004, 4);
+    expect(delta(s)).toBeCloseTo(0.0051, 4);
   });
 
   it("moves a settled rating about a third as far as v1.0 did", () => {
@@ -108,16 +113,25 @@ describe("documented DUPR behaviors (§5.1)", () => {
   it("#1 rewards beating a stronger opponent far more than a weaker one", () => {
     const upset = matchSurprise(3.5, 4.5, 11, 9);
     const expected = matchSurprise(4.5, 3.5, 11, 9);
-    expect(upset).toBeGreaterThan(Math.abs(expected) * 10);
+    expect(upset).toBeGreaterThan(0);
+    expect(expected).toBeLessThan(0);
+    // Same scoreline, opposite verdict, purely because of who you played.
+    expect(upset).toBeGreaterThan(Math.abs(expected));
   });
 
-  it("#4 lets margin matter, but only a little", () => {
+  it("#4 scores the margin, not the win", () => {
+    // Corrected in v1.1. We used to assert that margin mattered "only a
+    // little" — DUPR's Forecast shows the opposite: across three losses in
+    // one match the change swings 0.209 on margin alone, and winning by
+    // itself is worth nothing. See dupr-forecast.test.ts.
     const blowout = delta(matchSurprise(MID, MID, 11, 0));
     const squeaker = delta(matchSurprise(MID, MID, 11, 9));
-    const marginEffect = blowout - squeaker;
-    expect(marginEffect).toBeGreaterThan(0);
-    // Margin is worth well under half of what winning at all is worth.
-    expect(marginEffect).toBeLessThan(squeaker * 0.5);
+    expect(blowout).toBeGreaterThan(squeaker * 5);
+
+    // A win and a loss with the same margin are worth the same.
+    const narrowWin = delta(matchSurprise(MID, MID, 11, 10));
+    const narrowLoss = delta(matchSurprise(MID, MID, 10, 11));
+    expect(narrowWin).toBeCloseTo(-narrowLoss, 10);
   });
 
   it("#5 moves a brand-new player far faster than an established one", () => {
@@ -589,15 +603,21 @@ describe("dated tuning", () => {
   });
 
   it("replays an old session exactly as v1.0 scored it", () => {
-    const seed = (playerId: string, rating: number): SeedEvent => ({
+    /*
+     * The point of dated tuning: this expected value is a constant, not a
+     * comparison against whatever the engine does today. Retune anything and
+     * a match played before the cutover must still land here, because that is
+     * the number its players were shown.
+     */
+    const seeds: SeedEvent[] = ["a", "b", "c", "d"].map((id) => ({
       kind: "seed",
       at: new Date(before.getTime() - 3_600_000),
-      playerId,
-      rating,
+      playerId: id,
+      rating: 3.5,
       declaredReliability: 0,
       isInitial: true,
       selfInitiated: true,
-    });
+    }));
     const match = (at: Date): MatchEvent => ({
       kind: "match",
       at,
@@ -608,16 +628,11 @@ describe("dated tuning", () => {
       scoreB: 4,
     });
 
-    const seeds = [seed("a", 3.5), seed("b", 3.5), seed("c", 3.5), seed("d", 3.5)];
     const old = recompute([...seeds, match(before)]);
-    const now = recompute([...seeds, match(after)]);
-
-    const oldDelta = Math.abs(old.changes[0].delta);
-    const newDelta = Math.abs(now.changes[0].delta);
-
-    // Same four players, same score — only the date differs.
-    expect(oldDelta).toBeGreaterThan(newDelta);
-    expect(oldDelta / newDelta).toBeGreaterThan(2.5);
+    // v1.0: K_NEW 0.5 boosted by CAL_MULT 1.5 to 0.75, then clipped by the
+    // old CAP_PROVISIONAL of 0.25.
+    expect(old.changes[0].k).toBeCloseTo(0.75, 10);
+    expect(old.changes[0].delta).toBeCloseTo(TUNING_V1_0.CAP_PROVISIONAL, 10);
   });
 
   it("keeps a mixed history stable: old matches score old, new score new", () => {

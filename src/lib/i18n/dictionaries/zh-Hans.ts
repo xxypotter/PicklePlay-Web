@@ -327,6 +327,8 @@ export const zhHans: Dict = {
   "notes.v11.startingRating": "没有 DUPR 的新玩家起评分下调，第一次打完是往上修正，而不是一路往下掉。",
   "notes.v11.perMatch": "「我的战绩」现在会显示每场比赛让评分变动了多少。",
   "notes.v11.roster": "开赛前把缺席的人标记为未到，就会腾出名额，临时来的人可以直接补上。",
+  "notes.v11.underdog": "评分现在看比分差距，与 DUPR 官方预测一致。输给更强的对手 9-11，评分会上升而不是下降 — 之前我们搞反了。",
+  "notes.v11.sorting": "所有玩家列表都按字母顺序排列 — 管理页和创建活动选人时都一样，数字排在最前。",
   "notes.v10.initial": "首个版本：活动、报名、自动排对阵、记分、评分与排行榜。",
 
   "import.title": "加入 PicklePlay 之前的战绩",

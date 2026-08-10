@@ -367,6 +367,10 @@ export const en = {
   "notes.v11.perMatch": "My record now shows what each match did to your rating.",
   "notes.v11.roster":
     "Marking someone absent before a session frees their place, so a walk-in can take it.",
+  "notes.v11.underdog":
+    "Ratings now score the margin, matching DUPR's own forecast. Losing 9-11 to a stronger pair gains rating instead of losing it — we had that backwards.",
+  "notes.v11.sorting":
+    "Player lists are alphabetical everywhere — admin, and when you pick people for a session. Numbers come first.",
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
 

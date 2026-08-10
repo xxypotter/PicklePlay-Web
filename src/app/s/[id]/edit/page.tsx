@@ -4,6 +4,7 @@ import TopBar, { safeFrom } from "@/components/TopBar";
 import { canOrganizeSession } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
+import { sortByUsername } from "@/lib/players/sort";
 import { players, sessions, signups } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import EditForm from "./EditForm";
@@ -59,9 +60,11 @@ export default async function EditSessionPage({
   ]);
 
   const signedUp = new Set(roster.map((r) => r.playerId));
-  const playing = roster.filter((r) => r.state === "in");
+  // Signup order is meaningless to read; alphabetical is what people scan.
+  const playing = sortByUsername(roster.filter((r) => r.state === "in"));
+  // The waitlist is a queue, so it keeps its order.
   const waiting = roster.filter((r) => r.state === "waitlist");
-  const candidates = everyone.filter((p) => !signedUp.has(p.id));
+  const candidates = sortByUsername(everyone.filter((p) => !signedUp.has(p.id)));
 
   return (
     <>

@@ -122,15 +122,16 @@ export function matchSurprise(
   teamB: number,
   scoreA: number,
   scoreB: number,
+  tuning: Tuning = RATING,
 ): number {
-  const eP = expectedShare(teamA, teamB, RATING.D_POINTS);
+  const eP = expectedShare(teamA, teamB, tuning.D_POINTS);
   const eW = expectedShare(teamA, teamB, RATING.D_WIN);
-  const expected = RATING.ALPHA * eP + (1 - RATING.ALPHA) * eW;
+  const expected = tuning.ALPHA * eP + (1 - tuning.ALPHA) * eW;
 
   const total = scoreA + scoreB;
   const share = total > 0 ? scoreA / total : 0.5;
   const won = scoreA > scoreB ? 1 : 0;
-  const actual = RATING.ALPHA * share + (1 - RATING.ALPHA) * won;
+  const actual = tuning.ALPHA * share + (1 - tuning.ALPHA) * won;
 
   return actual - expected;
 }
@@ -400,14 +401,13 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
 
     const teamA = (a1.rating + a2.rating) / 2;
     const teamB = (b1.rating + b2.rating) / 2;
-    const surpriseA = matchSurprise(teamA, teamB, event.scoreA, event.scoreB);
-
-    // Every delta is computed from the pre-match ratings, then applied — so
-    // partner order within a match can never change the outcome.
     // Whatever tuning was in force the day this match was played, so replaying
     // history reproduces it rather than re-scoring it under today's numbers.
     const tuning = tuningFor(event.at);
+    const surpriseA = matchSurprise(teamA, teamB, event.scoreA, event.scoreB, tuning);
 
+    // Every delta is computed from the pre-match ratings, then applied — so
+    // partner order within a match can never change the outcome.
     const pending = st.map((s, i) => {
       const onTeamA = i < 2;
       const surprise = onTeamA ? surpriseA : -surpriseA;

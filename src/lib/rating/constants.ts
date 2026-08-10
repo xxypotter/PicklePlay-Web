@@ -23,18 +23,44 @@ export const RATING = {
    * D_WIN:    a 1.00 rating gap predicts a ~90% win probability.
    * D_WIN is deliberately steeper than D_POINTS.
    */
-  D_POINTS: 1.75,
+  D_POINTS: 1.33,
   D_WIN: 1.0,
 
   /**
    * How much of the signal comes from margin vs. pure win/loss (§5.3 step 2).
-   * 0.35 => 65% "did you win", 35% "by how much". This is what reproduces
-   * DUPR's documented behavior that score margin barely matters.
+   *
+   * 1.0 means the score is everything and winning, by itself, is worth nothing
+   * — which is what DUPR's own Forecast shows. Three outcomes of one match
+   * (screenshots in "dupr forecast/"): losing 3-11 costs 0.090, losing 6-11
+   * *gains* 0.033, losing 9-11 gains 0.119. All three are losses, so every bit
+   * of that 0.209 swing comes from the margin, and DUPR's own wording is
+   * "score at least 6 points to see your rating rise" rather than anything
+   * about winning.
+   *
+   * At the old 0.35 the binary win/loss carried 65% of the weight, which made
+   * us return the wrong sign for an underdog losing narrowly: we took rating
+   * away from a performance DUPR rewards.
+   *
+   * Kept as a parameter rather than deleted. The forecasts available are all
+   * losses, so they pin ALPHA x K but cannot separate a genuine win bonus from
+   * none at all; a single win forecast would settle it.
    */
-  ALPHA: 0.35,
+  ALPHA: 1.0,
 
-  /** K-factor endpoints: reliability 0 -> K_NEW, reliability 1 -> K_RELIABLE. */
-  K_NEW: 0.2,
+  /**
+   * K-factor endpoints: reliability 0 -> K_NEW, reliability 1 -> K_RELIABLE.
+   *
+   * K_NEW is set from the one hard measurement we have. DUPR's Forecast moves
+   * Xiayu Xu — 3.813 at 10% reliability, 18 matches in — by 0.887 per unit of
+   * point-share surprise. Solving the line through K_RELIABLE for that point
+   * gives 0.98, which is where an unproven player has to sit if a first
+   * session is going to find their level the way DUPR's does.
+   *
+   * The curve *between* the two ends is still a guess: we have one reading,
+   * not four. Forecasts for the same match from the other three players (60%,
+   * 40% and 100% reliable) would pin it properly.
+   */
+  K_NEW: 0.98,
   K_RELIABLE: 0.017,
 
   /**
@@ -49,8 +75,21 @@ export const RATING = {
   CAL_MATCHES: 5,
   CAL_MULT: 1.25,
 
-  /** Per-match movement caps. */
-  CAP_PROVISIONAL: 0.08,
+  /**
+   * Per-match movement caps — a guard against absurdity, not a working limit.
+   *
+   * This has to sit above every ordinary scoreline or it stops being a guard
+   * and starts being the answer: at 0.20 an unproven player got exactly the
+   * same move for 11-9, 11-3 and 11-0, erasing the margin signal that is now
+   * the whole mechanism.
+   *
+   * 0.35 clears every result up to about a two-thirds point share and trims
+   * only true blowouts. That upper end is the least trustworthy part of the
+   * model — the forecasts we have are all losses spanning shares 0.21 to 0.45,
+   * so what a *win* is worth is extrapolated rather than measured, and the cap
+   * is deliberately holding that extrapolation back until we can check it.
+   */
+  CAP_PROVISIONAL: 0.35,
   CAP_RELIABLE: 0.03,
 
   /**
@@ -108,6 +147,9 @@ export const RATING = {
  * part we expect to keep tuning.
  */
 export interface Tuning {
+  /** Margin vs win/loss weighting, and the curve that sets the expected score. */
+  ALPHA: number;
+  D_POINTS: number;
   K_NEW: number;
   K_RELIABLE: number;
   K_SEED_FLOOR: number;
@@ -133,6 +175,8 @@ export interface Tuning {
  * history stops being a moving target.
  */
 export const TUNING_V1_0: Tuning = {
+  ALPHA: 0.35,
+  D_POINTS: 1.75,
   K_NEW: 0.5,
   K_RELIABLE: 0.06,
   K_SEED_FLOOR: 0.15,

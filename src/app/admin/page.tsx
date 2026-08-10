@@ -12,6 +12,7 @@ import {
 import { getCurrentPlayer } from "@/lib/auth/session";
 import type { Role } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
+import { sortByUsername } from "@/lib/players/sort";
 import { auditLog, players, playerStats } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import { getInviteCode } from "@/lib/invite";
@@ -30,7 +31,7 @@ export default async function AdminPage() {
 
   const t = await getT(me.locale);
   const db = getDb();
-  const [code, roster, headerList, lastBackupRow] = await Promise.all([
+  const [code, rosterRows, headerList, lastBackupRow] = await Promise.all([
     getInviteCode(),
     db
       .select({
@@ -47,7 +48,6 @@ export default async function AdminPage() {
       })
       .from(players)
       .leftJoin(playerStats, eq(playerStats.playerId, players.id))
-      .orderBy(desc(players.createdAt))
       .limit(200),
     headers(),
     // A backup nobody can confirm ran is barely a backup. actorId is null when
@@ -59,6 +59,14 @@ export default async function AdminPage() {
       .orderBy(desc(auditLog.createdAt))
       .limit(1),
   ]);
+
+  /*
+   * Alphabetical, not newest-first. The roster used to be ordered by signup
+   * date, which is meaningless once there are thirty names: you cannot scan
+   * for someone under a rule you don't know. Same ordering as every other
+   * player list in the app.
+   */
+  const roster = sortByUsername(rosterRows);
 
   const lastBackup = lastBackupRow[0]
     ? {

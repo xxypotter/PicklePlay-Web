@@ -303,8 +303,14 @@ Actual   = ALPHA * S        + (1 - ALPHA) * W
 Surprise = Actual - Expected
 ```
 
-`ALPHA = 0.35` puts 65% of the signal on *did you win* and 35% on *by how much* —
-this is what produces behavior #4.
+`ALPHA = 1.0` puts the whole signal on the score and nothing on the bare fact of
+winning. This is measured, not assumed: DUPR's own Forecast (screenshots in
+`dupr forecast/`) gives three outcomes of one match as −0.090 at 3–11, **+0.033**
+at 6–11 and **+0.119** at 9–11. All three are losses, so the entire 0.209 swing
+is margin, and DUPR's wording is "score at least 6 points to see your rating
+rise". At the old 0.35 we returned the wrong sign for an underdog losing
+narrowly. Kept as a parameter because every forecast we have is a loss, which
+pins `ALPHA × K` but cannot rule out a win bonus.
 
 **Step 3 — Per-player K factor.** Each player has their own K, derived from their
 own reliability (§5.4), which is why partners move by different amounts.
@@ -312,7 +318,7 @@ own reliability (§5.4), which is why partners move by different amounts.
 ```
 K_i = K_RELIABLE + (K_NEW - K_RELIABLE) * (1 - reliability_i)
 
-K_NEW       = 0.20     # reliability 0 — brand new
+K_NEW       = 0.98     # reliability 0 — brand new
 K_RELIABLE  = 0.017    # reliability 1 — fully established
 ```
 

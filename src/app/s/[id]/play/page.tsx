@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import TopBar, { safeFrom } from "@/components/TopBar";
@@ -7,6 +7,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
 import { getAttending } from "@/lib/matchmaking/service";
+import { sortByUsername } from "@/lib/players/sort";
 import { getT } from "@/lib/i18n/server";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import MatchCard from "../MatchCard";
@@ -50,7 +51,7 @@ export default async function PlayPage({
   // comes after the lookup rather than before it.
   if (!canOrganizeSession(me, session)) notFound();
 
-  const [roster, allRounds, standings, attending] = await Promise.all([
+  const [rosterRows, allRounds, standings, attending] = await Promise.all([
     db
       .select({
         playerId: signups.playerId,
@@ -59,21 +60,23 @@ export default async function PlayPage({
       })
       .from(signups)
       .innerJoin(players, eq(players.id, signups.playerId))
-      .where(and(eq(signups.sessionId, id), eq(signups.state, "in")))
-      .orderBy(asc(players.username)),
+      .where(and(eq(signups.sessionId, id), eq(signups.state, "in"))),
     getAllRounds(id, session.courtNames, me.locale),
     getSessionStandings(id),
     getAttending(id),
   ]);
 
+  const roster = sortByUsername(rosterRows);
+
   const signedUpIds = new Set(roster.map((r) => r.playerId));
-  const notSignedUp = (
-    await db
-      .select({ id: players.id, username: players.username })
-      .from(players)
-      .where(eq(players.active, true))
-      .orderBy(asc(players.username))
-  ).filter((p) => !signedUpIds.has(p.id));
+  const notSignedUp = sortByUsername(
+    (
+      await db
+        .select({ id: players.id, username: players.username })
+        .from(players)
+        .where(eq(players.active, true))
+    ).filter((p) => !signedUpIds.has(p.id)),
+  );
 
   // Keep the chain intact: an admin who arrived from My sessions should walk
   // back out the same way rather than being dumped on the session page.
