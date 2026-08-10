@@ -5,7 +5,7 @@
  * DUPR behavior they broke.
  */
 import { describe, expect, it } from "vitest";
-import { RATING } from "./constants";
+import { RATING, TUNING_V1_0, tuningFor, RECALIBRATED_FROM } from "./constants";
 import {
   compression,
   evidenceWeight,
@@ -48,41 +48,59 @@ describe("expectation curves (§5.3 step 1)", () => {
   });
 });
 
+/*
+ * Worked examples for an established player.
+ *
+ * The surprise values are properties of the curves and did not move in the
+ * v1.1 recalibration. The deltas did: K_RELIABLE went 0.06 -> 0.017 so an
+ * ordinary result now shifts a settled rating by well under a hundredth,
+ * which is the scale DUPR actually moves at.
+ */
 describe("worked examples (§5.5)", () => {
-  it("even teams, win 11-9 → +0.021", () => {
+  it("even teams, win 11-9 → +0.0058", () => {
     const s = matchSurprise(MID, MID, 11, 9);
     expect(s).toBeCloseTo(0.3425, 4);
-    expect(delta(s)).toBeCloseTo(0.021, 3);
+    expect(delta(s)).toBeCloseTo(0.0058, 4);
   });
 
-  it("even teams, win 11-0 → +0.030", () => {
+  it("even teams, win 11-0 → +0.0085", () => {
     const s = matchSurprise(MID, MID, 11, 0);
     expect(s).toBeCloseTo(0.5, 4);
-    expect(delta(s)).toBeCloseTo(0.03, 3);
+    expect(delta(s)).toBeCloseTo(0.0085, 4);
   });
 
-  it("underdog by 1.00, wins 11-9 → +0.043", () => {
+  it("underdog by 1.00, wins 11-9 → +0.0121", () => {
     const s = matchSurprise(3.5, 4.5, 11, 9);
     expect(s).toBeCloseTo(0.7094, 4);
-    expect(delta(s)).toBeCloseTo(0.043, 3);
+    expect(delta(s)).toBeCloseTo(0.0121, 4);
   });
 
-  it("favorite by 1.00, wins 11-2 → +0.005", () => {
+  it("favorite by 1.00, wins 11-2 → +0.0013", () => {
     const s = matchSurprise(4.5, 3.5, 11, 2);
     expect(s).toBeCloseTo(0.0793, 4);
-    expect(delta(s, 4.5)).toBeCloseTo(0.005, 3);
+    expect(delta(s, 4.5)).toBeCloseTo(0.0013, 4);
   });
 
-  it("favorite by 1.00, wins 11-9 → -0.001 (down in a win)", () => {
+  it("favorite by 1.00, wins 11-9 → -0.0004 (down in a win)", () => {
     const s = matchSurprise(4.5, 3.5, 11, 9);
     expect(s).toBeLessThan(0);
-    expect(delta(s, 4.5)).toBeCloseTo(-0.001, 3);
+    expect(delta(s, 4.5)).toBeCloseTo(-0.0004, 4);
   });
 
-  it("underdog by 1.00, loses 9-11 → +0.001 (up in a loss)", () => {
+  it("underdog by 1.00, loses 9-11 → +0.0004 (up in a loss)", () => {
     const s = matchSurprise(3.5, 4.5, 9, 11);
     expect(s).toBeGreaterThan(0);
-    expect(delta(s)).toBeCloseTo(0.001, 3);
+    expect(delta(s)).toBeCloseTo(0.0004, 4);
+  });
+
+  it("moves a settled rating about a third as far as v1.0 did", () => {
+    // The complaint that started the recalibration: a player compared a
+    // session against DUPR's forecast and found us roughly 3x too generous.
+    const s = matchSurprise(MID, MID, 11, 9);
+    const before = ratingDelta(MID, TUNING_V1_0.K_RELIABLE, s, false, TUNING_V1_0);
+    const after = delta(s);
+    expect(before / after).toBeGreaterThan(3);
+    expect(before / after).toBeLessThan(3.8);
   });
 });
 
@@ -547,5 +565,87 @@ describe("changing your own rating reopens the question (§5.8)", () => {
       ...session(now - day(1), "b", 3),
     ]).players.get("p0")!;
     expect(after.provisional).toBe(false);
+  });
+});
+
+/*
+ * Dated tuning (v1.1).
+ *
+ * The engine rebuilds every rating from the whole history, so a change to the
+ * K-factors would ordinarily re-score matches players have already been shown.
+ * These lock in the promise that it doesn't.
+ */
+describe("dated tuning", () => {
+  const before = new Date(RECALIBRATED_FROM.getTime() - 86_400_000);
+  const after = new Date(RECALIBRATED_FROM.getTime() + 86_400_000);
+
+  it("uses the old movement for a match played before the cutover", () => {
+    expect(tuningFor(before)).toEqual(TUNING_V1_0);
+  });
+
+  it("uses the current movement from the cutover onward", () => {
+    expect(tuningFor(RECALIBRATED_FROM).K_RELIABLE).toBe(RATING.K_RELIABLE);
+    expect(tuningFor(after).K_RELIABLE).toBe(RATING.K_RELIABLE);
+  });
+
+  it("replays an old session exactly as v1.0 scored it", () => {
+    const seed = (playerId: string, rating: number): SeedEvent => ({
+      kind: "seed",
+      at: new Date(before.getTime() - 3_600_000),
+      playerId,
+      rating,
+      declaredReliability: 0,
+      isInitial: true,
+      selfInitiated: true,
+    });
+    const match = (at: Date): MatchEvent => ({
+      kind: "match",
+      at,
+      matchId: `m-${at.getTime()}`,
+      teamA: ["a", "b"],
+      teamB: ["c", "d"],
+      scoreA: 11,
+      scoreB: 4,
+    });
+
+    const seeds = [seed("a", 3.5), seed("b", 3.5), seed("c", 3.5), seed("d", 3.5)];
+    const old = recompute([...seeds, match(before)]);
+    const now = recompute([...seeds, match(after)]);
+
+    const oldDelta = Math.abs(old.changes[0].delta);
+    const newDelta = Math.abs(now.changes[0].delta);
+
+    // Same four players, same score — only the date differs.
+    expect(oldDelta).toBeGreaterThan(newDelta);
+    expect(oldDelta / newDelta).toBeGreaterThan(2.5);
+  });
+
+  it("keeps a mixed history stable: old matches score old, new score new", () => {
+    const seeds: SeedEvent[] = ["a", "b", "c", "d"].map((id) => ({
+      kind: "seed",
+      at: new Date(before.getTime() - 3_600_000),
+      playerId: id,
+      rating: 3.5,
+      declaredReliability: 0,
+      isInitial: true,
+      selfInitiated: true,
+    }));
+    const older: MatchEvent = {
+      kind: "match", at: before, matchId: "old",
+      teamA: ["a", "b"], teamB: ["c", "d"], scoreA: 11, scoreB: 4,
+    };
+    const newer: MatchEvent = {
+      kind: "match", at: after, matchId: "new",
+      teamA: ["a", "b"], teamB: ["c", "d"], scoreA: 11, scoreB: 4,
+    };
+
+    const both = recompute([...seeds, older, newer]);
+    const onlyOld = recompute([...seeds, older]);
+
+    // Adding a later match must not disturb what the earlier one recorded.
+    const oldInBoth = both.changes.find((c) => c.matchId === "old" && c.playerId === "a")!;
+    const oldAlone = onlyOld.changes.find((c) => c.playerId === "a")!;
+    expect(oldInBoth.delta).toBeCloseTo(oldAlone.delta, 12);
+    expect(oldInBoth.ratingAfter).toBeCloseTo(oldAlone.ratingAfter, 12);
   });
 });

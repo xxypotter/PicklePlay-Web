@@ -99,6 +99,13 @@ export const en = {
   "session.rated.no": "Casual — no rating change",
   "session.finished": "This session is finished.",
   "session.share": "Share this session",
+  "share.summary": "{when} · {where}",
+  "share.spots": "{count} of {max} signed up · {courts}",
+  "share.full": "Full — waitlist open",
+  "share.spotsLeft": "{count} place left",
+  "share.spotsLeft.plural": "{count} places left",
+  "share.finished": "Finished · {count} matches played",
+  "share.tapToJoin": "Tap to see the matchups and join.",
   "session.linkCopied": "Link copied!",
   "session.playing": "Playing ({count})",
   "session.waitlist": "Waitlist ({count})",
@@ -148,6 +155,13 @@ export const en = {
   "schedule.empty": "No matches yet.",
   "schedule.emptyHint":
     "The organizer starts the session and builds the schedule when play begins.",
+  "schedule.filterHint": "Tap players to see only the games they're in.",
+  "schedule.filterClear": "Show all",
+  "schedule.filterCount": "{count} game",
+  "schedule.filterCount.plural": "{count} games",
+  "schedule.filterTogether": "{together} together · {against} against",
+  "schedule.filterNone": "No games with everyone you picked.",
+  "schedule.filterYou": "You",
   "schedule.round": "Round {index} · {count} court",
   "schedule.round.plural": "Round {index} · {count} courts",
   "schedule.court": "Court {name}",
@@ -254,6 +268,10 @@ export const en = {
   "form.invitedHint": "Optional — leave empty and people RSVP themselves.",
   "form.rated": "Counts toward ratings",
   "form.ratedHint": "Turn off for a casual event.",
+  "form.private": "Private session",
+  "form.privateHint":
+    "Only you and the players you add will see this in Upcoming and History. Results still count toward ratings as normal.",
+  "card.private": " · private",
   "form.create": "Create session",
   "form.creating": "Creating…",
   "form.saveChanges": "Save changes",
@@ -332,6 +350,25 @@ export const en = {
   "me.gender.unspecified": "Not listed",
   "me.language": "Language",
   "me.languageHint": "Applies everywhere, and is remembered on your account.",
+  "me.version": "Version {version}",
+  "me.whatsNew": "What's new",
+  "notes.title": "What's new",
+  "notes.current": "You're on this version",
+  "notes.v11.share":
+    "Sharing a session link now shows the title, time, place and how many spots are left, instead of just \"PicklePlay\".",
+  "notes.v11.filter":
+    "On Matchups, tap two players to see only the games they share — how many you're partnered and how many you're against.",
+  "notes.v11.roundRobin":
+    "Regular round robin now solves the whole session at once, so you really do partner everyone exactly once. Two pairs repeated in a recent session; that can't happen now.",
+  "notes.v11.rating":
+    "Ratings now move about a third as far per match, much closer to what DUPR does. Matches already played keep the numbers they had — nothing was rewritten.",
+  "notes.v11.startingRating":
+    "New players without a DUPR now start lower, so a first session corrects them upward rather than dragging them down.",
+  "notes.v11.perMatch": "My record now shows what each match did to your rating.",
+  "notes.v11.roster":
+    "Marking someone absent before a session frees their place, so a walk-in can take it.",
+  "notes.v10.initial":
+    "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
 
   // --- imported record ----------------------------------------------------
   "import.title": "Record before PicklePlay",
@@ -434,6 +471,9 @@ export const en = {
     "From three or more games together, so one lucky night doesn't decide it.",
   "record.matches": "Matches ({count})",
   "record.matchesEmpty": "Nothing played here yet.",
+  "record.ratingUnchanged": "casual",
+  "record.deltaHint":
+    "The number under each score is what that match did to the rating. Casual sessions don't move it.",
   "record.with": "with {partner}",
   "record.versus": "v",
   "record.win": "W",
@@ -539,6 +579,15 @@ export const en = {
   "admin.newPin": "New PIN",
   "admin.setPin": "Set",
   "admin.clearImported": "Clear imported record",
+  "admin.deleteAccount": "Delete account",
+  "admin.deleteConfirm": "Tap again to delete {name}",
+  "admin.deleteHint":
+    "For duplicate accounts — somebody who forgot a PIN and signed up twice. Permanent, and only possible before they have played.",
+  "admin.deleted": "{name} deleted.",
+  "err.deleteSelf": "You can't delete your own account.",
+  "err.deleteSuperadmin": "The super admin's account can't be deleted.",
+  "err.deletePlayed":
+    "{name} has played {count} matches, so deleting the account would tear holes in other players' records. Reset their PIN instead, or clear the matches first.",
   "admin.importedLine": "Imported {wins}/{matches} ({rate}%)",
   "admin.clear": "Clear",
   "admin.newPinPlaceholder": "New 4–6 digit PIN",

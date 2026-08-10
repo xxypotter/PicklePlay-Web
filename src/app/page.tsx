@@ -7,7 +7,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
-import { canManageSessions } from "@/lib/auth/policy";
+import { canManageSessions, canSeeSession } from "@/lib/auth/policy";
 import { getT } from "@/lib/i18n/server";
 
 /**
@@ -68,6 +68,8 @@ export default async function HomePage({
       courtNames: sessions.courtNames,
       maxPlayers: sessions.maxPlayers,
       format: sessions.format,
+      isPrivate: sessions.isPrivate,
+      createdBy: sessions.createdBy,
       organizer: players.username,
     })
     .from(sessions)
@@ -101,11 +103,19 @@ export default async function HomePage({
 
   const canCreate = !!me && canManageSessions(me.role);
 
-  const cards: SessionCardData[] = rows.map((r) => ({
-    ...r,
-    signedUp: countBy.get(r.id) ?? 0,
-    myState: stateBy.get(r.id),
-  }));
+  /*
+   * A private session is invisible to anyone not in it, including in History.
+   * Filtered here rather than in SQL because "am I playing in it" is already
+   * loaded above, and one predicate shared with the session page is worth more
+   * than saving a join on a list this short.
+   */
+  const cards: SessionCardData[] = rows
+    .filter((r) => canSeeSession(me, r, stateBy.has(r.id)))
+    .map((r) => ({
+      ...r,
+      signedUp: countBy.get(r.id) ?? 0,
+      myState: stateBy.get(r.id),
+    }));
 
   const myCards = cards.filter((c) => c.myState);
   const otherCards = cards.filter((c) => !c.myState);

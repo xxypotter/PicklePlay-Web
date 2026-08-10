@@ -17,4 +17,6 @@ export interface FormState {
   error?: string;
   /** Which field to focus, so mobile users aren't hunting for the problem. */
   field?: string;
+  /** Confirmation for an action whose success isn't visible on screen. */
+  ok?: string;
 }

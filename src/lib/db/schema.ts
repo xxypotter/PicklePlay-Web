@@ -179,6 +179,15 @@ export const sessions = pgTable(
     format: formatEnum("format").notNull().default("balanced"),
     /** False for a casual night that shouldn't touch anyone's rating. */
     rated: boolean("rated").notNull().default(true),
+    /**
+     * Hidden from the session lists for anyone not playing in it.
+     *
+     * Only affects the Upcoming and History listings and direct access to the
+     * session page. Ratings, records and the rankings are untouched: a private
+     * night still counts, and a player's own history still shows every match
+     * they played, so this hides an event rather than falsifying a record.
+     */
+    isPrivate: boolean("is_private").notNull().default(false),
     status: sessionStatusEnum("status").notNull().default("open"),
     notes: text("notes"),
     createdBy: uuid("created_by").references(() => players.id, { onDelete: "set null" }),

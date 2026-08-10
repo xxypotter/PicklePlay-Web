@@ -9,7 +9,7 @@
  * (which is proprietary and unpublished). See §5.1 for the behaviors it
  * reproduces and §5.5 for the worked examples the test suite asserts.
  */
-import { RATING } from "./constants";
+import { RATING, tuningFor, type Tuning } from "./constants";
 
 const DAY_MS = 86_400_000;
 
@@ -144,11 +144,21 @@ export function compression(rating: number, gaining: boolean): number {
   return Math.sqrt(clamp(room / RATING.COMPRESS_BAND, 0, 1));
 }
 
-/** Per-player K (§5.3 step 3). Lower reliability means faster movement. */
-export function kFactor(reliability: number, localMatches: number): number {
-  let k = RATING.K_RELIABLE + (RATING.K_NEW - RATING.K_RELIABLE) * (1 - reliability);
-  if (localMatches < RATING.CAL_MATCHES) k *= RATING.CAL_MULT;
-  if (localMatches < RATING.SEED_FLOOR_MATCHES) k = Math.max(k, RATING.K_SEED_FLOOR);
+/**
+ * Per-player K (§5.3 step 3). Lower reliability means faster movement.
+ *
+ * `tuning` defaults to the current values; the recompute passes the tuning that
+ * was in force when the match was played, so re-running history reproduces the
+ * ratings players were actually shown.
+ */
+export function kFactor(
+  reliability: number,
+  localMatches: number,
+  tuning: Tuning = RATING,
+): number {
+  let k = tuning.K_RELIABLE + (tuning.K_NEW - tuning.K_RELIABLE) * (1 - reliability);
+  if (localMatches < tuning.CAL_MATCHES) k *= tuning.CAL_MULT;
+  if (localMatches < tuning.SEED_FLOOR_MATCHES) k = Math.max(k, tuning.K_SEED_FLOOR);
   return k;
 }
 
@@ -158,9 +168,10 @@ export function ratingDelta(
   k: number,
   surprise: number,
   provisional: boolean,
+  tuning: Tuning = RATING,
 ): number {
   const raw = k * surprise * compression(rating, surprise > 0);
-  const cap = provisional ? RATING.CAP_PROVISIONAL : RATING.CAP_RELIABLE;
+  const cap = provisional ? tuning.CAP_PROVISIONAL : tuning.CAP_RELIABLE;
   return clamp(raw, -cap, cap);
 }
 
@@ -393,13 +404,17 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
 
     // Every delta is computed from the pre-match ratings, then applied — so
     // partner order within a match can never change the outcome.
+    // Whatever tuning was in force the day this match was played, so replaying
+    // history reproduces it rather than re-scoring it under today's numbers.
+    const tuning = tuningFor(event.at);
+
     const pending = st.map((s, i) => {
       const onTeamA = i < 2;
       const surprise = onTeamA ? surpriseA : -surpriseA;
       const reliability = reliabilityAt(s, atMs);
       const halfLife = halfLifeAt(s, atMs);
-      const k = kFactor(reliability, s.localMatches);
-      const delta = ratingDelta(s.rating, k, surprise, isProvisional(reliability));
+      const k = kFactor(reliability, s.localMatches, tuning);
+      const delta = ratingDelta(s.rating, k, surprise, isProvisional(reliability), tuning);
       return { surprise, reliability, halfLife, k, delta, before: s.rating };
     });
 

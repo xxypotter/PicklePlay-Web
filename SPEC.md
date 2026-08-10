@@ -312,15 +312,15 @@ own reliability (§5.4), which is why partners move by different amounts.
 ```
 K_i = K_RELIABLE + (K_NEW - K_RELIABLE) * (1 - reliability_i)
 
-K_NEW       = 0.50     # reliability 0 — brand new
-K_RELIABLE  = 0.06     # reliability 1 — fully established
+K_NEW       = 0.20     # reliability 0 — brand new
+K_RELIABLE  = 0.017    # reliability 1 — fully established
 ```
 
 During a player's first `CAL_MATCHES = 5` matches, K is multiplied by
-`CAL_MULT = 1.5` so new players converge on their true level quickly.
+`CAL_MULT = 1.25` so new players converge on their true level quickly.
 
 **Seed floor.** Until a player has played 5 real matches *in this group*, K is
-floored at `K_SEED_FLOOR = 0.15` regardless of the reliability they declared at
+floored at `K_SEED_FLOOR = 0.043` regardless of the reliability they declared at
 signup. Without this, someone could type "4.5, 100% reliable" and be nearly
 immovable on the strength of a number nobody verified (§5.7).
 
@@ -411,17 +411,17 @@ reliability is under 60%.
 
 ### 5.5 Worked examples — validating the behaviors
 
-All examples use an established player (`K = 0.06`), game to 11.
+All examples use an established player (`K = 0.017`), game to 11.
 
 | Scenario | Surprise | Δ rating | Behavior shown |
 |---|---|---|---|
-| Even teams, win 11–9 | +0.343 | **+0.021** | Normal win |
-| Even teams, win 11–0 | +0.500 | **+0.030** | Margin adds only ~0.009 → #4 |
-| Underdog by 1.00, win 11–9 | +0.709 | **+0.043** | Upset richly rewarded → #1 |
-| Favorite by 1.00, win 11–2 | +0.079 | **+0.005** | Expected win barely counts |
-| **Favorite by 1.00, win 11–9** | **−0.025** | **−0.001** | **Down in a win → #3** |
-| **Underdog by 1.00, lose 9–11** | **+0.024** | **+0.001** | **Up in a loss → #2** |
-| Same as row 1, but brand-new player (K=0.50) | +0.343 | **+0.171** | New players move fast → #5 |
+| Even teams, win 11–9 | +0.343 | **+0.0058** | Normal win |
+| Even teams, win 11–0 | +0.500 | **+0.0085** | Margin adds only ~0.003 → #4 |
+| Underdog by 1.00, win 11–9 | +0.709 | **+0.0121** | Upset richly rewarded → #1 |
+| Favorite by 1.00, win 11–2 | +0.079 | **+0.0013** | Expected win barely counts |
+| **Favorite by 1.00, win 11–9** | **−0.024** | **−0.0004** | **Down in a win → #3** |
+| **Underdog by 1.00, lose 9–11** | **+0.024** | **+0.0004** | **Up in a loss → #2** |
+| Same as row 1, but brand-new player (K=0.25) | +0.343 | **+0.0856** | New players move fast → #5 |
 
 The last two rows are the tell that the model is right — they're the exact DUPR
 quirks players notice and talk about.
@@ -465,7 +465,23 @@ This gives us for free:
 - No possibility of accumulated drift or corrupted state.
 
 A `rating_events` table stores the per-match before/after for display (rating
-history charts, "+0.043" next to each match), but it's a rebuildable cache.
+history charts, "+0.006" next to each match), but it's a rebuildable cache.
+
+#### 5.6.1 Dated tuning
+
+Rebuilding from history means a change to the K-factors would re-score matches
+players have already seen. Results that have been shown are theirs, so the
+movement constants are versioned by date rather than edited in place: a match
+replays under whichever tuning was in force the day it was played
+(`TUNING_V1_0` before `RECALIBRATED_FROM`, the current values after).
+
+v1.1 recalibrated after a player compared a session against DUPR's forecast and
+found PicklePlay moving roughly three times as far. Measured over the 54
+matches on record, a settled player's mean move went from 0.043 to 0.014 — the
+3x the comparison called for — while every match already played came out
+bit-identical. Only the movement knobs are versioned; the curves, the
+reliability waypoints and the scale describe what a rating *is*, and correcting
+one of those genuinely should replay history.
 
 ### 5.7 Seeding from a real DUPR
 

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import BottomNav from "@/components/BottomNav";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
@@ -13,7 +14,19 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export async function generateMetadata(): Promise<Metadata> {
   const me = await getCurrentPlayer();
   const t = await getT(me?.locale);
+
+  /*
+   * Open Graph URLs have to be absolute, and the deployment doesn't know its
+   * own hostname at build time — preview builds, the vercel.app domain and a
+   * custom domain are all the same code. Taking it from the request means a
+   * link shared from wherever the reader was actually browsing resolves.
+   */
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+
   return {
+    metadataBase: new URL(`${proto}://${host}`),
     title: t("app.name"),
     description: t("app.description"),
     applicationName: t("app.name"),

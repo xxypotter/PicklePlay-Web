@@ -7,6 +7,7 @@ import {
   canRecomputeRatings,
   canRotateInviteCode,
   canRunBackup,
+  isAtLeast,
 } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import type { Role } from "@/lib/auth/types";
@@ -102,6 +103,7 @@ export default async function AdminPage() {
         roster={roster.map((p) => ({ ...p, role: p.role as Role }))}
         canManageRoles={canManageRoles(me.role)}
         canRecompute={canRecomputeRatings(me.role)}
+        canDelete={isAtLeast(me.role, "superadmin")}
         meRole={me.role}
         meId={me.id}
       />

@@ -10,6 +10,7 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getT } from "@/lib/i18n/server";
 import { getLocale } from "@/lib/i18n/server";
 import LanguageCard from "@/components/LanguageCard";
+import { CURRENT_VERSION } from "@/lib/release-notes";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
 import { AvatarCard, GenderCard, ImportRecordCard } from "./ProfileCards";
@@ -123,7 +124,20 @@ export default async function MePage() {
           playedHere={stats?.localMatches ?? 0}
         />
 
-        <form action={logoutAction} className="mt-6">
+        {/*
+          The version sits with Log out rather than in the shortcut grid: it is
+          the thing you look for when something behaves oddly, not something you
+          tap every visit.
+        */}
+        <Link
+          href="/notes?from=/me"
+          className="mt-6 flex items-center justify-center gap-2 text-xs text-[var(--muted)]"
+        >
+          <span>{t("me.version", { version: CURRENT_VERSION })}</span>
+          <span className="font-semibold text-[var(--accent)]">{t("me.whatsNew")}</span>
+        </Link>
+
+        <form action={logoutAction} className="mt-4">
           <button type="submit" className="btn-ghost text-[var(--muted)]">
             {t("me.logout")}
           </button>

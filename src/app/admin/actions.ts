@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth/permissions";
 import { hashPin, validatePin } from "@/lib/auth/pin";
@@ -9,7 +9,7 @@ import { canAdjustRating } from "@/lib/auth/policy";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { auditLog, players, ratingSeeds } from "@/lib/db/schema";
+import { auditLog, matches, players, ratingSeeds } from "@/lib/db/schema";
 import { generateInviteCode, setInviteCode } from "@/lib/invite";
 import { RATING } from "@/lib/rating/constants";
 import { recomputeAll, type RecomputeSummary } from "@/lib/rating/service";
@@ -245,4 +245,70 @@ export async function recomputeAction(): Promise<RecomputeSummary> {
   revalidatePath("/admin");
   revalidatePath("/");
   return summary;
+}
+
+/**
+ * Delete a duplicate account.
+ *
+ * The case this exists for: somebody forgets their PIN, signs up again, and
+ * now the roster and the rankings carry a ghost. Super admin only.
+ *
+ * Refused once they have played, and deliberately so. Four columns of every
+ * match point at players with no cascade, so the database would reject the
+ * delete anyway — but a foreign-key error is a terrible way to learn that
+ * removing this person would tear holes in three other people's records. We
+ * check first and say why. A real duplicate has never played, so the case that
+ * matters still works in one tap.
+ */
+export async function deletePlayerAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const me = await requireSuperAdmin();
+  const t = await getT(me.locale);
+
+  const targetId = String(formData.get("playerId") ?? "");
+  if (targetId === me.id) return { error: t("err.deleteSelf") };
+
+  const db = getDb();
+  const rows = await db
+    .select({ id: players.id, username: players.username, role: players.role })
+    .from(players)
+    .where(eq(players.id, targetId))
+    .limit(1);
+
+  const target = rows[0];
+  if (!target) return { error: t("err.playerGone") };
+  if (target.role === "superadmin") return { error: t("err.deleteSuperadmin") };
+
+  const [{ played }] = await db
+    .select({ played: sql<number>`count(*)::int` })
+    .from(matches)
+    .where(
+      or(
+        eq(matches.a1, targetId),
+        eq(matches.a2, targetId),
+        eq(matches.b1, targetId),
+        eq(matches.b2, targetId),
+      ),
+    );
+
+  if (played > 0) {
+    return { error: t("err.deletePlayed", { name: target.username, count: played }) };
+  }
+
+  // Signups, seeds, stats, rating events and login tokens all cascade.
+  await db.delete(players).where(eq(players.id, targetId));
+
+  await db.insert(auditLog).values({
+    actorId: me.id,
+    action: "player.delete",
+    targetType: "player",
+    targetId,
+    detail: target.username,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/leaderboard");
+  return { ok: t("admin.deleted", { name: target.username }) };
 }

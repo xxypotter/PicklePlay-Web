@@ -7,7 +7,7 @@ import type { Actor } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
-import { createNextRound } from "@/lib/matchmaking/service";
+import { createAllRounds, createNextRound } from "@/lib/matchmaking/service";
 import { requireOrganizer, requireScorer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { recomputeAll } from "@/lib/rating/service";
@@ -109,9 +109,7 @@ export async function generateAllRoundsAction(
   await requireLive(sessionId);
 
   const wanted = Math.max(1, Math.min(MAX_ROUNDS, Math.floor(roundCount)));
-  for (let i = 0; i < wanted; i++) {
-    await createNextRound(sessionId);
-  }
+  await createAllRounds(sessionId, wanted);
 
   revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);

@@ -19,7 +19,14 @@ export interface PickablePlayer {
   rating: number | null;
 }
 
-export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
+export default function SessionForm({
+  roster,
+  canMakePrivate = false,
+}: {
+  roster: PickablePlayer[];
+  /** Super admin only; the checkbox simply isn't rendered for anyone else. */
+  canMakePrivate?: boolean;
+}) {
   const t = useT();
   const [state, action, pending] = useActionState(createSessionAction, {} as FormState);
   const [courts, setCourts] = useState("1, 2");
@@ -273,6 +280,16 @@ export default function SessionForm({ roster }: { roster: PickablePlayer[] }) {
           <span className="hint block">{t("form.ratedHint")}</span>
         </span>
       </label>
+
+      {canMakePrivate ? (
+        <label className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-4">
+          <input type="checkbox" name="isPrivate" className="size-5 accent-[var(--accent)]" />
+          <span>
+            <span className="font-medium">{t("form.private")}</span>
+            <span className="hint block">{t("form.privateHint")}</span>
+          </span>
+        </label>
+      ) : null}
 
       {state.error ? (
         <p role="alert" className="text-sm font-medium text-[var(--danger)]">

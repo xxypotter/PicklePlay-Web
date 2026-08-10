@@ -6,6 +6,7 @@ import TopBar from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { matches, sessions, signups } from "@/lib/db/schema";
+import { canSeeSession } from "@/lib/auth/policy";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
@@ -30,6 +31,8 @@ export default async function SessionsPage() {
       startsAt: sessions.startsAt,
       status: sessions.status,
       rated: sessions.rated,
+      isPrivate: sessions.isPrivate,
+      createdBy: sessions.createdBy,
     })
     .from(sessions)
     .orderBy(desc(sessions.startsAt))
@@ -54,6 +57,9 @@ export default async function SessionsPage() {
   const matchesBy = new Map(playedCounts.map((c) => [c.sessionId, c.n]));
   const mineBy = new Map(mySignups.map((s) => [s.sessionId, s.state]));
 
+  // Same rule as Home: a private night belongs to the people in it.
+  const visible = all.filter((s) => canSeeSession(me, s, mineBy.has(s.id)));
+
   /*
    * Yours first, then everyone else's.
    *
@@ -61,12 +67,12 @@ export default async function SessionsPage() {
    * the group buried the two or three that are actually yours. Each session
    * appears once — your past nights aren't repeated in the archive below.
    */
-  const mineUpcoming = all
+  const mineUpcoming = visible
     .filter((s) => s.status !== "closed" && mineBy.has(s.id))
     .reverse(); // soonest first
-  const minePast = all.filter((s) => s.status === "closed" && mineBy.has(s.id));
-  const otherPast = all.filter((s) => s.status === "closed" && !mineBy.has(s.id));
-  const otherUpcoming = all.filter((s) => s.status !== "closed" && !mineBy.has(s.id)).length;
+  const minePast = visible.filter((s) => s.status === "closed" && mineBy.has(s.id));
+  const otherPast = visible.filter((s) => s.status === "closed" && !mineBy.has(s.id));
+  const otherUpcoming = visible.filter((s) => s.status !== "closed" && !mineBy.has(s.id)).length;
 
   return (
     <>

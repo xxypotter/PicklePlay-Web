@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
+import { canCreatePrivateSession } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { sessions, signups } from "@/lib/db/schema";
@@ -105,6 +106,13 @@ export async function createSessionAction(
       maxPlayers,
       format,
       rated: formData.get("rated") !== null,
+      /*
+       * Checked server-side, not merely hidden in the form. The checkbox is
+       * absent for everyone below super admin, but a hidden field is a
+       * suggestion — anyone can post one.
+       */
+      isPrivate:
+        formData.get("isPrivate") !== null && canCreatePrivateSession(me),
       notes: str(formData, "notes") || null,
       status: "open",
       createdBy: me.id,

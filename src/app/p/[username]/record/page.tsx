@@ -5,7 +5,7 @@ import MarginChart from "@/components/MarginChart";
 import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
-import { matches, players } from "@/lib/db/schema";
+import { matches, players, ratingEvents } from "@/lib/db/schema";
 import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
@@ -93,13 +93,42 @@ export default async function RecordPage({
     involved.add(m.partnerId);
     for (const o of m.opponentIds) involved.add(o);
   }
-  const nameRows = involved.size
-    ? await db
-        .select({ id: players.id, username: players.username })
-        .from(players)
-        .where(inArray(players.id, [...involved]))
-    : [];
+  const matchIds = record.matches.map((m) => m.matchId);
+
+  /*
+   * What each match did to this player's rating.
+   *
+   * Read separately from the matches themselves because the two don't line up
+   * one-to-one: a casual session is played and scored but never rated, so it
+   * has a row here and no event. Missing means "this game didn't count",
+   * which the row says out loud rather than showing a misleading 0.000.
+   */
+  const [nameRows, deltaRows] = await Promise.all([
+    involved.size
+      ? db
+          .select({ id: players.id, username: players.username })
+          .from(players)
+          .where(inArray(players.id, [...involved]))
+      : Promise.resolve([]),
+    matchIds.length
+      ? db
+          .select({
+            matchId: ratingEvents.matchId,
+            delta: ratingEvents.delta,
+            ratingAfter: ratingEvents.ratingAfter,
+          })
+          .from(ratingEvents)
+          .where(
+            and(
+              eq(ratingEvents.playerId, player.id),
+              inArray(ratingEvents.matchId, matchIds),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+
   const nameOf = new Map(nameRows.map((n) => [n.id, n.username]));
+  const movementOf = new Map(deltaRows.map((d) => [d.matchId, d]));
 
   // Career = brought with them plus played here, matching Me and the rankings.
   const careerPlayed = player.importedMatches + record.played;
@@ -236,14 +265,18 @@ export default async function RecordPage({
                       <LocalDateTime iso={m.playedAt.toISOString()} withWeekday={false} />
                     </p>
                   </div>
-                  <span className="shrink-0 font-mono text-sm tabular-nums">
-                    {m.scoreFor}–{m.scoreAgainst}
-                  </span>
+                  <div className="shrink-0 text-right">
+                    <p className="font-mono text-sm tabular-nums">
+                      {m.scoreFor}–{m.scoreAgainst}
+                    </p>
+                    <RatingMove move={movementOf.get(m.matchId)} t={t} />
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </section>
+        <p className="hint px-1">{t("record.deltaHint")}</p>
       </main>
     </>
   );
@@ -276,6 +309,37 @@ function fact(
     ? t("record.factRatio", { wins: count, games: h.games, verb: t(verbKey) })
     : t.plural("record.factGames", h.games, { count: h.games });
   return { key: labelKey, label: t(labelKey), name, detail };
+}
+
+/**
+ * What this match did to the rating.
+ *
+ * Three decimals because the recalibrated engine moves a settled player by
+ * thousandths — rounding to two would show "+0.01" or, more often, "0.00" for
+ * every result, which is exactly the detail this is here to expose.
+ */
+function RatingMove({
+  move,
+  t,
+}: {
+  move?: { delta: number; ratingAfter: number };
+  t: T;
+}) {
+  if (!move) {
+    return <p className="text-[10px] text-[var(--muted)]">{t("record.ratingUnchanged")}</p>;
+  }
+  const up = move.delta >= 0;
+  return (
+    <p
+      className={`font-mono text-[11px] tabular-nums ${
+        up ? "text-[var(--success)]" : "text-[var(--danger)]"
+      }`}
+      title={move.ratingAfter.toFixed(3)}
+    >
+      {up ? "+" : "−"}
+      {Math.abs(move.delta).toFixed(3)}
+    </p>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

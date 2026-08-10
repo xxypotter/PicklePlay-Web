@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import TopBar, { safeFrom } from "@/components/TopBar";
-import { canManageSessions } from "@/lib/auth/policy";
+import { canCreatePrivateSession, canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
@@ -38,7 +38,7 @@ export default async function NewSessionPage({
       {/* Reached from the centre button, which exists on every screen. */}
       <TopBar title={t("form.newSession")} back={safeFrom(from, "/")} />
       <main className="screen pt-4">
-        <SessionForm roster={roster} />
+        <SessionForm roster={roster} canMakePrivate={canCreatePrivateSession(me)} />
       </main>
     </>
   );

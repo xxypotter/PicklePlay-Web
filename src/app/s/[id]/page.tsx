@@ -1,28 +1,104 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import LocalDateTime from "@/components/LocalDateTime";
 import Tabs from "@/components/Tabs";
 import TopBar, { safeFrom } from "@/components/TopBar";
-import { canOrganizeSession, canScoreMatch } from "@/lib/auth/policy";
+import { canOrganizeSession, canScoreMatch, canSeeSession } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
-import { players, playerStats, sessions, signups } from "@/lib/db/schema";
+import { matches, players, playerStats, sessions, signups } from "@/lib/db/schema";
 import { getInviteCode } from "@/lib/invite";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import type { DictKey } from "@/lib/i18n/dictionaries/en";
-import { getT } from "@/lib/i18n/server";
+import { getLocale, getT } from "@/lib/i18n/server";
+import { shareDescription } from "@/lib/sessions/share";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import Schedule from "./Schedule";
 import ShareLink from "./ShareLink";
 import Standings from "./Standings";
 import { DeleteSessionButton, EndSessionButton } from "./play/PlayControls";
 
-import { titleFor } from "@/lib/i18n/metadata";
 
-export const generateMetadata = titleFor("session.title");
+/**
+ * A shared link should introduce itself.
+ *
+ * Sessions get pasted into group chats, and the chat app renders whatever Open
+ * Graph tags it finds. Without these it showed the app name and nothing else,
+ * so a link was indistinguishable from any other link to anyone who hadn't
+ * already opened it.
+ *
+ * Deliberately not gated on being signed in: the whole point is that the
+ * recipient hasn't signed up yet. Nothing here is private that the session page
+ * doesn't already show to a logged-out visitor holding the link.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const db = getDb();
+
+  const found = await db
+    .select({
+      title: sessions.title,
+      startsAt: sessions.startsAt,
+      location: sessions.location,
+      courtNames: sessions.courtNames,
+      maxPlayers: sessions.maxPlayers,
+      status: sessions.status,
+    })
+    .from(sessions)
+    .where(eq(sessions.id, id))
+    .limit(1);
+
+  const me = await getCurrentPlayer();
+  const locale = await getLocale(me?.locale);
+  const t = await getT(me?.locale);
+
+  const session = found[0];
+  if (!session) return { title: `${t("session.title")} · ${t("app.name")}` };
+
+  const [[signedUp], [played]] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(signups)
+      .where(and(eq(signups.sessionId, id), eq(signups.state, "in"))),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(matches)
+      .where(and(eq(matches.sessionId, id), eq(matches.status, "completed"))),
+  ]);
+
+  const description = shareDescription(
+    {
+      ...session,
+      signedUp: signedUp?.n ?? 0,
+      completedMatches: played?.n ?? 0,
+    },
+    t,
+    locale,
+  );
+
+  const heading = `${session.title} · ${t("app.name")}`;
+
+  return {
+    title: heading,
+    description,
+    openGraph: {
+      type: "website",
+      title: session.title,
+      description,
+      siteName: t("app.name"),
+      locale,
+    },
+    twitter: { card: "summary_large_image", title: session.title, description },
+  };
+}
 
 type TabKey = "info" | "standings" | "schedule";
 
@@ -72,6 +148,15 @@ export default async function SessionPage({
   ]);
 
   const t = await getT(me?.locale);
+
+  /*
+   * A private session is not merely hidden from the lists — holding the link
+   * isn't enough either, or "hidden" would mean "unlisted" and one forwarded
+   * message would undo it. Same answer as a session that doesn't exist.
+   */
+  if (!canSeeSession(me, session, roster.some((r) => r.playerId === me?.id))) {
+    notFound();
+  }
 
   /*
    * Everyone confirmed, and separately everyone still expected to play.
@@ -147,7 +232,6 @@ export default async function SessionPage({
             meId={me?.id}
             canScoreAny={canScoreAny}
             canScoreMine={canScoreMine}
-            locale={me?.locale}
           />
         ) : (
           <>

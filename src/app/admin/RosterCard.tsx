@@ -1,12 +1,18 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { startTransition, useActionState, useState, useTransition } from "react";
 import type { RecomputeSummary } from "@/lib/rating/service";
 import type { FormState, Role } from "@/lib/auth/types";
 import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { useT } from "@/lib/i18n/client";
 import { clearImportedRecordAction } from "@/lib/profile/actions";
-import { adjustRatingAction, recomputeAction, resetPinAction, setRoleAction } from "./actions";
+import {
+  adjustRatingAction,
+  deletePlayerAction,
+  recomputeAction,
+  resetPinAction,
+  setRoleAction,
+} from "./actions";
 
 export interface RosterEntry {
   id: string;
@@ -25,11 +31,14 @@ export default function RosterCard({
   roster,
   canManageRoles,
   canRecompute,
+  canDelete,
   meRole,
   meId,
 }: {
   roster: RosterEntry[];
   canManageRoles: boolean;
+  /** Removing an account outright is the owner's call, like recompute. */
+  canDelete: boolean;
   /** Rebuilding every rating at once is the owner's call. */
   canRecompute: boolean;
   meRole: Role;
@@ -52,6 +61,9 @@ export default function RosterCard({
     {} as FormState,
   );
   const [pinState, pinAction, pinPending] = useActionState(resetPinAction, {} as FormState);
+  const [delState, delAction, delPending] = useActionState(deletePlayerAction, {} as FormState);
+  /* Which row is armed. One at a time, so arming a second disarms the first. */
+  const [armedDelete, setArmedDelete] = useState<string | null>(null);
   const [recomputing, startRecompute] = useTransition();
   const [recomputed, setRecomputed] = useState<RecomputeSummary | null>(null);
   const [clearing, startClear] = useTransition();
@@ -87,6 +99,24 @@ export default function RosterCard({
         recompute finishes in well under a second and the numbers usually don't
         move, so without a word it looks like it did nothing.
       */}
+      {/*
+        Deleting reports back here rather than in the row, because a refusal
+        explains itself in a sentence ("has played 18 matches") and the row is
+        already dense. A success needs saying at all: the player simply
+        vanishes from the list, which on its own is indistinguishable from a
+        mis-tap.
+      */}
+      {delState.error ? (
+        <p role="alert" className="mt-2 rounded-lg bg-[var(--danger)]/10 px-3 py-2 text-xs
+          font-medium text-[var(--danger)]">
+          {delState.error}
+        </p>
+      ) : delState.ok ? (
+        <p className="mt-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">
+          {delState.ok}
+        </p>
+      ) : null}
+
       {canRecompute ? (
         recomputed ? (
           <p className="mt-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">
@@ -227,6 +257,37 @@ export default function RosterCard({
                   >
                     {clearing ? "…" : t("admin.clear")}
                   </button>
+                </div>
+              ) : null}
+
+              {canDelete && p.id !== meId && p.role !== "superadmin" ? (
+                <div className="mt-1.5">
+                  <button
+                    type="button"
+                    disabled={delPending}
+                    onClick={() => {
+                      if (armedDelete !== p.id) {
+                        setArmedDelete(p.id);
+                        return;
+                      }
+                      const data = new FormData();
+                      data.set("playerId", p.id);
+                      startTransition(() => {
+                        delAction(data);
+                        setArmedDelete(null);
+                      });
+                    }}
+                    className={`text-xs font-semibold underline disabled:opacity-50 ${
+                      armedDelete === p.id ? "text-[var(--danger)]" : "text-[var(--muted)]"
+                    }`}
+                  >
+                    {armedDelete === p.id
+                      ? t("admin.deleteConfirm", { name: p.username })
+                      : t("admin.deleteAccount")}
+                  </button>
+                  {armedDelete === p.id ? (
+                    <p className="hint">{t("admin.deleteHint")}</p>
+                  ) : null}
                 </div>
               ) : null}
 

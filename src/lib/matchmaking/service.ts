@@ -19,6 +19,7 @@ import {
   type Round,
   type SessionHistory,
 } from "./generator";
+import { planPerfectSchedule } from "./schedule";
 
 const GENERATOR_FORMATS: Format[] = [
   "regular",
@@ -116,6 +117,79 @@ export async function buildSessionHistory(sessionId: string): Promise<SessionHis
   }
 
   return history;
+}
+
+/**
+ * Build a whole session at once.
+ *
+ * A regular round robin promises that you partner everyone once, and that is a
+ * property of the *schedule*, not of any single round — generating round by
+ * round means round 4 can spend a partnership round 8 needed. So when we are
+ * laying out a fresh session we solve for all of it together, and only fall
+ * back to the round-at-a-time generator when no perfect draw exists (odd player
+ * counts, more rounds than there are partnerships) or the search misses.
+ *
+ * Anything other than `regular` keeps the old path: for balanced or social play
+ * the whole point is the per-round cost function, not partnership coverage.
+ */
+export async function createAllRounds(
+  sessionId: string,
+  roundCount: number,
+): Promise<{ rounds: number; perfect: boolean }> {
+  const t = await getT();
+  const db = getDb();
+
+  const found = await db
+    .select({ courtCount: sessions.courtCount, format: sessions.format })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  const session = found[0];
+  if (!session) throw new Error(t("err.sessionGone"));
+
+  const existing = await db
+    .select({ index: rounds.index })
+    .from(rounds)
+    .where(eq(rounds.sessionId, sessionId))
+    .limit(1);
+
+  const attending = await getAttending(sessionId);
+  if (attending.length < 4) throw new Error(t("err.needFourPresent"));
+
+  // Only from a clean slate: bolting a solved schedule onto rounds that already
+  // exist would ignore the partnerships those rounds already spent.
+  const plan =
+    toGeneratorFormat(session.format) === "regular" && existing.length === 0
+      ? planPerfectSchedule(attending.length, session.courtCount, roundCount)
+      : null;
+
+  if (!plan) {
+    for (let i = 0; i < roundCount; i++) await createNextRound(sessionId);
+    return { rounds: roundCount, perfect: false };
+  }
+
+  for (const [i, round] of plan.entries()) {
+    const inserted = await db
+      .insert(rounds)
+      .values({ sessionId, index: i + 1, state: "active" })
+      .returning({ id: rounds.id });
+
+    await db.insert(matches).values(
+      round.map(([a1, a2, b1, b2], court) => ({
+        sessionId,
+        roundId: inserted[0].id,
+        courtNo: court + 1,
+        a1: attending[a1].id,
+        a2: attending[a2].id,
+        b1: attending[b1].id,
+        b2: attending[b2].id,
+        status: "scheduled" as const,
+      })),
+    );
+  }
+
+  return { rounds: plan.length, perfect: true };
 }
 
 /** Generate the next round and persist it as scheduled matches. */

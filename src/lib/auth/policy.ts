@@ -78,6 +78,36 @@ export const canOrganizeSession = (actor: Actor, session: SessionScope): boolean
  * being a live scoreboard and becomes a record, so amending it narrows to the
  * organizer.
  */
+/**
+ * Who may even know a session exists.
+ *
+ * Private sessions are the super admin's to run: they appear in the listings
+ * only for them and for the people actually playing. Everyone else gets the
+ * same answer as for a session that was never created.
+ *
+ * Deliberately narrow. It hides the *event*, not its consequences — the matches
+ * still rate, the players still see them in their own record, and the rankings
+ * still move. Anything wider would be a way to play unrated games that quietly
+ * counted, which is the one thing a rating system must not allow.
+ */
+export const canSeeSession = (
+  actor: Actor | null,
+  session: { isPrivate: boolean; createdBy: string | null },
+  playing: boolean,
+): boolean => {
+  if (!session.isPrivate) return true;
+  if (!actor) return false;
+  return (
+    playing ||
+    isAtLeast(actor.role, "superadmin") ||
+    (session.createdBy !== null && session.createdBy === actor.id)
+  );
+};
+
+/** Only the super admin may create a session nobody else can see. */
+export const canCreatePrivateSession = (actor: Actor): boolean =>
+  isAtLeast(actor.role, "superadmin");
+
 export const canScoreMatch = (
   actor: Actor,
   session: SessionScope,
