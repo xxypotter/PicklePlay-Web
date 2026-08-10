@@ -21,7 +21,7 @@ import {
 } from "./engine";
 
 /** An established player: reliability 1, well past the calibration window. */
-const K_ESTABLISHED = RATING.K_RELIABLE;
+const K_ESTABLISHED = kFactor(1, 50, RATING, 0);
 /** Mid-scale rating, far enough from both bounds that compression is inert. */
 const MID = 3.5;
 
@@ -55,29 +55,30 @@ describe("expectation curves (§5.3 step 1)", () => {
  *
  * Rewritten for v1.1. Both the shape and the scale moved: ALPHA went 0.35 ->
  * 1.0 and D_POINTS 1.75 -> 1.33, because DUPR's own Forecast turned out to
- * score a match on the point margin alone (see dupr-forecast.test.ts), and
- * K_RELIABLE went 0.06 -> 0.017 so a settled rating moves by thousandths.
+ * score a match on the point margin alone (see dupr-forecast.test.ts), and a
+ * fully established player now sits on the K_SETTLED tail, so an ordinary
+ * result shifts them by thousandths.
  *
  * The visible consequence: "up in a loss" and "down in a win" are now much
  * stronger than they were, because nothing is being paid for the win itself.
  */
 describe("worked examples (§5.5)", () => {
-  it("even teams, win 11-9 → +0.0009 (barely better than expected)", () => {
+  it("even teams, win 11-9 → +0.0010 (barely better than expected)", () => {
     const s = matchSurprise(MID, MID, 11, 9);
     expect(s).toBeCloseTo(0.05, 4);
-    expect(delta(s)).toBeCloseTo(0.0009, 4);
+    expect(delta(s)).toBeCloseTo(0.001, 4);
   });
 
-  it("even teams, win 11-0 → +0.0085", () => {
+  it("even teams, win 11-0 → +0.0100", () => {
     const s = matchSurprise(MID, MID, 11, 0);
     expect(s).toBeCloseTo(0.5, 4);
-    expect(delta(s)).toBeCloseTo(0.0085, 4);
+    expect(delta(s)).toBeCloseTo(0.01, 4);
   });
 
-  it("underdog by 1.00, wins 11-9 → +0.0068", () => {
+  it("underdog by 1.00, wins 11-9 → +0.0080", () => {
     const s = matchSurprise(3.5, 4.5, 11, 9);
     expect(s).toBeCloseTo(0.3996, 4);
-    expect(delta(s)).toBeCloseTo(0.0068, 4);
+    expect(delta(s)).toBeCloseTo(0.008, 4);
   });
 
   it("favorite by 1.00, wins 11-2 → about nothing (that is the expected score)", () => {
@@ -86,26 +87,33 @@ describe("worked examples (§5.5)", () => {
     expect(delta(s, 4.5)).toBeCloseTo(0, 3);
   });
 
-  it("favorite by 1.00, wins 11-9 → -0.0051 (down in a win)", () => {
+  it("favorite by 1.00, wins 11-9 → -0.0060 (down in a win)", () => {
     const s = matchSurprise(4.5, 3.5, 11, 9);
     expect(s).toBeLessThan(0);
-    expect(delta(s, 4.5)).toBeCloseTo(-0.0051, 4);
+    expect(delta(s, 4.5)).toBeCloseTo(-0.006, 4);
   });
 
-  it("underdog by 1.00, loses 9-11 → +0.0051 (up in a loss)", () => {
+  it("underdog by 1.00, loses 9-11 → +0.0060 (up in a loss)", () => {
     const s = matchSurprise(3.5, 4.5, 9, 11);
     expect(s).toBeGreaterThan(0);
-    expect(delta(s)).toBeCloseTo(0.0051, 4);
+    expect(delta(s)).toBeCloseTo(0.006, 4);
   });
 
-  it("moves a settled rating about a third as far as v1.0 did", () => {
+  it("moves a settled rating far less than v1.0 did", () => {
     // The complaint that started the recalibration: a player compared a
-    // session against DUPR's forecast and found us roughly 3x too generous.
+    // session against DUPR's forecast and found us far too generous with
+    // established players. Under v1.0 the same result used K 0.06 against a
+    // blended surprise; now a fully reliable player sits on the K_SETTLED
+    // tail and an ordinary win barely registers.
     const s = matchSurprise(MID, MID, 11, 9);
-    const before = ratingDelta(MID, TUNING_V1_0.K_RELIABLE, s, false, TUNING_V1_0);
-    const after = delta(s);
-    expect(before / after).toBeGreaterThan(3);
-    expect(before / after).toBeLessThan(3.8);
+    const before = ratingDelta(
+      MID,
+      kFactor(1, 50, TUNING_V1_0),
+      matchSurprise(MID, MID, 11, 9, TUNING_V1_0),
+      false,
+      TUNING_V1_0,
+    );
+    expect(Math.abs(before)).toBeGreaterThan(Math.abs(delta(s)) * 3);
   });
 });
 
@@ -177,8 +185,8 @@ describe("K factor and the seed floor (§5.3, §5.7)", () => {
     for (let i = 1; i < ks.length; i++) expect(ks[i]).toBeLessThan(ks[i - 1]);
   });
 
-  it("bottoms out at K_RELIABLE for a fully established player", () => {
-    expect(kFactor(1, 50)).toBeCloseTo(RATING.K_RELIABLE, 10);
+  it("bottoms out at the settled tail for a fully established player", () => {
+    expect(kFactor(1, 50)).toBeCloseTo(RATING.K_SETTLED, 10);
   });
 
   it("floors K until the player has 5 local matches, however reliable they claim to be", () => {
@@ -598,8 +606,8 @@ describe("dated tuning", () => {
   });
 
   it("uses the current movement from the cutover onward", () => {
-    expect(tuningFor(RECALIBRATED_FROM).K_RELIABLE).toBe(RATING.K_RELIABLE);
-    expect(tuningFor(after).K_RELIABLE).toBe(RATING.K_RELIABLE);
+    expect(tuningFor(RECALIBRATED_FROM).K_LAW).toBe(RATING.K_LAW);
+    expect(tuningFor(after).K_LAW).toBe(RATING.K_LAW);
   });
 
   it("replays an old session exactly as v1.0 scored it", () => {

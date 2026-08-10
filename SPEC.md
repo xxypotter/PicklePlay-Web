@@ -318,9 +318,37 @@ own reliability (§5.4), which is why partners move by different amounts.
 ```
 K_i = K_RELIABLE + (K_NEW - K_RELIABLE) * (1 - reliability_i)
 
-K_NEW       = 0.98     # reliability 0 — brand new
-K_RELIABLE  = 0.017    # reliability 1 — fully established
+k_i = K_BASE * (1 - reliability_i)^K_EXPONENT + settled_i
+
+K_BASE      = 0.98
+K_EXPONENT  = 1.06
 ```
+
+Measured, not chosen. Thirteen DUPR forecasts of a single match — seven from a
+player at 10% reliability, six from his partner at 60% — give `k(0.10) = 0.877`
+and `k(0.60) = 0.371`, which sit almost exactly on `k = 1 − reliability`. The
+fitted power reproduces all thirteen to within 0.0065.
+
+A straight line between those two points would predict a **negative** K for
+anyone fully established, which is why v1.0's two-endpoint interpolation could
+not be rescued by retuning.
+
+**The settled tail.** The law above reaches zero at 100% reliability, so
+reliability alone would freeze a fully established player permanently. It
+doesn't work that way in DUPR, and our most-played member notices his rating
+still moves — and moves more than opponents with even longer histories. Past
+the ceiling, live evidence takes over:
+
+```
+settled_i = K_SETTLED / (1 + halfLife_i / HALF_LIFE_SCALE)
+
+K_SETTLED        = 0.02
+HALF_LIFE_SCALE  = 25
+```
+
+`halfLife` is the decayed match count (§5.4), so this shrinks as a record
+deepens and recovers if someone stops playing and their evidence ages out. It
+is deliberately small — the tail of the curve, not a second opinion.
 
 During a player's first `CAL_MATCHES = 5` matches, K is multiplied by
 `CAL_MULT = 1.25` so new players converge on their true level quickly.

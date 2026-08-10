@@ -254,6 +254,30 @@ export default async function ProfilePage({
         </div>
       </section>
 
+      {/*
+        A short account of the method, on the screen that shows the number.
+        People ask how it works, and a rating nobody can explain is one nobody
+        trusts — particularly one that can fall after a win.
+      */}
+      <section className="card mt-5">
+        <h2 className="text-sm font-medium text-[var(--muted)]">{t("rating.howTitle")}</h2>
+        <ul className="mt-2 flex flex-col gap-2">
+          {(
+            [
+              "rating.howScore",
+              "rating.howReliability",
+              "rating.howVolume",
+              "rating.howCalibrated",
+            ] as const
+          ).map((key) => (
+            <li key={key} className="flex gap-2 text-sm text-[var(--muted)]">
+              <span className="shrink-0 text-[var(--accent)]">•</span>
+              <span>{t(key)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {history.length > 0 ? (
         <section className="card mt-5">
           <h2 className="text-sm font-medium text-[var(--muted)]">{t("rating.whoTheyPlay")}</h2>

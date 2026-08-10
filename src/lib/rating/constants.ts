@@ -48,27 +48,50 @@ export const RATING = {
   ALPHA: 1.0,
 
   /**
-   * K-factor endpoints: reliability 0 -> K_NEW, reliability 1 -> K_RELIABLE.
+   * How far a match moves you, as a function of how well established you are.
    *
-   * K_NEW is set from the one hard measurement we have. DUPR's Forecast moves
-   * Xiayu Xu — 3.813 at 10% reliability, 18 matches in — by 0.887 per unit of
-   * point-share surprise. Solving the line through K_RELIABLE for that point
-   * gives 0.98, which is where an unproven player has to sit if a first
-   * session is going to find their level the way DUPR's does.
+   * Measured, not chosen. Thirteen DUPR forecasts of one match — seven from a
+   * player at 10% reliability, six from his partner at 60% — give
    *
-   * The curve *between* the two ends is still a guess: we have one reading,
-   * not four. Forecasts for the same match from the other three players (60%,
-   * 40% and 100% reliable) would pin it properly.
+   *     k(0.10) = 0.877     k(0.60) = 0.371
+   *
+   * and those two land almost exactly on k = (1 − reliability). Fitting the
+   * exponent gives 0.98 × (1 − reliability)^1.06, with every one of the
+   * thirteen predicted to within 0.0014.
+   *
+   * Note what that means at the top: k reaches zero at 100%, so reliability
+   * alone would freeze a fully established player forever. It doesn't happen
+   * in DUPR, which is what K_SETTLED below is for.
    */
-  K_NEW: 0.98,
-  K_RELIABLE: 0.017,
+  K_LAW: "reliability-power" as const,
+  K_BASE: 0.98,
+  K_EXPONENT: 1.06,
+
+  /**
+   * What still moves a player who is already 100% reliable.
+   *
+   * Reliability saturates: once you're at 100% it can't tell a player with
+   * twenty logged matches from one with a thousand, yet DUPR plainly still
+   * separates them — our most-played member notices that his rating moves more
+   * than opponents with even longer histories. So past that ceiling the amount
+   * of live evidence takes over. `halfLife` is the decayed match count (§5.4),
+   * so this shrinks as someone's record deepens and recovers if they stop
+   * playing and their evidence ages out.
+   *
+   * Deliberately small. It is the tail of the curve, not a second opinion —
+   * the reliability law above is doing the work everywhere it can.
+   */
+  K_SETTLED: 0.02,
+  HALF_LIFE_SCALE: 25,
 
   /**
    * Floor on K until a player has played SEED_FLOOR_MATCHES real matches here.
    * Stops someone declaring "4.5 at 100% reliability" at signup and becoming
-   * immovable on the strength of a number nobody verified (§5.7).
+   * immovable on the strength of a number nobody verified (§5.7). It matters
+   * more under the new law, where a declared 100% would otherwise put them
+   * straight onto K_SETTLED.
    */
-  K_SEED_FLOOR: 0.043,
+  K_SEED_FLOOR: 0.15,
   SEED_FLOOR_MATCHES: 5,
 
   /** Calibration window: K is boosted for a player's first few local matches. */
@@ -83,14 +106,14 @@ export const RATING = {
    * same move for 11-9, 11-3 and 11-0, erasing the margin signal that is now
    * the whole mechanism.
    *
-   * 0.35 clears every result up to about a two-thirds point share and trims
-   * only true blowouts. That upper end is the least trustworthy part of the
-   * model — the forecasts we have are all losses spanning shares 0.21 to 0.45,
-   * so what a *win* is worth is extrapolated rather than measured, and the cap
-   * is deliberately holding that extrapolation back until we can check it.
+   * Now a genuine backstop rather than a working limit, because the win side
+   * turned out to be measured after all: DUPR forecasts +0.411 for an 11-3 win
+   * in the very match above. A cap anywhere near that would contradict the
+   * data it is supposed to be protecting. These only catch nonsense — a score
+   * typed as 99-0, say.
    */
-  CAP_PROVISIONAL: 0.35,
-  CAP_RELIABLE: 0.03,
+  CAP_PROVISIONAL: 0.6,
+  CAP_RELIABLE: 0.5,
 
   /**
    * Evidence decay (§5.4). Matches halve in weight every 90 days, which
@@ -150,8 +173,21 @@ export interface Tuning {
   /** Margin vs win/loss weighting, and the curve that sets the expected score. */
   ALPHA: number;
   D_POINTS: number;
-  K_NEW: number;
-  K_RELIABLE: number;
+  /**
+   * Which K law applies. v1.0 interpolated linearly between two endpoints;
+   * the calibrated law is a power of (1 - reliability) with a volume-based
+   * tail. Named rather than inferred so reading either tuning tells you
+   * exactly what it did.
+   */
+  K_LAW: "linear" | "reliability-power";
+  /** `linear` only. */
+  K_NEW?: number;
+  K_RELIABLE?: number;
+  /** `reliability-power` only. */
+  K_BASE?: number;
+  K_EXPONENT?: number;
+  K_SETTLED?: number;
+  HALF_LIFE_SCALE?: number;
   K_SEED_FLOOR: number;
   SEED_FLOOR_MATCHES: number;
   CAL_MATCHES: number;
@@ -177,6 +213,7 @@ export interface Tuning {
 export const TUNING_V1_0: Tuning = {
   ALPHA: 0.35,
   D_POINTS: 1.75,
+  K_LAW: "linear",
   K_NEW: 0.5,
   K_RELIABLE: 0.06,
   K_SEED_FLOOR: 0.15,

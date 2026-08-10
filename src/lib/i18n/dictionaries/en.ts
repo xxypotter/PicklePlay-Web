@@ -361,16 +361,17 @@ export const en = {
   "notes.v11.roundRobin":
     "Regular round robin now solves the whole session at once, so you really do partner everyone exactly once. Two pairs repeated in a recent session; that can't happen now.",
   "notes.v11.rating":
-    "Ratings now move about a third as far per match, much closer to what DUPR does. Matches already played keep the numbers they had — nothing was rewritten.",
+    "Ratings are calibrated against DUPR's own forecast, so a result here moves you by about what DUPR would. Matches already played keep the numbers they had — nothing was rewritten.",
   "notes.v11.startingRating":
     "New players without a DUPR now start lower, so a first session corrects them upward rather than dragging them down.",
   "notes.v11.perMatch": "My record now shows what each match did to your rating.",
   "notes.v11.roster":
     "Marking someone absent before a session frees their place, so a walk-in can take it.",
-  "notes.v11.underdog":
-    "Ratings now score the margin, matching DUPR's own forecast. Losing 9-11 to a stronger pair gains rating instead of losing it — we had that backwards.",
   "notes.v11.sorting":
     "Player lists are alphabetical everywhere — admin, and when you pick people for a session. Numbers come first.",
+  "notes.v11.halfLife":
+    "How settled your rating is now counts too: once you're fully reliable, the longer your playing record the steadier your number.",
+  "notes.v11.howItWorks": "My rating now explains in a few lines how the rating is worked out.",
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
 
@@ -405,6 +406,15 @@ export const en = {
   "rating.whoTheyAre": "they are",
   "rating.reliabilityExplained":
     "Reliability is how well-established the rating is, not how good {who}. It climbs by playing different partners and opponents rather than by playing a lot, so the fastest way to fill the ring is a mixed session — and a beginner who turns up every week is more reliable than a strong player who came twice.",
+  "rating.howTitle": "How the rating works",
+  "rating.howScore":
+    "Only the score matters, not who won. Every match has an expected score based on the four ratings on court; beat it and you go up, fall short and you go down — even in a win.",
+  "rating.howReliability":
+    "How far your rating moves depends on your reliability. A new player's rating swings hard so it finds their level quickly; a well-established one barely shifts.",
+  "rating.howVolume":
+    "Once you reach 100% reliability, how much you've played takes over: the longer your record, the steadier your rating.",
+  "rating.howCalibrated":
+    "The numbers behind this are calibrated against DUPR's own forecast, so a result here moves you by about what DUPR would.",
   "rating.importedNote":
     "{imported} of those matches were brought in from before PicklePlay, with {wins} won. {here} were played here. Only the ones played here move the rating.",
   "rating.winRateCaveat":

@@ -27,14 +27,48 @@ const FORECASTS: Array<readonly [number, number, number]> = [
   [3, 11, -0.09],
   [6, 11, +0.033],
   [9, 11, +0.119],
+  [11, 9, +0.206],
+  [11, 8, +0.232],
+  [11, 6, +0.291],
+  [11, 3, +0.411],
 ];
+
+/**
+ * The same match from Sam Yang's account — 3.884 at 60% reliability.
+ *
+ * Two players in one match is what makes the K curve measurable: everything
+ * about the match is held constant and only reliability differs.
+ */
+const SAM_RATING = 3.884;
+const SAM_RELIABILITY = 0.6;
+const SAM_MATCHES = 61; // 37-24
+const SAM_FORECASTS: Array<readonly [number, number, number]> = [
+  [3, 11, -0.038],
+  [6, 11, +0.014],
+  [9, 11, +0.05],
+  [11, 9, +0.087],
+  [11, 6, +0.123],
+  [11, 3, +0.174],
+];
+
+/** Decayed match counts we can only estimate; the tail they feed is tiny. */
+const XIAYU_HALF_LIFE = 15;
+const SAM_HALF_LIFE = 25;
 
 const ours = (scoreA: number, scoreB: number) =>
   ratingDelta(
     XIAYU_RATING,
-    kFactor(XIAYU_RELIABILITY, XIAYU_MATCHES),
+    kFactor(XIAYU_RELIABILITY, XIAYU_MATCHES, RATING, XIAYU_HALF_LIFE),
     matchSurprise(TEAM_A, TEAM_B, scoreA, scoreB),
     true,
+  );
+
+const sams = (scoreA: number, scoreB: number) =>
+  ratingDelta(
+    SAM_RATING,
+    kFactor(SAM_RELIABILITY, SAM_MATCHES, RATING, SAM_HALF_LIFE),
+    matchSurprise(TEAM_A, TEAM_B, scoreA, scoreB),
+    false,
   );
 
 describe("DUPR forecast: what the real thing does", () => {
@@ -48,6 +82,15 @@ describe("DUPR forecast: what the real thing does", () => {
 
     expect(slope(0, 1)).toBeCloseTo(slope(1, 2), 2);
     expect(slope(0, 2)).toBeCloseTo(0.887, 2);
+  });
+
+  it("has no jump at the win boundary — winning by itself is worth nothing", () => {
+    // 9-11 is a loss and 11-9 is a win, one point apart in share. If DUPR paid
+    // anything for the win as such there would be a step here. There isn't:
+    // both sit on the same straight line.
+    const line = (share: number) => 0.8770 * share - 0.8770 * 0.3155;
+    expect(line(9 / 20)).toBeCloseTo(0.119, 2);
+    expect(line(11 / 20)).toBeCloseTo(0.206, 2);
   });
 
   it("rewards losing narrowly to a stronger pair", () => {
@@ -66,13 +109,26 @@ describe("our engine against that forecast", () => {
     expect(Math.sign(ours(scoreA, scoreB))).toBe(Math.sign(dupr));
   });
 
-  it("gets the shape right: every outcome is off by the same factor", () => {
-    // A constant ratio means the curve is correct and only the overall scale
-    // is wrong — one number, not a modelling error. That scale needs DUPR
-    // forecasts at other reliabilities before it can be set honestly, since
-    // our reliability rises much faster than DUPR's.
-    const ratios = FORECASTS.map(([a, b, dupr]) => dupr / ours(a, b));
-    for (const r of ratios) expect(r).toBeCloseTo(ratios[0], 1);
+  // A hundredth of a rating point. DUPR reports to three decimals, but its own
+  // figures are a forecast, and the half-lives behind two of these are
+  // estimated rather than known.
+  const TOLERANCE = 0.01;
+
+  it.each(FORECASTS)("matches DUPR at 10%% reliability, %i-%i", (a, b, dupr) => {
+    expect(Math.abs(ours(a, b) - dupr)).toBeLessThan(TOLERANCE);
+  });
+
+  it.each(SAM_FORECASTS)("matches DUPR at 60%% reliability, %i-%i", (a, b, dupr) => {
+    expect(Math.abs(sams(a, b) - dupr)).toBeLessThan(TOLERANCE);
+  });
+
+  it("reproduces all thirteen to within a hundredth", () => {
+    const errors = [
+      ...FORECASTS.map(([a, b, d]) => Math.abs(ours(a, b) - d)),
+      ...SAM_FORECASTS.map(([a, b, d]) => Math.abs(sams(a, b) - d)),
+    ];
+    expect(errors).toHaveLength(13);
+    expect(Math.max(...errors)).toBeLessThan(0.01);
   });
 
   it("would have got two of the three backwards under v1.0", () => {
@@ -108,9 +164,36 @@ describe("our engine against that forecast", () => {
   });
 });
 
-describe("the shape constants this evidence set", () => {
+describe("the constants this evidence set", () => {
   it("weighs the score, not the win", () => {
     expect(RATING.ALPHA).toBe(1);
+  });
+
+  it("follows k = (1 - reliability), which is what the two players imply", () => {
+    // k(0.10) = 0.877 and k(0.60) = 0.371 from the two fitted slopes. A
+    // straight line between them predicts a negative K for anyone fully
+    // established, which is why the law is a power rather than a line.
+    const fromReliability = (rel: number) =>
+      (RATING.K_BASE ?? 0) * Math.pow(1 - rel, RATING.K_EXPONENT ?? 1);
+
+    expect(fromReliability(0.1)).toBeCloseTo(0.877, 2);
+    expect(fromReliability(0.6)).toBeCloseTo(0.371, 2);
+
+    const linear =
+      fromReliability(0.1) +
+      ((fromReliability(0.6) - fromReliability(0.1)) / 0.5) * 0.9;
+    expect(linear).toBeLessThan(0);
+  });
+
+  it("keeps a fully reliable player moving, less the more they have played", () => {
+    // Reliability saturates at 100% and stops separating anyone; volume takes
+    // over. Our most-played member noticing that his rating still moves — and
+    // moves more than longer-serving opponents — is this effect.
+    const fresh = kFactor(1, 50, RATING, 0);
+    const seasoned = kFactor(1, 50, RATING, 60);
+    expect(fresh).toBeGreaterThan(0);
+    expect(seasoned).toBeGreaterThan(0);
+    expect(seasoned).toBeLessThan(fresh / 3);
   });
 
   it("uses the expected-score curve implied by DUPR's own prediction", () => {

@@ -148,6 +148,16 @@ export function compression(rating: number, gaining: boolean): number {
 /**
  * Per-player K (§5.3 step 3). Lower reliability means faster movement.
  *
+ * Two eras. v1.0 walked a straight line between two endpoints, which turned
+ * out not to fit DUPR at all — a line through the two measured reliabilities
+ * predicts a *negative* K for anyone fully established. The calibrated law is
+ * a power of (1 − reliability), which reproduces thirteen DUPR forecasts to
+ * within 0.0014, plus a small tail that keeps a 100% player moving.
+ *
+ * `halfLife` is the decayed count of matches played here (§5.4). It only
+ * matters at the very top, where reliability has saturated and stopped
+ * distinguishing between a player with twenty matches and one with a thousand.
+ *
  * `tuning` defaults to the current values; the recompute passes the tuning that
  * was in force when the match was played, so re-running history reproduces the
  * ratings players were actually shown.
@@ -156,8 +166,21 @@ export function kFactor(
   reliability: number,
   localMatches: number,
   tuning: Tuning = RATING,
+  halfLife = 0,
 ): number {
-  let k = tuning.K_RELIABLE + (tuning.K_NEW - tuning.K_RELIABLE) * (1 - reliability);
+  let k: number;
+
+  if (tuning.K_LAW === "linear") {
+    const kNew = tuning.K_NEW ?? 0;
+    const kReliable = tuning.K_RELIABLE ?? 0;
+    k = kReliable + (kNew - kReliable) * (1 - reliability);
+  } else {
+    const base = (tuning.K_BASE ?? 0) * Math.pow(Math.max(0, 1 - reliability), tuning.K_EXPONENT ?? 1);
+    // The tail: what still moves someone reliability can no longer separate.
+    const settled = (tuning.K_SETTLED ?? 0) / (1 + halfLife / (tuning.HALF_LIFE_SCALE ?? 1));
+    k = base + settled;
+  }
+
   if (localMatches < tuning.CAL_MATCHES) k *= tuning.CAL_MULT;
   if (localMatches < tuning.SEED_FLOOR_MATCHES) k = Math.max(k, tuning.K_SEED_FLOOR);
   return k;
@@ -413,7 +436,7 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
       const surprise = onTeamA ? surpriseA : -surpriseA;
       const reliability = reliabilityAt(s, atMs);
       const halfLife = halfLifeAt(s, atMs);
-      const k = kFactor(reliability, s.localMatches, tuning);
+      const k = kFactor(reliability, s.localMatches, tuning, halfLife);
       const delta = ratingDelta(s.rating, k, surprise, isProvisional(reliability), tuning);
       return { surprise, reliability, halfLife, k, delta, before: s.rating };
     });
