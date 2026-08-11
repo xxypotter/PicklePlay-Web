@@ -20,8 +20,12 @@ import {
   type TimelineEvent,
 } from "./engine";
 
-/** An established player: reliability 1, well past the calibration window. */
-const K_ESTABLISHED = kFactor(1, 50, RATING, 0);
+/**
+ * An established player: fully reliable, well past the calibration window,
+ * and with a deep record — half-life 40, which is the figure behind the one
+ * 100%-reliability calibration point we have.
+ */
+const K_ESTABLISHED = kFactor(1, 200, RATING, 40);
 /** Mid-scale rating, far enough from both bounds that compression is inert. */
 const MID = 3.5;
 
@@ -63,22 +67,22 @@ describe("expectation curves (§5.3 step 1)", () => {
  * stronger than they were, because nothing is being paid for the win itself.
  */
 describe("worked examples (§5.5)", () => {
-  it("even teams, win 11-9 → +0.0010 (barely better than expected)", () => {
+  it("even teams, win 11-9 → +0.0047 (barely better than expected)", () => {
     const s = matchSurprise(MID, MID, 11, 9);
     expect(s).toBeCloseTo(0.05, 4);
-    expect(delta(s)).toBeCloseTo(0.001, 4);
+    expect(delta(s)).toBeCloseTo(0.0047, 4);
   });
 
-  it("even teams, win 11-0 → +0.0100", () => {
+  it("even teams, win 11-0 → +0.0470", () => {
     const s = matchSurprise(MID, MID, 11, 0);
     expect(s).toBeCloseTo(0.5, 4);
-    expect(delta(s)).toBeCloseTo(0.01, 4);
+    expect(delta(s)).toBeCloseTo(0.047, 4);
   });
 
-  it("underdog by 1.00, wins 11-9 → +0.0080", () => {
+  it("underdog by 1.00, wins 11-9 → +0.0376", () => {
     const s = matchSurprise(3.5, 4.5, 11, 9);
     expect(s).toBeCloseTo(0.3996, 4);
-    expect(delta(s)).toBeCloseTo(0.008, 4);
+    expect(delta(s)).toBeCloseTo(0.0376, 4);
   });
 
   it("favorite by 1.00, wins 11-2 → about nothing (that is the expected score)", () => {
@@ -87,16 +91,16 @@ describe("worked examples (§5.5)", () => {
     expect(delta(s, 4.5)).toBeCloseTo(0, 3);
   });
 
-  it("favorite by 1.00, wins 11-9 → -0.0060 (down in a win)", () => {
+  it("favorite by 1.00, wins 11-9 → -0.0282 (down in a win)", () => {
     const s = matchSurprise(4.5, 3.5, 11, 9);
     expect(s).toBeLessThan(0);
-    expect(delta(s, 4.5)).toBeCloseTo(-0.006, 4);
+    expect(delta(s, 4.5)).toBeCloseTo(-0.0282, 4);
   });
 
-  it("underdog by 1.00, loses 9-11 → +0.0060 (up in a loss)", () => {
+  it("underdog by 1.00, loses 9-11 → +0.0282 (up in a loss)", () => {
     const s = matchSurprise(3.5, 4.5, 9, 11);
     expect(s).toBeGreaterThan(0);
-    expect(delta(s)).toBeCloseTo(0.006, 4);
+    expect(delta(s)).toBeCloseTo(0.0282, 4);
   });
 
   it("moves a settled rating far less than v1.0 did", () => {
@@ -186,13 +190,20 @@ describe("K factor and the seed floor (§5.3, §5.7)", () => {
   });
 
   it("bottoms out at the settled tail for a fully established player", () => {
-    expect(kFactor(1, 50)).toBeCloseTo(RATING.K_SETTLED, 10);
+    expect(kFactor(1, 50, RATING, 0)).toBeCloseTo(RATING.K_SETTLED, 10);
   });
 
-  it("floors K until the player has 5 local matches, however reliable they claim to be", () => {
-    expect(kFactor(1, 0)).toBeGreaterThanOrEqual(RATING.K_SEED_FLOOR);
-    expect(kFactor(1, 4)).toBeGreaterThanOrEqual(RATING.K_SEED_FLOOR);
-    expect(kFactor(1, 5)).toBeLessThan(RATING.K_SEED_FLOOR);
+  it("keeps someone claiming full reliability movable until they've played here", () => {
+    // Somebody can type "4.5, 100% reliable" at signup. Until they have five
+    // real matches with us, K must stay high enough to correct that.
+    expect(kFactor(1, 0, RATING, 0)).toBeGreaterThanOrEqual(RATING.K_SEED_FLOOR);
+    expect(kFactor(1, 4, RATING, 0)).toBeGreaterThanOrEqual(RATING.K_SEED_FLOOR);
+
+    // A long record is the thing that earns a settled rating, and someone who
+    // has just arrived does not have one — so the deep-record floor cannot be
+    // reached before those five matches either.
+    expect(kFactor(1, 4, RATING, 200)).toBeGreaterThanOrEqual(RATING.K_SEED_FLOOR);
+    expect(kFactor(1, 5, RATING, 200)).toBeLessThan(RATING.K_SEED_FLOOR);
   });
 
 });

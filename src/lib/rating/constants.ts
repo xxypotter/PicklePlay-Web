@@ -68,21 +68,28 @@ export const RATING = {
   K_EXPONENT: 1.06,
 
   /**
-   * What still moves a player who is already 100% reliable.
+   * What moves a player once reliability has stopped telling them apart.
    *
-   * Reliability saturates: once you're at 100% it can't tell a player with
-   * twenty logged matches from one with a thousand, yet DUPR plainly still
-   * separates them — our most-played member notices that his rating moves more
-   * than opponents with even longer histories. So past that ceiling the amount
-   * of live evidence takes over. `halfLife` is the decayed match count (§5.4),
-   * so this shrinks as someone's record deepens and recovers if they stop
-   * playing and their evidence ages out.
+   * Reliability saturates: at 100% it cannot distinguish twenty logged matches
+   * from a thousand, and the power law above reaches exactly zero there, which
+   * would freeze a fully established player forever. DUPR does not do that. A
+   * third set of forecasts, from a 100%-reliable player with a self-reported
+   * half-life of 40, gives K = 0.094 — small, but eighty times what the law
+   * alone would allow.
    *
-   * Deliberately small. It is the tail of the curve, not a second opinion —
-   * the reliability law above is doing the work everywhere it can.
+   * So above roughly 89% reliability, where the two curves cross, live
+   * evidence takes over as a floor. `halfLife` is the decayed match count
+   * (§5.4): it deepens as someone plays and recovers if they stop and their
+   * results age out, which is why a long record steadies a rating and a break
+   * loosens it again.
+   *
+   * Anchored on the one measurement available — 0.188 / (1 + 40/40) = 0.094 —
+   * so the *shape* of the decline is a judgement and the value at half-life 40
+   * is not. Forecasts from a second 100% player at a different half-life would
+   * settle the shape.
    */
-  K_SETTLED: 0.02,
-  HALF_LIFE_SCALE: 25,
+  K_SETTLED: 0.188,
+  HALF_LIFE_SCALE: 40,
 
   /**
    * Floor on K until a player has played SEED_FLOOR_MATCHES real matches here.

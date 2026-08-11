@@ -175,10 +175,13 @@ export function kFactor(
     const kReliable = tuning.K_RELIABLE ?? 0;
     k = kReliable + (kNew - kReliable) * (1 - reliability);
   } else {
-    const base = (tuning.K_BASE ?? 0) * Math.pow(Math.max(0, 1 - reliability), tuning.K_EXPONENT ?? 1);
-    // The tail: what still moves someone reliability can no longer separate.
-    const settled = (tuning.K_SETTLED ?? 0) / (1 + halfLife / (tuning.HALF_LIFE_SCALE ?? 1));
-    k = base + settled;
+    const fromReliability =
+      (tuning.K_BASE ?? 0) * Math.pow(Math.max(0, 1 - reliability), tuning.K_EXPONENT ?? 1);
+    // A floor rather than an addition: below ~89% reliability the law above is
+    // larger and decides everything, and only past that — where it collapses
+    // toward zero — does the depth of someone's record take over.
+    const fromVolume = (tuning.K_SETTLED ?? 0) / (1 + halfLife / (tuning.HALF_LIFE_SCALE ?? 1));
+    k = Math.max(fromReliability, fromVolume);
   }
 
   if (localMatches < tuning.CAL_MATCHES) k *= tuning.CAL_MULT;

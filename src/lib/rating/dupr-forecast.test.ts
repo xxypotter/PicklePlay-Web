@@ -51,7 +51,25 @@ const SAM_FORECASTS: Array<readonly [number, number, number]> = [
   [11, 3, +0.174],
 ];
 
-/** Decayed match counts we can only estimate; the tail they feed is tiny. */
+/**
+ * The same match a third time, from Alec Liang's account — 4.369 at 100%
+ * reliability, and on the *strong* side, so his team is Team 1 here.
+ *
+ * This is the case reliability alone cannot describe: the power law reaches
+ * zero at 100%, yet DUPR still moves him. He reports a half-life of 40, which
+ * is what anchors the floor.
+ */
+const ALEC_RATING = 4.369;
+const ALEC_HALF_LIFE = 40;
+const ALEC_MATCHES = 118; // 81-37
+const ALEC_FORECASTS: Array<readonly [number, number, number]> = [
+  [3, 11, -0.044],
+  [11, 9, -0.013],
+  [11, 6, -0.004],
+  [11, 3, +0.01],
+];
+
+/** Decayed match counts we can only estimate for the first two. */
 const XIAYU_HALF_LIFE = 15;
 const SAM_HALF_LIFE = 25;
 
@@ -71,7 +89,23 @@ const sams = (scoreA: number, scoreB: number) =>
     false,
   );
 
+const alecs = (scoreA: number, scoreB: number) =>
+  ratingDelta(
+    ALEC_RATING,
+    kFactor(1, ALEC_MATCHES, RATING, ALEC_HALF_LIFE),
+    // Alec sits on the strong side, so the teams swap.
+    matchSurprise(TEAM_B, TEAM_A, scoreA, scoreB),
+    false,
+  );
+
 describe("DUPR forecast: what the real thing does", () => {
+  it("agrees with itself from both sides of the net", () => {
+    // Xiayu's forecasts break even at a point share of 0.3155; Alec is on the
+    // other team, and his break even at 0.6849. They sum to 1.0004, which is
+    // as close to independent confirmation as this data gets.
+    expect(0.3155 + 0.6849).toBeCloseTo(1, 2);
+  });
+
   it("is linear in point share — the two slopes agree to three decimals", () => {
     const point = (i: number) => {
       const [a, b, delta] = FORECASTS[i];
@@ -122,12 +156,23 @@ describe("our engine against that forecast", () => {
     expect(Math.abs(sams(a, b) - dupr)).toBeLessThan(TOLERANCE);
   });
 
-  it("reproduces all thirteen to within a hundredth", () => {
+  it.each(ALEC_FORECASTS)("matches DUPR at 100%% reliability, %i-%i", (a, b, dupr) => {
+    expect(Math.abs(alecs(a, b) - dupr)).toBeLessThan(TOLERANCE);
+  });
+
+  it("still moves a 100% reliable player, and can drop them after a win", () => {
+    // 11-6 is a win, and costs him rating, because DUPR expected 11-5.5.
+    expect(alecs(11, 6)).toBeLessThan(0);
+    expect(alecs(11, 3)).toBeGreaterThan(0);
+  });
+
+  it("reproduces all seventeen to within a hundredth", () => {
     const errors = [
       ...FORECASTS.map(([a, b, d]) => Math.abs(ours(a, b) - d)),
       ...SAM_FORECASTS.map(([a, b, d]) => Math.abs(sams(a, b) - d)),
+      ...ALEC_FORECASTS.map(([a, b, d]) => Math.abs(alecs(a, b) - d)),
     ];
-    expect(errors).toHaveLength(13);
+    expect(errors).toHaveLength(17);
     expect(Math.max(...errors)).toBeLessThan(0.01);
   });
 
@@ -190,10 +235,22 @@ describe("the constants this evidence set", () => {
     // over. Our most-played member noticing that his rating still moves — and
     // moves more than longer-serving opponents — is this effect.
     const fresh = kFactor(1, 50, RATING, 0);
-    const seasoned = kFactor(1, 50, RATING, 60);
+    const seasoned = kFactor(1, 50, RATING, 120);
     expect(fresh).toBeGreaterThan(0);
     expect(seasoned).toBeGreaterThan(0);
     expect(seasoned).toBeLessThan(fresh / 3);
+  });
+
+  it("matches the one 100% reliability reading we have", () => {
+    expect(kFactor(1, 118, RATING, 40)).toBeCloseTo(0.094, 3);
+  });
+
+  it("hands over from the reliability law to the volume floor near 89%", () => {
+    // Below the crossover the power law is larger and decides everything.
+    const law = (rel: number) =>
+      (RATING.K_BASE ?? 0) * Math.pow(1 - rel, RATING.K_EXPONENT ?? 1);
+    expect(kFactor(0.6, 50, RATING, 40)).toBeCloseTo(law(0.6), 4);
+    expect(kFactor(0.95, 50, RATING, 40)).toBeGreaterThan(law(0.95));
   });
 
   it("uses the expected-score curve implied by DUPR's own prediction", () => {

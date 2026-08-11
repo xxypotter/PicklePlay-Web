@@ -333,22 +333,33 @@ A straight line between those two points would predict a **negative** K for
 anyone fully established, which is why v1.0's two-endpoint interpolation could
 not be rescued by retuning.
 
-**The settled tail.** The law above reaches zero at 100% reliability, so
-reliability alone would freeze a fully established player permanently. It
-doesn't work that way in DUPR, and our most-played member notices his rating
-still moves — and moves more than opponents with even longer histories. Past
-the ceiling, live evidence takes over:
+**The volume floor.** The law above reaches zero at 100% reliability, so
+reliability alone would freeze a fully established player permanently. DUPR
+does not do that. A third forecast set, from a 100%-reliable player with a
+self-reported half-life of 40, measures `K = 0.094` — eighty times what the
+power law alone allows. Past the ceiling, the depth of someone's record takes
+over as a floor:
 
 ```
-settled_i = K_SETTLED / (1 + halfLife_i / HALF_LIFE_SCALE)
+k_i = max( K_BASE * (1 - reliability_i)^K_EXPONENT ,
+           K_SETTLED / (1 + halfLife_i / HALF_LIFE_SCALE) )
 
-K_SETTLED        = 0.02
-HALF_LIFE_SCALE  = 25
+K_SETTLED        = 0.188
+HALF_LIFE_SCALE  = 40
 ```
 
-`halfLife` is the decayed match count (§5.4), so this shrinks as a record
-deepens and recovers if someone stops playing and their evidence ages out. It
-is deliberately small — the tail of the curve, not a second opinion.
+The two curves cross at about 89% reliability: below that the power law is
+larger and decides everything, above it the floor does. `halfLife` is the
+decayed match count (§5.4), so a rating steadies as a record deepens and
+loosens again if someone stops playing and their results age out.
+
+Anchored on one reading — `0.188 / (1 + 40/40) = 0.094` — so the value at
+half-life 40 is measured and the *shape* of the decline is a judgement.
+
+**Coverage.** Seventeen forecasts of one match from three accounts, at 10%,
+60% and 100% reliability, reproduced to a mean of 0.0006 and a worst case of
+0.0016. The two ends of the court agree independently: break-even point shares
+of 0.3155 and 0.6849 sum to 1.0004.
 
 During a player's first `CAL_MATCHES = 5` matches, K is multiplied by
 `CAL_MULT = 1.25` so new players converge on their true level quickly.
