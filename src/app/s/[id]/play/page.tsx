@@ -15,6 +15,7 @@ import Standings from "../Standings";
 import {
   AddPlayers,
   AttendanceToggle,
+  PartnerPicker,
   DeleteSessionButton,
   DiscardRoundButton,
   EndSessionButton,
@@ -57,6 +58,7 @@ export default async function PlayPage({
         playerId: signups.playerId,
         username: players.username,
         attended: signups.attended,
+        partnerId: signups.partnerId,
       })
       .from(signups)
       .innerJoin(players, eq(players.id, signups.playerId))
@@ -123,6 +125,17 @@ export default async function PlayPage({
         </div>
 
         <AddPlayers sessionId={id} candidates={notSignedUp} />
+      </section>
+
+      {session.format === "fixed" ? (
+        <PartnerPicker
+          sessionId={id}
+          players={roster.filter((r) => r.attended)}
+          locked={session.status !== "open"}
+        />
+      ) : null}
+
+      <section className="card mt-3">
 
         {/*
           Three phases, not two. Testing "is it open?" put closed sessions down

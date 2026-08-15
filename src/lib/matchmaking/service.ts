@@ -19,7 +19,7 @@ import {
   type Round,
   type SessionHistory,
 } from "./generator";
-import { planPerfectSchedule } from "./schedule";
+import { planFixedPartnerRounds, planPerfectSchedule } from "./schedule";
 
 const GENERATOR_FORMATS: Format[] = [
   "regular",
@@ -37,6 +37,8 @@ export function toGeneratorFormat(format: string): Format {
 
 export interface AttendingPlayer extends GenPlayer {
   username: string;
+  /** Who they are fixed with, for a fixed-partner session. */
+  partnerId: string | null;
 }
 
 /** Everyone marked present, with the rating the generator should balance on. */
@@ -46,6 +48,7 @@ export async function getAttending(sessionId: string): Promise<AttendingPlayer[]
       id: signups.playerId,
       username: players.username,
       rating: playerStats.rating,
+      partnerId: signups.partnerId,
     })
     .from(signups)
     .innerJoin(players, eq(players.id, signups.playerId))
@@ -62,6 +65,7 @@ export async function getAttending(sessionId: string): Promise<AttendingPlayer[]
   return rows.map((r) => ({
     id: r.id,
     username: r.username,
+    partnerId: r.partnerId,
     // An unrated player still has to be placed somewhere; mid-scale is the
     // least-wrong guess and their first results correct it fast.
     rating: r.rating ?? RATING.DEFAULT_RATING,
@@ -157,10 +161,40 @@ export async function createAllRounds(
   const attending = await getAttending(sessionId);
   if (attending.length < 4) throw new Error(t("err.needFourPresent"));
 
+  const format = toGeneratorFormat(session.format);
+
+  /*
+   * Fixed partners is a different problem once the pairs are known: partners
+   * stop being something to solve for, so what's left is a round robin between
+   * teams. Anyone the organizer didn't pair simply doesn't play — pairing is
+   * the whole point of the format, and quietly inventing a partner for them
+   * would be a worse surprise than leaving them out.
+   */
+  if (format === "fixed" && existing.length === 0) {
+    const pairs = pairsFrom(attending);
+    if (pairs.length >= 2) {
+      const rows = planFixedPartnerRounds(pairs.length, session.courtCount, roundCount);
+      if (rows) {
+        await insertRounds(
+          sessionId,
+          rows.map((round) =>
+            round.map(([a, b]) => [
+              pairs[a][0].id,
+              pairs[a][1].id,
+              pairs[b][0].id,
+              pairs[b][1].id,
+            ] as [string, string, string, string]),
+          ),
+        );
+        return { rounds: rows.length, perfect: true };
+      }
+    }
+  }
+
   // Only from a clean slate: bolting a solved schedule onto rounds that already
   // exist would ignore the partnerships those rounds already spent.
   const plan =
-    toGeneratorFormat(session.format) === "regular" && existing.length === 0
+    format === "regular" && existing.length === 0
       ? planPerfectSchedule(attending.length, session.courtCount, roundCount)
       : null;
 
@@ -169,6 +203,45 @@ export async function createAllRounds(
     return { rounds: roundCount, perfect: false };
   }
 
+  await insertRounds(
+    sessionId,
+    plan.map((round) =>
+      round.map(([a1, a2, b1, b2]) => [
+        attending[a1].id,
+        attending[a2].id,
+        attending[b1].id,
+        attending[b2].id,
+      ] as [string, string, string, string]),
+    ),
+  );
+
+  return { rounds: plan.length, perfect: true };
+}
+
+/**
+ * The fixed pairs among the players present, each listed once.
+ *
+ * Both signup rows point at each other, so walking the list would otherwise
+ * yield every pair twice; the `id <` test keeps the first sighting only.
+ * Anyone unpaired, or paired with someone who didn't turn up, is dropped.
+ */
+function pairsFrom(attending: AttendingPlayer[]): Array<[AttendingPlayer, AttendingPlayer]> {
+  const present = new Map(attending.map((p) => [p.id, p]));
+  const pairs: Array<[AttendingPlayer, AttendingPlayer]> = [];
+  for (const p of attending) {
+    if (!p.partnerId || p.id >= p.partnerId) continue;
+    const partner = present.get(p.partnerId);
+    if (partner?.partnerId === p.id) pairs.push([p, partner]);
+  }
+  return pairs;
+}
+
+/** Persist a planned schedule as rounds of scheduled matches. */
+async function insertRounds(
+  sessionId: string,
+  plan: Array<Array<[string, string, string, string]>>,
+): Promise<void> {
+  const db = getDb();
   for (const [i, round] of plan.entries()) {
     const inserted = await db
       .insert(rounds)
@@ -180,16 +253,14 @@ export async function createAllRounds(
         sessionId,
         roundId: inserted[0].id,
         courtNo: court + 1,
-        a1: attending[a1].id,
-        a2: attending[a2].id,
-        b1: attending[b1].id,
-        b2: attending[b2].id,
+        a1,
+        a2,
+        b1,
+        b2,
         status: "scheduled" as const,
       })),
     );
   }
-
-  return { rounds: plan.length, perfect: true };
 }
 
 /** Generate the next round and persist it as scheduled matches. */

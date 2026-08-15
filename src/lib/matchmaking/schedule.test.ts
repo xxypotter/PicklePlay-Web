@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   perfectSchedulePossible,
+  planFixedPartnerRounds,
   planPerfectSchedule,
   seatsUsed,
+  type PlannedPairRound,
   type PlannedRound,
 } from "./schedule";
 
@@ -131,5 +133,67 @@ describe("planPerfectSchedule", () => {
       if (planPerfectSchedule(9, 2, 9, { random: seeded(seed) })) solved++;
     }
     expect(solved).toBe(40);
+  });
+});
+
+describe("planFixedPartnerRounds", () => {
+  const flat = (s: PlannedPairRound[]) => s.flat();
+
+  it("gives every pair the same number of games when they all fit", () => {
+    // 4 pairs, 2 courts: everyone plays every round.
+    const schedule = planFixedPartnerRounds(4, 2, 6, { random: seeded(1) })!;
+    const games = new Array(4).fill(0);
+    for (const [a, b] of flat(schedule)) {
+      games[a]++;
+      games[b]++;
+    }
+    expect(new Set(games)).toEqual(new Set([6]));
+  });
+
+  it("never puts a pair on two courts in the same round", () => {
+    const schedule = planFixedPartnerRounds(6, 3, 8, { random: seeded(2) })!;
+    for (const round of schedule) {
+      const seated = round.flat();
+      expect(new Set(seated).size).toBe(seated.length);
+    }
+  });
+
+  it("spends every fresh matchup before repeating one", () => {
+    // 4 pairs have 6 possible opponents pairings; over 3 rounds of 2 courts
+    // that is exactly 6 matches, so none should repeat.
+    const schedule = planFixedPartnerRounds(4, 2, 3, { random: seeded(3) })!;
+    const seen = flat(schedule).map(([a, b]) => (a < b ? `${a}|${b}` : `${b}|${a}`));
+    expect(seen).toHaveLength(6);
+    expect(new Set(seen).size).toBe(6);
+  });
+
+  it("keeps court time even when more pairs than courts turn up", () => {
+    // 5 pairs, 2 courts: one pair rests each round.
+    const schedule = planFixedPartnerRounds(5, 2, 10, { random: seeded(4) })!;
+    const games = new Array(5).fill(0);
+    for (const [a, b] of flat(schedule)) {
+      games[a]++;
+      games[b]++;
+    }
+    expect(Math.max(...games) - Math.min(...games)).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps going past the point where fresh matchups run out", () => {
+    // Unlike the perfect-schedule search, this must not give up: a long
+    // fixed-partner night simply replays opponents.
+    const schedule = planFixedPartnerRounds(4, 2, 12, { random: seeded(5) });
+    expect(schedule).not.toBeNull();
+    expect(schedule).toHaveLength(12);
+  });
+
+  it("refuses a shape that cannot produce a match", () => {
+    expect(planFixedPartnerRounds(1, 2, 4, { random: seeded(1) })).toBeNull();
+    expect(planFixedPartnerRounds(4, 0, 4, { random: seeded(1) })).toBeNull();
+  });
+
+  it("is deterministic for a given seed", () => {
+    const a = planFixedPartnerRounds(6, 2, 5, { random: seeded(9) });
+    const b = planFixedPartnerRounds(6, 2, 5, { random: seeded(9) });
+    expect(a).toEqual(b);
   });
 });

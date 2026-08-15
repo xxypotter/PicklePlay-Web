@@ -33,6 +33,8 @@ export const RELEASES: Release[] = [
       "notes.v11.sorting",
       "notes.v11.halfLife",
       "notes.v11.howItWorks",
+      "notes.v11.fixedPartners",
+      "notes.v11.balanced",
     ],
   },
   {

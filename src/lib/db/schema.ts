@@ -221,6 +221,15 @@ export const signups = pgTable(
      * boxes for a group that mostly turns up.
      */
     attended: boolean("attended").notNull().default(true),
+    /**
+     * Who this player is fixed with, for a fixed-partner session.
+     *
+     * Stored on the signup rather than in a pairs table because a player can
+     * only have one partner per session, which the column makes structural
+     * rather than something a check has to remember. Both rows point at each
+     * other; the actions that set it always write the pair together.
+     */
+    partnerId: uuid("partner_id").references(() => players.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("signups_session_player_idx").on(t.sessionId, t.playerId)],

@@ -229,3 +229,77 @@ export function planPerfectSchedule(
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Fixed partners
+// ---------------------------------------------------------------------------
+
+/** One match as two pair indices: pair A plays pair B. */
+export type PlannedPairMatch = [number, number];
+export type PlannedPairRound = PlannedPairMatch[];
+
+/**
+ * Schedule a fixed-partner session.
+ *
+ * Once the pairs are decided the problem changes shape: partners are no longer
+ * something to solve for, so what's left is a round robin between *teams*.
+ * Each round seats as many pairs as there are courts for, and the search
+ * spends unused pairings first so everyone meets as many different opponents
+ * as the round count allows.
+ *
+ * Returns null only when the shape is impossible — fewer than two pairs, or no
+ * courts. Repeated opponents are fine and expected past the point where every
+ * pair has met every other, so unlike `planPerfectSchedule` this does not give
+ * up when it runs out of fresh pairings; it just starts reusing the least-used.
+ */
+export function planFixedPartnerRounds(
+  pairCount: number,
+  courtCount: number,
+  rounds: number,
+  options: PlanOptions = {},
+): PlannedPairRound[] | null {
+  const { random = Math.random } = options;
+  if (pairCount < 2 || courtCount < 1 || rounds < 1) return null;
+
+  const perRound = Math.min(courtCount, Math.floor(pairCount / 2));
+  if (perRound < 1) return null;
+
+  const met = new Map<string, number>();
+  const games = new Array(pairCount).fill(0);
+  const schedule: PlannedPairRound[] = [];
+
+  for (let r = 0; r < rounds; r++) {
+    // Pairs with the fewest games sit down last, so court time stays even.
+    const order = shuffled([...Array(pairCount).keys()], random).sort(
+      (a, b) => games[a] - games[b],
+    );
+    const seated = order.slice(0, perRound * 2);
+    const remaining = new Set(seated);
+    const round: PlannedPairRound = [];
+
+    while (remaining.size >= 2) {
+      const [first] = remaining;
+      remaining.delete(first);
+      // Whoever this pair has faced least often, ties broken by who has played
+      // least — which keeps a strong pair from monopolising the fresh opponents.
+      let best = -1;
+      let bestCost = Infinity;
+      for (const other of remaining) {
+        const cost = (met.get(key(first, other)) ?? 0) * 10 + games[other];
+        if (cost < bestCost) {
+          bestCost = cost;
+          best = other;
+        }
+      }
+      remaining.delete(best);
+      round.push([first, best]);
+      met.set(key(first, best), (met.get(key(first, best)) ?? 0) + 1);
+      games[first]++;
+      games[best]++;
+    }
+
+    schedule.push(round);
+  }
+
+  return schedule;
+}

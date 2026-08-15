@@ -12,6 +12,7 @@ import {
   addPlayerAction,
   removePlayerAction,
   setAttendanceAction,
+  setPartnerAction,
 } from "@/lib/sessions/actions";
 import {
   deleteSessionAction,
@@ -457,5 +458,121 @@ export function EndSessionButton({
         </button>
       </div>
     </div>
+  );
+}
+
+export interface PairablePlayer {
+  playerId: string;
+  username: string;
+  partnerId: string | null;
+}
+
+/**
+ * Choose who partners whom, before the session starts.
+ *
+ * A fixed-partner night is defined by its pairs, and until now there was no way
+ * to say what they were — the format only nudged the generator to repeat
+ * whatever pairs it happened to invent. Tap one player then another to pair
+ * them; tap a pair to split it.
+ *
+ * Deliberately a two-tap flow rather than drag-and-drop: this is used courtside
+ * on a phone, one-handed, often while someone is talking to you.
+ */
+export function PartnerPicker({
+  sessionId,
+  players,
+  locked,
+}: {
+  sessionId: string;
+  players: PairablePlayer[];
+  locked: boolean;
+}) {
+  const t = useT();
+  const [pending, start] = useTransition();
+  const [holding, setHolding] = useState<string | null>(null);
+
+  const nameOf = new Map(players.map((p) => [p.playerId, p.username]));
+
+  // Each pair once, plus everyone still on their own.
+  const pairs = players.filter(
+    (p) => p.partnerId && p.playerId < p.partnerId && nameOf.has(p.partnerId),
+  );
+  const single = players.filter((p) => !p.partnerId || !nameOf.has(p.partnerId));
+
+  const tap = (id: string) => {
+    if (locked || pending) return;
+    if (holding === null) {
+      setHolding(id);
+      return;
+    }
+    if (holding === id) {
+      setHolding(null);
+      return;
+    }
+    const first = holding;
+    setHolding(null);
+    start(() => void setPartnerAction(sessionId, first, id));
+  };
+
+  return (
+    <section className="card mt-3">
+      <h2 className="text-sm font-medium text-[var(--muted)]">{t("play.partnersTitle")}</h2>
+      <p className="hint">{locked ? t("play.partnersLocked") : t("play.partnersHint")}</p>
+
+      {pairs.length > 0 ? (
+        <ul className="mt-3 flex flex-col gap-2">
+          {pairs.map((p) => (
+            <li key={p.playerId}>
+              <button
+                type="button"
+                disabled={locked || pending}
+                onClick={() => start(() => void setPartnerAction(sessionId, p.playerId, null))}
+                aria-label={t("play.unpair", {
+                  a: p.username,
+                  b: nameOf.get(p.partnerId!) ?? "",
+                })}
+                className="flex w-full items-center gap-2 rounded-xl border border-[var(--accent)]
+                  bg-[var(--accent)]/10 px-3 py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {p.username} &amp; {nameOf.get(p.partnerId!)}
+                </span>
+                {locked ? null : <span className="shrink-0 text-[var(--muted)]">✕</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {single.length > 0 && !locked ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {single.map((p) => (
+            <button
+              key={p.playerId}
+              type="button"
+              disabled={pending}
+              onClick={() => tap(p.playerId)}
+              aria-pressed={holding === p.playerId}
+              className={`truncate rounded-xl border px-3 py-2.5 text-sm transition
+                disabled:opacity-50 ${
+                  holding === p.playerId
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] font-semibold text-[var(--accent)]"
+                    : "border-[var(--border)]"
+                }`}
+            >
+              {p.username}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <p className="hint">
+        {t.plural("play.partnersReady", pairs.length, { count: pairs.length })}
+        {single.length > 0 ? ` · ${t("play.partnersUnpaired", { count: single.length })}` : ""}
+      </p>
+      {pairs.length < 2 && !locked ? (
+        <p className="hint text-[var(--accent)]">{t("play.partnersNeedTwo")}</p>
+      ) : null}
+    </section>
   );
 }

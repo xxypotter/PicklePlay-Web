@@ -5,6 +5,7 @@ import {
   generateRound,
   pairKey,
   selectSeated,
+  WEIGHTS,
   type GenPlayer,
   type Round,
   type SessionHistory,
@@ -249,5 +250,77 @@ describe("determinism", () => {
     const a = generateRound(players, 3, emptyHistory(), { random: seeded(99) });
     const b = generateRound(players, 3, emptyHistory(), { random: seeded(99) });
     expect(a).toEqual(b);
+  });
+});
+
+describe("balanced mode really balances", () => {
+  /** A realistic spread, taken from the live roster. */
+  const POOL: GenPlayer[] = [
+    { id: "a", rating: 4.45 }, { id: "b", rating: 4.34 }, { id: "c", rating: 4.24 },
+    { id: "d", rating: 4.15 }, { id: "e", rating: 4.02 }, { id: "f", rating: 3.97 },
+    { id: "g", rating: 3.93 }, { id: "h", rating: 3.92 }, { id: "i", rating: 3.86 },
+    { id: "j", rating: 3.75 }, { id: "k", rating: 3.58 }, { id: "l", rating: 3.47 },
+  ];
+
+  function seeded(seed: number) {
+    let s = seed >>> 0;
+    return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 0x100000000);
+  }
+
+  function gaps(players: GenPlayer[], courts: number, rounds: number) {
+    const by = new Map(players.map((p) => [p.id, p.rating]));
+    let history = emptyHistory();
+    const out: number[] = [];
+    for (let r = 0; r < rounds; r++) {
+      const round = generateRound(players, courts, history, {
+        format: "balanced",
+        random: seeded(r + 1),
+      });
+      for (const c of round.courts) {
+        out.push(
+          Math.abs(
+            (by.get(c.teamA[0])! + by.get(c.teamA[1])!) / 2 -
+              (by.get(c.teamB[0])! + by.get(c.teamB[1])!) / 2,
+          ),
+        );
+      }
+      history = applyRound(history, round);
+    }
+    return out;
+  }
+
+  it("keeps the average team gap small across a whole session", () => {
+    // Before v1.1 this averaged 0.13 with a worst case of 0.68, because one
+    // repeated partnership outweighed half a rating point of imbalance.
+    const g = gaps(POOL, 3, 8);
+    const mean = g.reduce((s, v) => s + v, 0) / g.length;
+    expect(mean).toBeLessThan(0.05);
+    expect(Math.max(...g)).toBeLessThan(0.2);
+  });
+
+  it("balances better than social play, which ignores rating entirely", () => {
+    const by = new Map(POOL.map((p) => [p.id, p.rating]));
+    const social = generateRound(POOL, 3, emptyHistory(), {
+      format: "social",
+      random: seeded(4),
+    });
+    const socialGap =
+      social.courts
+        .map((c) =>
+          Math.abs(
+            (by.get(c.teamA[0])! + by.get(c.teamA[1])!) / 2 -
+              (by.get(c.teamB[0])! + by.get(c.teamB[1])!) / 2,
+          ),
+        )
+        .reduce((s, v) => s + v, 0) / social.courts.length;
+
+    const balancedGap = gaps(POOL, 3, 1).reduce((s, v) => s + v, 0) / 3;
+    expect(balancedGap).toBeLessThan(socialGap);
+  });
+
+  it("weighs balance far above avoiding a repeated partnership", () => {
+    // The ordering that was wrong: a repeat must cost less than a tenth of a
+    // rating point of imbalance, or variety wins and "balanced" is a lie.
+    expect(WEIGHTS.balanced.balance * 0.1).toBeGreaterThan(WEIGHTS.balanced.partner);
   });
 });

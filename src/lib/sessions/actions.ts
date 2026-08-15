@@ -311,3 +311,69 @@ export async function setAttendanceAction(
   revalidatePath(`/s/${sessionId}`);
 }
 
+
+/**
+ * Pair two players for a fixed-partner session, or split a pair.
+ *
+ * Written as one action because a partnership is symmetric: storing it on one
+ * row and not the other is the bug this shape prevents. Passing null for
+ * `partnerId` unpairs whoever `playerId` was with, from both sides.
+ *
+ * Only before the session starts. Once rounds exist the pairs are baked into
+ * the schedule, and changing them would leave the matches disagreeing with the
+ * roster.
+ */
+export async function setPartnerAction(
+  sessionId: string,
+  playerId: string,
+  partnerId: string | null,
+): Promise<void> {
+  const t = await getT();
+  await requireOrganizer(sessionId);
+  const db = getDb();
+
+  const found = await db
+    .select({ status: sessions.status })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  if (!found[0]) throw new Error(t("err.sessionGone"));
+  if (found[0].status !== "open") throw new Error(t("err.pairsLocked"));
+
+  // Break whatever either of them was in before, so nobody is left pointing at
+  // a partner who has moved on.
+  const detach = async (id: string) => {
+    const current = await db
+      .select({ partnerId: signups.partnerId })
+      .from(signups)
+      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, id)))
+      .limit(1);
+    const old = current[0]?.partnerId;
+    if (old) {
+      await db
+        .update(signups)
+        .set({ partnerId: null })
+        .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, old)));
+    }
+    await db
+      .update(signups)
+      .set({ partnerId: null })
+      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, id)));
+  };
+
+  await detach(playerId);
+  if (partnerId && partnerId !== playerId) {
+    await detach(partnerId);
+    await db
+      .update(signups)
+      .set({ partnerId })
+      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, playerId)));
+    await db
+      .update(signups)
+      .set({ partnerId: playerId })
+      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, partnerId)));
+  }
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+}

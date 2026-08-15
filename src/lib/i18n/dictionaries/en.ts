@@ -233,6 +233,15 @@ export const en = {
   "play.dropLabel": "Drop {name} from this session",
   "play.outFreesPlace":
     "Marking someone out frees their place, so you can add a walk-in. Tap ✕ to take them off the list entirely.",
+  "play.partnersTitle": "Fixed partners",
+  "play.partnersHint":
+    "Tap two players to pair them. Only paired players are scheduled, and pairs are locked once the session starts.",
+  "play.partnersReady": "{count} pair ready",
+  "play.partnersReady.plural": "{count} pairs ready",
+  "play.partnersUnpaired": "{count} still unpaired",
+  "play.partnersNeedTwo": "Pair up at least four players — two teams — to build the matches.",
+  "play.unpair": "Split {a} and {b}",
+  "play.partnersLocked": "Partners are locked now the session has started.",
   "play.starting": "Starting…",
   "play.tooFewToStart": "Mark at least 4 players present to start.",
   "play.reopenFailed": "Couldn't reopen.",
@@ -372,6 +381,10 @@ export const en = {
   "notes.v11.halfLife":
     "How settled your rating is now counts too: once you're fully reliable, the longer your playing record the steadier your number.",
   "notes.v11.howItWorks": "My rating now explains in a few lines how the rating is worked out.",
+  "notes.v11.fixedPartners":
+    "Fixed partners now lets you actually set the pairs before the session starts — tap two players to team them up.",
+  "notes.v11.balanced":
+    "Balanced round robin now really balances: it puts even team ratings ahead of mixing up partners, so matches are much closer.",
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
 
@@ -647,6 +660,7 @@ export const en = {
   "err.pickFormat": "Pick a format.",
   "err.sessionGone": "That session no longer exists.",
   "err.sessionStarted": "This session has started, so its details are locked.",
+  "err.pairsLocked": "Partners can only be set before the session starts.",
   "err.tooManyIn": "{count} players are already in. Remove some before lowering the cap.",
   "err.notAuthorized": "Not authorized.",
   "err.notOrganizer": "Only the organizer of this session can change it.",
