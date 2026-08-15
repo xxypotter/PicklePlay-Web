@@ -337,8 +337,8 @@ export const zhHant: Dict = {
   "notes.v11.sorting": "所有玩家列表都按字母順序排列 — 管理頁和建立活動選人時都一樣，數字排在最前。",
   "notes.v11.halfLife": "現在還會看你的記錄有多深：到達完全可靠之後，打得越多，評分越穩。",
   "notes.v11.howItWorks": "「我的評分」頁面現在用幾句話說明了評分是怎麼算的。",
-  "notes.v11.fixedPartners": "固定搭檔現在可以在開始前真正指定搭檔了 — 點兩個人就能配成一隊。",
-  "notes.v11.balanced": "均衡循環賽現在真的均衡了：優先讓兩隊評分接近，而不是先換搭檔，比賽會致得多。",
+  "notes.v12.fixedPartners": "固定搭檔現在可以在開始前真正指定搭檔了 — 點兩個人就能配成一隊。",
+  "notes.v12.balanced": "均衡循環賽現在真的均衡了：優先讓兩隊評分接近，而不是先換搭檔，比賽會更勢均力敵。",
   "notes.v10.initial": "首個版本：活動、報名、自動排對陣、記分、評分與排行榜。",
 
   "import.title": "加入 PicklePlay 之前的戰績",

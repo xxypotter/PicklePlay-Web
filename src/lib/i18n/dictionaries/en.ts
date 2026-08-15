@@ -381,9 +381,9 @@ export const en = {
   "notes.v11.halfLife":
     "How settled your rating is now counts too: once you're fully reliable, the longer your playing record the steadier your number.",
   "notes.v11.howItWorks": "My rating now explains in a few lines how the rating is worked out.",
-  "notes.v11.fixedPartners":
+  "notes.v12.fixedPartners":
     "Fixed partners now lets you actually set the pairs before the session starts — tap two players to team them up.",
-  "notes.v11.balanced":
+  "notes.v12.balanced":
     "Balanced round robin now really balances: it puts even team ratings ahead of mixing up partners, so matches are much closer.",
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",

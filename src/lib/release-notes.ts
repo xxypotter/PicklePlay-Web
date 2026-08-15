@@ -20,6 +20,11 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "1.2",
+    date: "2026-08-15",
+    notes: ["notes.v12.fixedPartners", "notes.v12.balanced"],
+  },
+  {
     version: "1.1",
     date: "2026-08-10",
     notes: [
@@ -33,8 +38,6 @@ export const RELEASES: Release[] = [
       "notes.v11.sorting",
       "notes.v11.halfLife",
       "notes.v11.howItWorks",
-      "notes.v11.fixedPartners",
-      "notes.v11.balanced",
     ],
   },
   {
