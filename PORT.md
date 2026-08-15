@@ -8,6 +8,12 @@ The reference implementation is a Next.js web app backed by Postgres. Anything
 tied to that stack — server components, Drizzle, Vercel — is an implementation
 detail and is called out as such.
 
+**The two apps are independent** — separate databases, separate players,
+separate ratings. Nothing here has to match the web app bit-for-bit at runtime;
+this is a description of behaviour to rebuild, not a contract to interoperate
+with. Where exactness still matters it is for the native app's *own* sake, and
+said so explicitly (§3.9 is the one to read twice).
+
 **Deliberately out of scope here:** sign-in (the web app uses a username + PIN
 with an invite code; the native app will use email or phone), payment, and
 anything about the App Store. Those are noted in §12 as gaps, not specified.
@@ -274,6 +280,13 @@ instead), so a correction stays on the old tuning.
 
 Verify after any change that replaying real history reproduces stored ratings
 **bit-identically**. That check has caught real mistakes.
+
+> **Do not copy our epoch table.** It contains one historical entry —
+> pre-v1.1 constants, superseded on 2026-08-10 — which describes *this* app's
+> past, not yours. A fresh install has no history to protect, so ship with the
+> constants in §3.2–§3.6 as your v1.0 and a single open-ended epoch. Add a
+> second entry the first time you retune, and from then on the guarantee is
+> yours to keep. The machinery matters; our dates do not.
 
 ### 3.10 Starting rating
 
