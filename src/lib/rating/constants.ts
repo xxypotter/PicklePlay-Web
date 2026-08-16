@@ -141,10 +141,32 @@ export const RATING = {
    * explicitly. A 9-player round robin gives 8 partners and 8 opposing teams in
    * one night, which is why a single session settles a new player.
    */
-  PARTNERS_AT_60: 2,
-  PARTNERS_AT_100: 4,
-  TEAMS_AT_60: 6,
-  TEAMS_AT_100: 12,
+  PARTNERS_AT_60: 4,
+  PARTNERS_AT_100: 8,
+  TEAMS_AT_60: 12,
+  TEAMS_AT_100: 24,
+
+  /**
+   * How much play it takes before a rating is considered settled.
+   *
+   * Diversity alone is too easy to satisfy in a closed group: one nine-player
+   * round robin hands you eight partners and eight opposing pairs, which under
+   * the old waypoints was a 70% reliability from a single night. DUPR asks for
+   * far more — one of the players we calibrated against sits at 10% after
+   * eighteen matches.
+   *
+   * We cannot reproduce DUPR's numbers directly, because its reliability
+   * reflects a large open pool and ours is capped by a roster of forty: with
+   * nine regulars there are only ever eight distinct partners to have. What we
+   * can do is stop one session from finishing the job. Volume is the term that
+   * isn't capped by group size, so it carries the tail.
+   *
+   * Measured in decayed matches (§5.4), so it fades if someone stops playing.
+   * At eight games a session that is reliable after about three sessions and
+   * fully settled after about nine, against one session before.
+   */
+  VOLUME_AT_60: 24,
+  VOLUME_AT_100: 72,
 
   /**
    * What a partner or opponent is worth when they aren't reliable themselves.
@@ -201,6 +223,17 @@ export interface Tuning {
   CAL_MULT: number;
   CAP_PROVISIONAL: number;
   CAP_RELIABLE: number;
+  /**
+   * Reliability waypoints. Versioned too, because reliability feeds K — change
+   * these without dating them and every match ever played is re-scored.
+   */
+  PARTNERS_AT_60: number;
+  PARTNERS_AT_100: number;
+  TEAMS_AT_60: number;
+  TEAMS_AT_100: number;
+  /** Undefined before v1.2, when volume wasn't part of the calculation. */
+  VOLUME_AT_60?: number;
+  VOLUME_AT_100?: number;
 }
 
 /**
@@ -217,6 +250,13 @@ export interface Tuning {
  * the current ones. The recompute stays a pure function of history, and the
  * history stops being a moving target.
  */
+const RELIABILITY_V1_0 = {
+  PARTNERS_AT_60: 2,
+  PARTNERS_AT_100: 4,
+  TEAMS_AT_60: 6,
+  TEAMS_AT_100: 12,
+} as const;
+
 export const TUNING_V1_0: Tuning = {
   ALPHA: 0.35,
   D_POINTS: 1.75,
@@ -229,21 +269,62 @@ export const TUNING_V1_0: Tuning = {
   CAL_MULT: 1.5,
   CAP_PROVISIONAL: 0.25,
   CAP_RELIABLE: 0.1,
+  ...RELIABILITY_V1_0,
 };
 
 /**
- * When the recalibrated tuning takes over.
+ * v1.1 — the DUPR recalibration, before reliability was tightened.
  *
- * Sits after the last match of the three sessions played under v1.0 (the most
- * recent was 2026-08-09T13:24Z) and before anything played since. Editing an
- * old score keeps that match on the old tuning, because saving a correction
- * updates `editedAt` and leaves `playedAt` alone.
+ * Everything about how far a match moves you is already correct here; the only
+ * thing that changed afterwards is how quickly a player is *considered*
+ * settled, which feeds K and therefore had to be dated too.
  */
+export const TUNING_V1_1: Tuning = {
+  ALPHA: 1.0,
+  D_POINTS: 1.33,
+  K_LAW: "reliability-power",
+  K_BASE: 0.98,
+  K_EXPONENT: 1.06,
+  K_SETTLED: 0.188,
+  HALF_LIFE_SCALE: 40,
+  K_SEED_FLOOR: 0.15,
+  SEED_FLOOR_MATCHES: 5,
+  CAL_MATCHES: 5,
+  CAL_MULT: 1.25,
+  CAP_PROVISIONAL: 0.6,
+  CAP_RELIABLE: 0.5,
+  ...RELIABILITY_V1_0,
+};
+
+/**
+ * Every tuning this engine has used, newest first.
+ *
+ * A match replays under whichever was in force the day it was played, so
+ * results already shown to players never move. Each cutover sits after the
+ * last match played under the previous tuning and before anything since.
+ * Editing an old score keeps it on its original tuning, because saving a
+ * correction updates `editedAt` and leaves `playedAt` alone.
+ *
+ * Add to the front when you retune. Never edit an entry that has matches
+ * behind it.
+ */
+export const TUNING_EPOCHS: ReadonlyArray<{ from: Date; tuning: Tuning }> = [
+  // v1.2 — reliability tightened. Last match under v1.1: 2026-08-15T18:09Z.
+  { from: new Date("2026-08-16T00:00:00.000Z"), tuning: RATING },
+  // v1.1 — DUPR recalibration. Last match under v1.0: 2026-08-09T13:24Z.
+  { from: new Date("2026-08-10T00:00:00.000Z"), tuning: TUNING_V1_1 },
+  // v1.0 — the original engine.
+  { from: new Date(0), tuning: TUNING_V1_0 },
+];
+
+/** Kept for the tests that name the first cutover directly. */
 export const RECALIBRATED_FROM = new Date("2026-08-10T00:00:00.000Z");
 
-/** Which movement tuning applies to a match played at this moment. */
+/** Which tuning applies to a match played at this moment. */
 export function tuningFor(at: Date): Tuning {
-  return at.getTime() < RECALIBRATED_FROM.getTime() ? TUNING_V1_0 : RATING;
+  const ms = at.getTime();
+  return (TUNING_EPOCHS.find((e) => ms >= e.from.getTime()) ?? TUNING_EPOCHS[TUNING_EPOCHS.length - 1])
+    .tuning;
 }
 
 /**

@@ -339,6 +339,9 @@ export const zhHant: Dict = {
   "notes.v11.howItWorks": "「我的評分」頁面現在用幾句話說明了評分是怎麼算的。",
   "notes.v12.fixedPartners": "固定搭檔現在可以在開始前真正指定搭檔了 — 點兩個人就能配成一隊。",
   "notes.v12.balanced": "均衡循環賽現在真的均衡了：優先讓兩隊評分接近，而不是先換搭檔，比賽會更勢均力敵。",
+  "notes.v12.liveRefresh": "現在比分會自動同步到每個人的手機。比賽進行中，排名和對陣會自動重新整理；重新打開 App 時也會拉取最新內容。",
+  "notes.v12.opponents": "循環賽現在會把對手分得更均勻，一晚上碰到同一對三四次的情況大幅減少。",
+  "notes.v12.reliability": "可靠度更難獲得了。以前一晚就能到 70%，現在需要幾次活動逐步累積，更接近 DUPR 的做法，「已穩定」的評分也更有分量。",
   "notes.v10.initial": "首個版本：活動、報名、自動排對陣、記分、評分與排行榜。",
 
   "import.title": "加入 PicklePlay 之前的戰績",

@@ -197,3 +197,54 @@ describe("planFixedPartnerRounds", () => {
     expect(a).toEqual(b);
   });
 });
+
+describe("opponent balance", () => {
+  const key = (a: number, b: number) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+  function opponents(schedule: PlannedRound[]) {
+    const met = new Map<string, number>();
+    for (const round of schedule) {
+      for (const [a1, a2, b1, b2] of round) {
+        for (const a of [a1, a2]) {
+          for (const b of [b1, b2]) met.set(key(a, b), (met.get(key(a, b)) ?? 0) + 1);
+        }
+      }
+    }
+    return met;
+  }
+
+  it("mostly holds everyone to three meetings, and never exceeds four", () => {
+    /*
+     * 72 opponent slots over 36 pairs means two each is ideal, but a perfect
+     * design does not exist for every rest rota — some draws are stuck with a
+     * three. Four is the hard bound and three is the usual case; the session
+     * that prompted this had a four *and* ten pairs at three or more.
+     */
+    let atThree = 0;
+    const seeds = 20;
+    for (let seed = 1; seed <= seeds; seed++) {
+      const schedule = planPerfectSchedule(9, 2, 9, { random: seeded(seed) })!;
+      const worst = Math.max(...opponents(schedule).values());
+      expect(worst).toBeLessThanOrEqual(4);
+      if (worst <= 3) atThree++;
+    }
+    expect(atThree / seeds).toBeGreaterThan(0.8);
+  });
+
+  it("leaves almost nobody unfaced", () => {
+    let unfaced = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const schedule = planPerfectSchedule(9, 2, 9, { random: seeded(seed) })!;
+      unfaced += 36 - opponents(schedule).size;
+    }
+    // Averaged well under one pair per session.
+    expect(unfaced / 20).toBeLessThan(1);
+  });
+
+  it("still keeps every partnership unique while balancing opponents", () => {
+    // Opponent balance is a preference; partnership uniqueness is the promise.
+    const schedule = planPerfectSchedule(9, 2, 9, { random: seeded(7) })!;
+    const pairs = partnerships(schedule);
+    expect(new Set(pairs).size).toBe(36);
+  });
+});

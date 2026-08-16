@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
 import Avatar from "@/components/Avatar";
 import Tabs from "@/components/Tabs";
+import LiveRefresh from "@/components/LiveRefresh";
 import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
@@ -89,6 +90,8 @@ export default async function LeaderboardPage({
 
   return (
     <>
+      {/* No polling here — just pick up changes on returning to the app. */}
+      <LiveRefresh />
       <TopBar title={t("rank.title")} back={backTo} />
       <Tabs
         active={active}

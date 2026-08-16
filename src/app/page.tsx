@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import Link from "next/link";
+import LiveRefresh from "@/components/LiveRefresh";
 import SessionCard, { type SessionCardData } from "@/components/SessionCard";
 import Tabs from "@/components/Tabs";
 import TopBar from "@/components/TopBar";
@@ -126,6 +127,7 @@ export default async function HomePage({
 
   return (
     <>
+      <LiveRefresh />
       <TopBar />
       <Tabs
         active={active}

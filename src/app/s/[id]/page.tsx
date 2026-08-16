@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import LiveRefresh from "@/components/LiveRefresh";
 import LocalDateTime from "@/components/LocalDateTime";
 import Tabs from "@/components/Tabs";
 import TopBar, { safeFrom } from "@/components/TopBar";
@@ -208,6 +209,8 @@ export default async function SessionPage({
 
   return (
     <>
+      {/* Scores are usually entered by one person on their own phone. */}
+      <LiveRefresh active={session.status === "live"} />
       <TopBar title={session.title} back={backTo} />
       <Tabs
         active={active}

@@ -305,26 +305,39 @@ function decayedTotal(book: Map<string, Encounter>, nowMs: number): number {
 /**
  * Reliability: how much the number can be trusted, not how good the player is.
  *
- * Both conditions have to hold, so this takes the *lower* of the two scores.
- * Playing twelve different pairs while always partnering the same person still
- * leaves us guessing about that pairing, and DUPR treats the two requirements
- * as a pair rather than a total.
+ * Every condition has to hold, so this takes the *lowest* score. Playing twelve
+ * different pairs while always partnering the same person still leaves us
+ * guessing about that pairing, and DUPR treats the requirements as a set rather
+ * than a total.
+ *
+ * From v1.2 there is a third condition: how much you have actually played.
+ * Diversity saturates almost immediately in a closed group — one nine-player
+ * round robin is eight partners and eight opposing pairs — so on its own it let
+ * a single night settle a newcomer. Volume is the only term a small roster
+ * can't shortcut.
  *
  * A trusted signup declaration acts as a floor rather than an addition: it says
  * "DUPR already established this player", and playing here can only raise it.
  */
-function reliabilityAt(state: State, nowMs: number): number {
+function reliabilityAt(state: State, nowMs: number, tuning: Tuning): number {
   const partners = waypoint(
     decayedTotal(state.partners, nowMs),
-    RATING.PARTNERS_AT_60,
-    RATING.PARTNERS_AT_100,
+    tuning.PARTNERS_AT_60,
+    tuning.PARTNERS_AT_100,
   );
   const teams = waypoint(
     decayedTotal(state.teams, nowMs),
-    RATING.TEAMS_AT_60,
-    RATING.TEAMS_AT_100,
+    tuning.TEAMS_AT_60,
+    tuning.TEAMS_AT_100,
   );
-  return Math.max(state.declaredFloor, Math.min(partners, teams));
+
+  // Absent before v1.2, when reliability was diversity alone.
+  const volume =
+    tuning.VOLUME_AT_60 === undefined || tuning.VOLUME_AT_100 === undefined
+      ? 1
+      : waypoint(halfLifeAt(state, nowMs), tuning.VOLUME_AT_60, tuning.VOLUME_AT_100);
+
+  return Math.max(state.declaredFloor, Math.min(partners, teams, volume));
 }
 
 const isProvisional = (reliability: number) => reliability < RATING.RELIABILITY_PASS;
@@ -437,7 +450,7 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
     const pending = st.map((s, i) => {
       const onTeamA = i < 2;
       const surprise = onTeamA ? surpriseA : -surpriseA;
-      const reliability = reliabilityAt(s, atMs);
+      const reliability = reliabilityAt(s, atMs, tuning);
       const halfLife = halfLifeAt(s, atMs);
       const k = kFactor(reliability, s.localMatches, tuning, halfLife);
       const delta = ratingDelta(s.rating, k, surprise, isProvisional(reliability), tuning);
@@ -506,10 +519,14 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
   // who stopped showing up decays toward provisional rather than freezing.
   const endMs = events.length ? events[events.length - 1].at.getTime() : Date.now();
 
+  // Reported as of the end of the timeline, under today's rules — this is a
+  // statement about the player now, not about any particular past match.
+  const endTuning = tuningFor(new Date(endMs));
+
   const players = new Map<string, PlayerRating>();
   for (const [playerId, s] of states) {
     const halfLife = halfLifeAt(s, endMs);
-    const reliability = reliabilityAt(s, endMs);
+    const reliability = reliabilityAt(s, endMs, endTuning);
     players.set(playerId, {
       playerId,
       rating: s.rating,

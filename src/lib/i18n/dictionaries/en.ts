@@ -385,6 +385,12 @@ export const en = {
     "Fixed partners now lets you actually set the pairs before the session starts — tap two players to team them up.",
   "notes.v12.balanced":
     "Balanced round robin now really balances: it puts even team ratings ahead of mixing up partners, so matches are much closer.",
+  "notes.v12.liveRefresh":
+    "Scores now appear on everyone's phone. Standings and matchups update on their own while a session is running, and any screen refreshes when you come back to the app.",
+  "notes.v12.opponents":
+    "Round robin now spreads opponents more evenly, so you're far less likely to face the same pair three or four times in a night.",
+  "notes.v12.reliability":
+    "Reliability is harder to earn. It used to reach 70% after a single night; now it builds over several sessions, which is closer to how DUPR works and makes a settled rating mean more.",
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
 

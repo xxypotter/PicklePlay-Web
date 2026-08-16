@@ -282,5 +282,23 @@ async function recomputeIfRated(sessionId: string | null): Promise<void> {
     .where(eq(sessions.id, sessionId))
     .limit(1);
 
-  if (found[0]?.rated) await recomputeAll();
+  if (!found[0]?.rated) return;
+
+  await recomputeAll();
+
+  /*
+   * A recompute rebuilds *every* player's rating, so every screen that shows
+   * one is now stale — not just the session it came from.
+   *
+   * Tied to the recompute rather than listed at each call site: saving a score
+   * used to refresh the session page and leave the rankings showing last
+   * night's numbers until somebody ended the session. Anything that rebuilds
+   * ratings has to invalidate the same set, and the only way to keep that true
+   * is for it to be one thing.
+   */
+  revalidatePath("/leaderboard");
+  revalidatePath("/p/[username]", "page");
+  revalidatePath("/p/[username]/record", "page");
+  revalidatePath("/me");
+  revalidatePath("/admin");
 }

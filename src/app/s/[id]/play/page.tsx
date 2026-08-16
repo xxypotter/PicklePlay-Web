@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import LiveRefresh from "@/components/LiveRefresh";
 import TopBar, { safeFrom } from "@/components/TopBar";
 import { canOrganizeSession } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
@@ -92,6 +93,7 @@ export default async function PlayPage({
 
   return (
     <>
+      <LiveRefresh active={session.status === "live"} />
       <TopBar
         title={t("play.title")}
         back={backTo}
