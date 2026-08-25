@@ -395,9 +395,9 @@ export const en = {
     "Round robin now spreads opponents more evenly, so you're far less likely to face the same pair three or four times in a night.",
   "notes.v12.reliability":
     "Reliability is harder to earn. It used to reach 70% after a single night; now it builds over several sessions, which is closer to how DUPR works and makes a settled rating mean more.",
-  "notes.v12.void":
-    "Voiding a match is now the super admin's call alone, and it can be undone. A voided match stays on the matchups list, struck through, with its score kept — one tap puts it back.",
-  "notes.v12.autoClose":
+  "notes.v13.void":
+    "The void button has been removed. A match that was voided before now stays on the matchups list, struck through with its score kept, rather than disappearing.",
+  "notes.v13.autoClose":
     "A session nobody remembers to end now closes itself after 48 hours instead of 24, so a late night still leaves time to finish the scores.",
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
