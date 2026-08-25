@@ -411,6 +411,23 @@ function session(atMs: number, tag: string, gap = 2): MatchEvent[] {
 const cast = (declared: number, atMs: number) =>
   Array.from({ length: 9 }, (_, i) => seed(`p${i}`, 3.5, declared, atMs));
 
+/**
+ * Several sessions, a week apart, with a different draw each time.
+ *
+ * From v1.2 reliability also counts how much you have played, so a single
+ * night no longer settles anybody — these tests need a real run of play to
+ * reach the state they are about.
+ */
+function nights(count: number, endMs: number, gapDays = 7, tag = "n"): MatchEvent[] {
+  const out: MatchEvent[] = [];
+  for (let n = 0; n < count; n++) {
+    out.push(
+      ...session(endMs - day(gapDays * (count - 1 - n)), `${tag}${n}`, 2 + (n % 6)),
+    );
+  }
+  return out;
+}
+
 describe("a trusted signup declaration (§5.7)", () => {
   const now = Date.now();
 
@@ -440,7 +457,7 @@ describe("a trusted signup declaration (§5.7)", () => {
   });
 });
 
-describe("reliability is earned from variety, not volume (§5.4)", () => {
+describe("reliability is earned from variety and volume (§5.4)", () => {
   const now = Date.now();
 
   it("gains nothing from replaying the same two people", () => {
@@ -459,33 +476,47 @@ describe("reliability is earned from variety, not volume (§5.4)", () => {
     expect(p.reliability).toBeLessThan(0.3);
   });
 
-  it("settles a newcomer in one night among established players", () => {
-    // The case that actually matters: friends who already carry a real DUPR
-    // reliability, and someone new joining them.
+  it("does not settle a newcomer on one night, however good the company", () => {
+    /*
+     * Changed in v1.2. One nine-player round robin hands you eight partners
+     * and eight opposing pairs, which used to be enough on its own — a
+     * newcomer turned up once and was treated as established. Volume is now a
+     * third condition, and it is the one a nine-person roster can't shortcut.
+     */
     const events: TimelineEvent[] = [
       seed("p0", 3.5, 0, now - day(60)),
       ...Array.from({ length: 8 }, (_, i) => seed(`p${i + 1}`, 3.5, 100, now - day(60))),
       ...session(now - day(1), "a"),
     ];
     const p = recompute(events).players.get("p0")!;
+    expect(p.provisional).toBe(true);
+    expect(p.reliability).toBeLessThan(RATING.RELIABILITY_PASS);
+  });
+
+  it("settles them after a few sessions of real play", () => {
+    const events: TimelineEvent[] = [
+      ...cast(0, now - day(60)),
+      ...nights(5, now - day(1)),
+    ];
+    const p = recompute(events).players.get("p0")!;
+    expect(p.localMatches).toBe(40);
     expect(p.provisional).toBe(false);
     expect(p.reliability).toBeGreaterThanOrEqual(RATING.RELIABILITY_PASS);
   });
 
-  it("takes a second night when nobody in the group is established", () => {
-    // Everyone at zero: each partner is worth half, so one night lands short.
-    const one = recompute([...cast(0, now - day(60)), ...session(now - day(8), "a")]);
-    const after1 = one.players.get("p0")!;
-    expect(after1.provisional).toBe(true);
+  it("climbs with every night rather than arriving all at once", () => {
+    const at = (n: number) =>
+      recompute([...cast(0, now - day(60)), ...nights(n, now - day(1))]).players.get("p0")!
+        .reliability;
 
-    const two = recompute([
-      ...cast(0, now - day(60)),
-      ...session(now - day(8), "a"),
-      ...session(now - day(1), "b", 3),
-    ]);
-    const after2 = two.players.get("p0")!;
-    expect(after2.reliability).toBeGreaterThan(after1.reliability);
-    expect(after2.provisional).toBe(false);
+    const one = at(1);
+    const three = at(3);
+    const five = at(5);
+
+    expect(one).toBeLessThan(three);
+    expect(three).toBeLessThan(five);
+    // And the first night is a long way short of settled.
+    expect(one).toBeLessThan(RATING.RELIABILITY_PASS / 2);
   });
 
   it("bootstraps from an all-unknown group rather than deadlocking", () => {
@@ -520,14 +551,34 @@ describe("reliability is earned from variety, not volume (§5.4)", () => {
   });
 
   it("counts an established partner for more than an unknown one", () => {
-    const known = recompute([
-      seed("p0", 3.5, 0, now - day(60)),
-      ...Array.from({ length: 8 }, (_, i) => seed(`p${i + 1}`, 3.5, 100, now - day(60))),
-      ...session(now - day(1), "a"),
-    ]).players.get("p0")!.reliability;
+    /*
+     * Demonstrated on a narrow circle rather than a full round robin.
+     *
+     * With nine players you can only ever have eight distinct partners, which
+     * is exactly PARTNERS_AT_100 — so in this group the partner term saturates
+     * and volume is what actually binds. The weighting is still in the model;
+     * it only shows where the circle is small enough for partners to be the
+     * limiting condition, which is precisely when who you played matters most.
+     */
+    const circle = (declared: number): TimelineEvent[] => {
+      const events: TimelineEvent[] = [
+        seed("p0", 3.5, 0, now - day(90)),
+        ...[1, 2, 3].map((i) => seed(`p${i}`, 3.5, declared, now - day(90))),
+      ];
+      // Plenty of games, only three different partners.
+      for (let g = 0; g < 40; g++) {
+        const partner = 1 + (g % 3);
+        const others = [1, 2, 3].filter((i) => i !== partner);
+        events.push(
+          match(`c${g}`, ["p0", `p${partner}`], [`p${others[0]}`, `p${others[1]}`],
+            11, g % 2 ? 7 : 9, now - day(60) + g * 3_600_000),
+        );
+      }
+      return events;
+    };
 
-    const unknown = recompute([...cast(0, now - day(60)), ...session(now - day(1), "a")])
-      .players.get("p0")!.reliability;
+    const known = recompute(circle(100)).players.get("p0")!.reliability;
+    const unknown = recompute(circle(0)).players.get("p0")!.reliability;
 
     expect(known).toBeGreaterThan(unknown);
   });
@@ -539,7 +590,8 @@ describe("changing your own rating reopens the question (§5.8)", () => {
   const established = (): TimelineEvent[] => [
     seed("p0", 3.5, 0, now - day(60)),
     ...Array.from({ length: 8 }, (_, i) => seed(`p${i + 1}`, 3.5, 100, now - day(60))),
-    ...session(now - day(10), "a"),
+    // Five nights: from v1.2 one is nowhere near enough to be established.
+    ...nights(5, now - day(10)),
   ];
 
   it("sends a self re-seed back to provisional", () => {
@@ -562,8 +614,8 @@ describe("changing your own rating reopens the question (§5.8)", () => {
       ...established(),
       seed("p0", 4.6, 0, now - day(1), { isInitial: false, selfInitiated: true }),
     ]).players.get("p0")!;
-    expect(after.localMatches).toBe(8);
-    expect(after.wins + after.losses).toBe(8);
+    expect(after.localMatches).toBe(40);
+    expect(after.wins + after.losses).toBe(40);
   });
 
   it("does not punish an admin correction the same way", () => {
@@ -594,8 +646,10 @@ describe("changing your own rating reopens the question (§5.8)", () => {
   it("lets a re-seeded player earn it back by playing again", () => {
     const after = recompute([
       ...established(),
-      seed("p0", 4.6, 0, now - day(5), { isInitial: false, selfInitiated: true }),
-      ...session(now - day(1), "b", 3),
+      seed("p0", 4.6, 0, now - day(9), { isInitial: false, selfInitiated: true }),
+      // Strictly after the re-seed: events are sorted, so nights that land
+      // before it would simply be wiped again and prove nothing.
+      ...nights(6, now - day(1), 1.2, "r"),
     ]).players.get("p0")!;
     expect(after.provisional).toBe(false);
   });

@@ -2,8 +2,16 @@ import { and, lt, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { sessions } from "@/lib/db/schema";
 
-/** A night is over long before this; the window is generous on purpose. */
-export const AUTO_CLOSE_HOURS = 24;
+/**
+ * How long a session may sit unfinished before it closes itself.
+ *
+ * A night is over long before this; the window is generous on purpose. Raised
+ * from 24 to 48 so a Saturday evening that runs late, or an organizer who only
+ * picks their phone up the next day, still gets to end it themselves — closing
+ * locks scoring down to the organizer, so an early auto-close takes the pen out
+ * of the hands of everyone who was on court.
+ */
+export const AUTO_CLOSE_HOURS = 48;
 
 /**
  * Close sessions nobody remembered to end.

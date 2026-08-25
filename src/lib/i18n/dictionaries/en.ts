@@ -178,6 +178,10 @@ export const en = {
     "This session is finished — only its organizer can change a score now.",
   "schedule.error.bothScores": "Enter both scores.",
   "schedule.voiding": "Voiding…",
+  "schedule.voided": "Voided",
+  "schedule.voidedNote": "Taken out of the record. It counts for nobody until it's restored.",
+  "schedule.restore": "Restore this match",
+  "schedule.restoring": "Restoring…",
   "schedule.vs": "vs",
   "schedule.scoreFor": "Score for {team}",
   "schedule.increase": "Increase",
@@ -391,6 +395,10 @@ export const en = {
     "Round robin now spreads opponents more evenly, so you're far less likely to face the same pair three or four times in a night.",
   "notes.v12.reliability":
     "Reliability is harder to earn. It used to reach 70% after a single night; now it builds over several sessions, which is closer to how DUPR works and makes a settled rating mean more.",
+  "notes.v12.void":
+    "Voiding a match is now the super admin's call alone, and it can be undone. A voided match stays on the matchups list, struck through, with its score kept — one tap puts it back.",
+  "notes.v12.autoClose":
+    "A session nobody remembers to end now closes itself after 48 hours instead of 24, so a late night still leaves time to finish the scores.",
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
 
@@ -670,6 +678,7 @@ export const en = {
   "err.tooManyIn": "{count} players are already in. Remove some before lowering the cap.",
   "err.notAuthorized": "Not authorized.",
   "err.notOrganizer": "Only the organizer of this session can change it.",
+  "err.voidNeedsOwner": "Only the super admin can void or restore a match.",
   "err.needLogin": "You need to be logged in.",
   "err.badRole": "Role must be player or admin.",
   "err.ownRole": "You can't change your own role.",

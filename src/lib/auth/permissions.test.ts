@@ -17,6 +17,7 @@ import {
   canRotateInviteCode,
   canRunBackup,
   canScoreMatch,
+  canVoidMatch,
   isAtLeast,
   type SessionScope,
 } from "./policy";
@@ -181,5 +182,51 @@ describe("who may overwrite a rating", () => {
     // Players change their own rating through the re-seed flow, which has a
     // cooldown; this path deliberately isn't theirs.
     expect(canAdjustRating(PLAYER, player)).toBe(false);
+  });
+});
+
+describe("who may void a match", () => {
+  it("is the super admin and nobody else", () => {
+    // Narrower than scoring, and narrower than organizing. Voiding says the
+    // game did not happen: it leaves four people's records and moves everyone's
+    // rating, which is not a call an organizer should make about their own
+    // night unprompted.
+    expect(canVoidMatch(SUPER)).toBe(true);
+    expect(canVoidMatch(OWNER)).toBe(false);
+    expect(canVoidMatch(OTHER_ADMIN)).toBe(false);
+    expect(canVoidMatch(PLAYER)).toBe(false);
+  });
+
+  it("does not follow from being able to score the match", () => {
+    // An admin on the night can enter any score, and still cannot void.
+    const live = session("live");
+    expect(canScoreMatch(OTHER_ADMIN, live, false)).toBe(true);
+    expect(canVoidMatch(OTHER_ADMIN)).toBe(false);
+  });
+});
+
+describe("who may change a score once the session has ended", () => {
+  const closed = session("closed");
+
+  it("lets the organizing admin correct their own night", () => {
+    expect(canScoreMatch(OWNER, closed, false)).toBe(true);
+    expect(canScoreMatch(OWNER, closed, true)).toBe(true);
+  });
+
+  it("lets the super admin correct anyone's", () => {
+    expect(canScoreMatch(SUPER, closed, false)).toBe(true);
+  });
+
+  it("shuts out everyone else, including people who played in it", () => {
+    // Playing in a match is enough while the night is live and stops being
+    // enough the moment it closes — a finished session is a record.
+    expect(canScoreMatch(PLAYER, closed, true)).toBe(false);
+    expect(canScoreMatch(OTHER_ADMIN, closed, true)).toBe(false);
+    expect(canScoreMatch(OTHER_ADMIN, closed, false)).toBe(false);
+  });
+
+  it("still lets a player score their own match while it is live", () => {
+    expect(canScoreMatch(PLAYER, session("live"), true)).toBe(true);
+    expect(canScoreMatch(PLAYER, session("live"), false)).toBe(false);
   });
 });

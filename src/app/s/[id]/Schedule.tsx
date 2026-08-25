@@ -28,6 +28,7 @@ export default function Schedule({
   meId,
   canScoreAny = false,
   canScoreMine = false,
+  canVoid = false,
 }: {
   rounds: CurrentRound[];
   meId?: string;
@@ -35,6 +36,8 @@ export default function Schedule({
   canScoreAny?: boolean;
   /** May score a match you played in. False once the session is closed. */
   canScoreMine?: boolean;
+  /** Super admin only — voiding removes a game from four people's records. */
+  canVoid?: boolean;
 }) {
   const t = useT();
   const [picked, setPicked] = useState<string[]>([]);
@@ -151,9 +154,15 @@ export default function Schedule({
             {round.matches.map((m) => {
               const mine = [...m.teamA, ...m.teamB].some((p) => p.id === meId);
 
+              // A voided match is never a score form; it is a note about a
+              // game that was removed, and only the owner can put it back.
+              if (m.voided) {
+                return <MatchCard key={m.id} match={m} meId={meId} canVoid={canVoid} />;
+              }
+
               if (canScoreAny || (mine && canScoreMine)) {
                 return (
-                  <MatchCard key={m.id} match={m} meId={meId} canVoid={canScoreAny} highlight={mine} />
+                  <MatchCard key={m.id} match={m} meId={meId} canVoid={canVoid} highlight={mine} />
                 );
               }
 

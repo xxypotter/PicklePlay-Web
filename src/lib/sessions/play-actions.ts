@@ -8,6 +8,8 @@ import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
 import { createAllRounds, createNextRound } from "@/lib/matchmaking/service";
+import { requireLogin } from "@/lib/auth/permissions";
+import { canVoidMatch, PermissionError } from "@/lib/auth/policy";
 import { requireOrganizer, requireScorer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { recomputeAll } from "@/lib/rating/service";
@@ -256,20 +258,58 @@ export async function saveScoreAction(
   return {};
 }
 
-export async function voidMatchAction(matchId: string): Promise<void> {
-  // Participation doesn't grant a void — see requireScorer.
-  const { sessionId } = await requireScorer(matchId, { allowParticipant: false });
+/**
+ * Take a match out of the record, or put it back.
+ *
+ * One function for both directions because they are the same decision made
+ * twice, and splitting them is how the two ends up with different permissions.
+ *
+ * Nothing is deleted: the score stays on the row and only `status` moves, so a
+ * void is always reversible and the history stays auditable (§7). The recompute
+ * skips anything that isn't `completed`, which is what actually removes it from
+ * everyone's rating.
+ */
+async function setMatchVoided(matchId: string, voided: boolean): Promise<void> {
+  const t = await getT();
+  const me = await requireLogin();
+  if (!canVoidMatch(me)) throw new PermissionError(t("err.voidNeedsOwner"));
+
   const db = getDb();
+  const found = await db
+    .select({ sessionId: matches.sessionId })
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .limit(1);
+  if (!found[0]) throw new Error(t("err.matchGone"));
 
-  // Voided rather than deleted, so the history stays auditable (§7).
-  await db.update(matches).set({ status: "void", editedAt: new Date() }).where(eq(matches.id, matchId));
+  await db
+    .update(matches)
+    .set({ status: voided ? "void" : "completed", editedAt: new Date() })
+    .where(eq(matches.id, matchId));
 
+  await db.insert(auditLog).values({
+    actorId: me.id,
+    action: voided ? "match.void" : "match.restore",
+    targetType: "match",
+    targetId: matchId,
+  });
+
+  const sessionId = found[0].sessionId;
   if (sessionId) {
     await recomputeIfRated(sessionId);
     revalidatePath(`/s/${sessionId}/play`);
     revalidatePath(`/s/${sessionId}`);
   }
   revalidatePath("/");
+}
+
+export async function voidMatchAction(matchId: string): Promise<void> {
+  await setMatchVoided(matchId, true);
+}
+
+/** Put a voided match back into the record, score and all. */
+export async function restoreMatchAction(matchId: string): Promise<void> {
+  await setMatchVoided(matchId, false);
 }
 
 /** Unrated sessions still record matches; they just don't move anyone's number. */

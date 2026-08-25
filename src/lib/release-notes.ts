@@ -28,6 +28,8 @@ export const RELEASES: Release[] = [
       "notes.v12.liveRefresh",
       "notes.v12.opponents",
       "notes.v12.reliability",
+      "notes.v12.void",
+      "notes.v12.autoClose",
     ],
   },
   {

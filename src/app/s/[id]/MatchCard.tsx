@@ -6,7 +6,11 @@ import type { FormState } from "@/lib/auth/types";
 import { useT } from "@/lib/i18n/client";
 import type { T } from "@/lib/i18n/translate";
 import type { RoundPlayer } from "@/lib/sessions/queries";
-import { saveScoreAction, voidMatchAction } from "@/lib/sessions/play-actions";
+import {
+  restoreMatchAction,
+  saveScoreAction,
+  voidMatchAction,
+} from "@/lib/sessions/play-actions";
 
 export interface MatchCardData {
   id: string;
@@ -16,6 +20,7 @@ export interface MatchCardData {
   scoreA: number | null;
   scoreB: number | null;
   completed: boolean;
+  voided?: boolean;
 }
 
 const MAX_SCORE = 99;
@@ -71,6 +76,45 @@ export default function MatchCard({
         { key: "A", players: match.teamA, value: a, set: setA },
         { key: "B", players: match.teamB, value: b, set: setB },
       ] as const);
+
+  if (match.voided) {
+    return (
+      <div className="card border border-dashed border-[var(--border)] opacity-70">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-base font-bold line-through">{match.courtLabel}</h3>
+          <span className="text-xs font-semibold text-[var(--danger)]">
+            {t("schedule.voided")}
+          </span>
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-3 text-sm line-through">
+          <span className="min-w-0 flex-1 truncate">
+            {match.teamA.map((p) => (p.id === meId ? t("common.you") : p.username)).join(" & ")}
+          </span>
+          <span className="shrink-0 font-mono tabular-nums">
+            {match.scoreA}–{match.scoreB}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-right">
+            {match.teamB.map((p) => (p.id === meId ? t("common.you") : p.username)).join(" & ")}
+          </span>
+        </div>
+
+        <p className="hint">{t("schedule.voidedNote")}</p>
+
+        {canVoid ? (
+          <button
+            type="button"
+            disabled={voiding}
+            onClick={() => startVoid(() => void restoreMatchAction(match.id))}
+            className="mt-2 w-full text-xs font-semibold text-[var(--accent)] underline
+              disabled:opacity-50"
+          >
+            {voiding ? t("schedule.restoring") : t("schedule.restore")}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <form action={action} className={`card ${highlight ? "border-2 border-[var(--accent)]" : ""}`}>

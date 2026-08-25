@@ -118,6 +118,21 @@ export const canScoreMatch = (
     : playedInIt || isAtLeast(actor.role, "admin");
 
 /**
+ * Who may void a match, and who may put it back.
+ *
+ * Narrower than scoring, and deliberately narrower than organizing. A wrong
+ * score is a correction anybody on court can make; voiding says the game did
+ * not happen, which removes it from four people's records and moves everyone's
+ * rating. That is not a courtside decision, and it should not be one an
+ * organizer can take about their own night without a second pair of eyes.
+ *
+ * Nothing is destroyed either way — a voided match keeps its score and can be
+ * restored — so the cost of asking the owner is a message, not lost data.
+ */
+export const canVoidMatch = (actor: Actor): boolean =>
+  isAtLeast(actor.role, "superadmin");
+
+/**
  * Who may overwrite someone's rating.
  *
  * An admin may correct a player's number, and their own. They may not touch a

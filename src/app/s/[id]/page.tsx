@@ -7,7 +7,12 @@ import LiveRefresh from "@/components/LiveRefresh";
 import LocalDateTime from "@/components/LocalDateTime";
 import Tabs from "@/components/Tabs";
 import TopBar, { safeFrom } from "@/components/TopBar";
-import { canOrganizeSession, canScoreMatch, canSeeSession } from "@/lib/auth/policy";
+import {
+  canOrganizeSession,
+  canScoreMatch,
+  canSeeSession,
+  canVoidMatch,
+} from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { matches, players, playerStats, sessions, signups } from "@/lib/db/schema";
@@ -235,6 +240,7 @@ export default async function SessionPage({
             meId={me?.id}
             canScoreAny={canScoreAny}
             canScoreMine={canScoreMine}
+            canVoid={!!me && canVoidMatch(me)}
           />
         ) : (
           <>

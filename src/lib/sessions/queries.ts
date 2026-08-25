@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { matches, players, ratingEvents, rounds } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
@@ -30,6 +30,12 @@ export interface RoundMatch {
   scoreA: number | null;
   scoreB: number | null;
   completed: boolean;
+  /**
+   * Taken out of the record but kept. Shown struck through rather than hidden:
+   * a match that silently disappears is indistinguishable from one that was
+   * never created, and the people who played it remember playing it.
+   */
+  voided: boolean;
 }
 
 export interface CurrentRound {
@@ -72,7 +78,7 @@ export async function getAllRounds(
         status: matches.status,
       })
       .from(matches)
-      .where(and(eq(matches.sessionId, sessionId), ne(matches.status, "void")))
+      .where(eq(matches.sessionId, sessionId))
       .orderBy(asc(matches.courtNo)),
   ]);
 
@@ -108,6 +114,7 @@ export async function getAllRounds(
         scoreA: r.scoreA,
         scoreB: r.scoreB,
         completed: r.status === "completed",
+        voided: r.status === "void",
       })),
   }));
 }

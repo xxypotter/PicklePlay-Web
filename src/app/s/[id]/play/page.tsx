@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import LiveRefresh from "@/components/LiveRefresh";
 import TopBar, { safeFrom } from "@/components/TopBar";
-import { canOrganizeSession } from "@/lib/auth/policy";
+import { canOrganizeSession, canVoidMatch } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, sessions, signups } from "@/lib/db/schema";
@@ -87,9 +87,10 @@ export default async function PlayPage({
   const here = from ? `/s/${id}/play?from=${encodeURIComponent(backTo)}` : `/s/${id}/play`;
 
   const attendingCount = attending.length;
+  // A voided match isn't waiting for a score; it has been taken out.
   const unscored = allRounds
     .flatMap((r) => r.matches)
-    .filter((m) => !m.completed).length;
+    .filter((m) => !m.completed && !m.voided).length;
 
   return (
     <>
@@ -146,7 +147,7 @@ export default async function PlayPage({
           session before creating matches", which is a baffling thing to be told
           about a session that already happened.
 
-          A session can close on its own (24h after its start time), so this is
+          A session can close on its own (48h after its start time), so this is
           reachable without anyone pressing anything.
         */}
         {session.status === "open" ? (
@@ -196,7 +197,9 @@ export default async function PlayPage({
           {/* Round 1 first: the schedule reads in the order it's played. */}
           {allRounds.map((round) => {
             const playingIds = new Set(
-              round.matches.flatMap((m) => [...m.teamA, ...m.teamB].map((p) => p.id)),
+              round.matches
+                .filter((m) => !m.voided)
+                .flatMap((m) => [...m.teamA, ...m.teamB].map((p) => p.id)),
             );
             const sittingOut = attending.filter((p) => !playingIds.has(p.id));
             const unplayed = round.matches.every((m) => !m.completed);
@@ -214,7 +217,7 @@ export default async function PlayPage({
 
                 <div className="flex flex-col gap-3">
                   {round.matches.map((m) => (
-                    <MatchCard key={m.id} match={m} meId={me.id} canVoid />
+                    <MatchCard key={m.id} match={m} meId={me.id} canVoid={canVoidMatch(me)} />
                   ))}
                 </div>
 
