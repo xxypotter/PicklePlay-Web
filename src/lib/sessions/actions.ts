@@ -14,7 +14,7 @@ import { getT } from "@/lib/i18n/server";
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const num = (fd: FormData, key: string) => Number(str(fd, key));
 
-const FORMATS = ["regular", "balanced", "fixed", "custom"] as const;
+const FORMATS = ["regular", "balanced", "gender", "fixed", "custom"] as const;
 type Format = (typeof FORMATS)[number];
 
 /** Server-side caps; the form mirrors these but is not what enforces them. */

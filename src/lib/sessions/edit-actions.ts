@@ -14,7 +14,7 @@ const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;
-const FORMATS = ["regular", "balanced", "fixed", "custom"] as const;
+const FORMATS = ["regular", "balanced", "gender", "fixed", "custom"] as const;
 type Format = (typeof FORMATS)[number];
 
 /**

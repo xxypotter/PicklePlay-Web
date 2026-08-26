@@ -13,10 +13,13 @@
  * partner over repeating an opponent — playing the same four people against
  * each other all night is what actually feels stale.
  */
+import { matchViolates, type Gender } from "./gender";
 
 export interface GenPlayer {
   id: string;
   rating: number;
+  /** Only the gender-balanced format reads this; absent means unspecified. */
+  gender?: Gender;
 }
 
 export interface Court {
@@ -45,9 +48,18 @@ export interface Weights {
   partner: number;
   opponent: number;
   spread: number;
+  /** Cost of putting two men against two women. Only `gender` sets it. */
+  gender: number;
 }
 
-export type Format = "regular" | "balanced" | "fixed" | "social" | "custom" | "manual";
+export type Format =
+  | "regular"
+  | "balanced"
+  | "fixed"
+  | "social"
+  | "gender"
+  | "custom"
+  | "manual";
 
 /**
  * Every format is the same search with different weights, rather than separate
@@ -60,11 +72,15 @@ export type Format = "regular" | "balanced" | "fixed" | "social" | "custom" | "m
  * `balanced` — even teams by rating; the everyday default.
  * `fixed` — a *negative* partner weight makes repeating a partner desirable,
  *   which expresses fixed-partner play through the same machinery.
+ * `gender` — regular's weights with one rule on top: never two men against two
+ *   women. Priced at 1000 so it beats twenty repeated partnerships, which is
+ *   what "top priority" has to mean for a search that trades things off.
  * `spread` keeps a 4.5 and a 2.5 off the same court where possible — balanced
  *   on paper but miserable to play.
  */
 export const WEIGHTS: Record<Exclude<Format, "manual" | "custom">, Weights> = {
-  regular: { balance: 0, partner: 50, opponent: 3, spread: 0 },
+  regular: { balance: 0, partner: 50, opponent: 3, spread: 0, gender: 0 },
+  gender: { balance: 0, partner: 50, opponent: 3, spread: 0, gender: 1000 },
   /*
    * Balance has to be worth far more than variety, or it quietly loses.
    *
@@ -76,9 +92,9 @@ export const WEIGHTS: Record<Exclude<Format, "manual" | "custom">, Weights> = {
    * tie-breaker. Measured over 8, 12 and 20 players the mean gap falls to
    * 0.045, 0.022 and 0.011.
    */
-  balanced: { balance: 100, partner: 6, opponent: 2, spread: 4 },
-  fixed: { balance: 100, partner: -8, opponent: 2, spread: 4 },
-  social: { balance: 0, partner: 6, opponent: 2, spread: 0 },
+  balanced: { balance: 100, partner: 6, opponent: 2, spread: 4, gender: 0 },
+  fixed: { balance: 100, partner: -8, opponent: 2, spread: 4, gender: 0 },
+  social: { balance: 0, partner: 6, opponent: 2, spread: 0, gender: 0 },
 };
 
 /** Below this many players, partner repeats are forced, so relax that penalty. */
@@ -144,6 +160,7 @@ export function roundCost(
   ratingOf: Map<string, number>,
   history: SessionHistory,
   weights: Weights,
+  genderOf?: Map<string, Gender>,
 ): number {
   let cost = 0;
 
@@ -172,6 +189,11 @@ export function roundCost(
 
     const ratings = [ra1, ra2, rb1, rb2];
     cost += weights.spread * (Math.max(...ratings) - Math.min(...ratings));
+
+    if (weights.gender !== 0 && genderOf) {
+      const g = (id: string) => genderOf.get(id) ?? "unspecified";
+      if (matchViolates(g(a1), g(a2), g(b1), g(b2))) cost += weights.gender;
+    }
   }
 
   return cost;
@@ -211,6 +233,9 @@ export function generateRound(
 
   const { seated, sittingOut } = selectSeated(players, courts * 4, history, random);
   const ratingOf = new Map(players.map((p) => [p.id, p.rating]));
+  const genderOf = new Map<string, Gender>(
+    players.map((p) => [p.id, p.gender ?? "unspecified"]),
+  );
 
   const base =
     format === "manual" || format === "custom" ? WEIGHTS.balanced : WEIGHTS[format];
@@ -227,7 +252,8 @@ export function generateRound(
     balance: tiered ? 0 : base.balance,
   };
 
-  const score = (order: GenPlayer[]) => roundCost(toCourts(order), ratingOf, history, weights);
+  const score = (order: GenPlayer[]) =>
+    roundCost(toCourts(order), ratingOf, history, weights, genderOf);
 
   let bestOrder: GenPlayer[] | null = null;
   let bestCost = Infinity;

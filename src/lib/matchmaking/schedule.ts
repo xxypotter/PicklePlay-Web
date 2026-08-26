@@ -17,6 +17,7 @@
  *
  * Pure, seeded, and index-based: no database, no clock, no player ids.
  */
+import { countViolations, matchViolates, type Gender } from "./gender";
 
 /** One match as four seat indices: [a1, a2] play [b1, b2]. */
 export type PlannedMatch = [number, number, number, number];
@@ -26,7 +27,20 @@ export type PlannedRound = PlannedMatch[];
 export interface PlanOptions {
   restarts?: number;
   random?: () => number;
+  /**
+   * Gender per seat, for the gender-balanced format. When given, a draw that
+   * puts two men against two women is rejected in favour of one that doesn't,
+   * ahead of every other consideration.
+   */
+  genders?: readonly Gender[];
 }
+
+/**
+ * A violation is worth more than any opponent imbalance a schedule can carry,
+ * so ranking on their sum ranks on violations first and uses balance only to
+ * separate schedules that break the rule equally often.
+ */
+const VIOLATION_COST = 1e6;
 
 const key = (a: number, b: number) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
@@ -113,14 +127,33 @@ function matchSeated(
 function groupIntoMatches(
   pairs: Array<[number, number]>,
   opponents: Map<string, number>,
+  genders?: readonly Gender[],
 ): PlannedRound {
   const best: { round: PlannedRound; cost: number } = { round: [], cost: Infinity };
 
-  const cost = (x: [number, number], y: [number, number]) =>
-    (opponents.get(key(x[0], y[0])) ?? 0) +
-    (opponents.get(key(x[0], y[1])) ?? 0) +
-    (opponents.get(key(x[1], y[0])) ?? 0) +
-    (opponents.get(key(x[1], y[1])) ?? 0);
+  /*
+   * This is the step where the gender rule is actually won or lost. The teams
+   * are already decided by the time we get here — a round holding both an
+   * all-male and an all-female pair is fine, so long as they are not put across
+   * the net from each other, and choosing who faces whom is exactly this
+   * function's job.
+   */
+  const cost = (x: [number, number], y: [number, number]) => {
+    const opposed =
+      (opponents.get(key(x[0], y[0])) ?? 0) +
+      (opponents.get(key(x[0], y[1])) ?? 0) +
+      (opponents.get(key(x[1], y[0])) ?? 0) +
+      (opponents.get(key(x[1], y[1])) ?? 0);
+
+    if (!genders) return opposed;
+    const violates = matchViolates(
+      genders[x[0]],
+      genders[x[1]],
+      genders[y[0]],
+      genders[y[1]],
+    );
+    return opposed + (violates ? VIOLATION_COST : 0);
+  };
 
   const recurse = (remaining: Array<[number, number]>, acc: PlannedRound, total: number) => {
     if (total >= best.cost) return; // no grouping below here can win
@@ -223,7 +256,7 @@ export function planPerfectSchedule(
    * worst "faced N times" from 4 down to 3 in 48 of them, and costs ~60ms —
    * paid once when a session is laid out, not per round.
    */
-  const { restarts = 500, random = Math.random } = options;
+  const { restarts = 500, random = Math.random, genders } = options;
 
   if (!perfectSchedulePossible(playerCount, courtCount, rounds)) return null;
 
@@ -251,7 +284,7 @@ export function planPerfectSchedule(
         sitters = chooseSitters(playerCount, sitCount, games, rests, random);
         const seated = [...Array(playerCount).keys()].filter((p) => !sitters.includes(p));
         const pairs = matchSeated(seated, used, random);
-        if (pairs) round = groupIntoMatches(pairs, opponents);
+        if (pairs) round = groupIntoMatches(pairs, opponents, genders);
       }
 
       if (!round) {
@@ -275,7 +308,16 @@ export function planPerfectSchedule(
     }
 
     if (ok && schedule.length === rounds) {
-      const imbalance = opponentImbalance(schedule, playerCount);
+      /*
+       * Violations dominate the ranking when a gender is given, so a draw that
+       * keeps two men off the other side of the net from two women wins over a
+       * more evenly-opposed draw that doesn't. With no genders the term is
+       * zero and this is the opponent-balance search it has always been.
+       */
+      const imbalance =
+        opponentImbalance(schedule, playerCount) +
+        (genders ? countViolations(schedule, genders) * VIOLATION_COST : 0);
+
       if (imbalance < bestImbalance) {
         bestImbalance = imbalance;
         best = schedule;

@@ -121,6 +121,7 @@ export const en = {
   "format.regular": "Regular round robin — partner with everyone once",
   "format.balanced": "Balanced round robin — even team ratings",
   "format.fixed": "Fixed partners",
+  "format.gender": "Gender balanced — never two men against two women",
   "format.custom": "Custom",
   "format.social": "Social",
   "format.manual": "Manual",
@@ -128,6 +129,7 @@ export const en = {
   "format.short.regular": "Regular round robin",
   "format.short.balanced": "Balanced round robin",
   "format.short.fixed": "Fixed partners",
+  "format.short.gender": "Gender balanced",
   "format.short.custom": "Custom",
   "format.short.social": "Social",
   "format.short.manual": "Manual",
@@ -296,6 +298,8 @@ export const en = {
   "form.desc.regular": "Partner with everyone once before anyone repeats.",
   "form.desc.balanced": "Teams matched so both sides average a similar rating.",
   "form.desc.fixed": "Pairs stay together all night; opponents rotate.",
+  "form.desc.gender":
+    "Never two men against two women. Partners still rotate as widely as the draw allows.",
   "form.desc.custom": "Rounds are still generated, but expect to rearrange courts yourself.",
   "form.defaultTitle": "Saturday Round Robin",
   "form.courtsPlaceholder": "3, 4",
@@ -395,6 +399,8 @@ export const en = {
     "Round robin now spreads opponents more evenly, so you're far less likely to face the same pair three or four times in a night.",
   "notes.v12.reliability":
     "Reliability is harder to earn. It used to reach 70% after a single night; now it builds over several sessions, which is closer to how DUPR works and makes a settled rating mean more.",
+  "notes.v13.genderMode":
+    "New Gender balanced format: it never puts two men against two women, and otherwise rotates partners as widely as a regular round robin.",
   "notes.v13.void":
     "The void button has been removed. A match that was voided before now stays on the matchups list, struck through with its score kept, rather than disappearing.",
   "notes.v13.autoClose":

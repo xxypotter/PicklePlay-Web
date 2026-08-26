@@ -22,7 +22,7 @@ export const RELEASES: Release[] = [
   {
     version: "1.3",
     date: "2026-08-25",
-    notes: ["notes.v13.void", "notes.v13.autoClose"],
+    notes: ["notes.v13.genderMode", "notes.v13.void", "notes.v13.autoClose"],
   },
   {
     version: "1.2",

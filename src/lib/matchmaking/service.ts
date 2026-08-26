@@ -19,6 +19,7 @@ import {
   type Round,
   type SessionHistory,
 } from "./generator";
+import { countViolations } from "./gender";
 import { planFixedPartnerRounds, planPerfectSchedule } from "./schedule";
 
 const GENERATOR_FORMATS: Format[] = [
@@ -26,6 +27,7 @@ const GENERATOR_FORMATS: Format[] = [
   "balanced",
   "fixed",
   "social",
+  "gender",
   "custom",
   "manual",
 ];
@@ -48,6 +50,7 @@ export async function getAttending(sessionId: string): Promise<AttendingPlayer[]
       id: signups.playerId,
       username: players.username,
       rating: playerStats.rating,
+      gender: players.gender,
       partnerId: signups.partnerId,
     })
     .from(signups)
@@ -65,6 +68,7 @@ export async function getAttending(sessionId: string): Promise<AttendingPlayer[]
   return rows.map((r) => ({
     id: r.id,
     username: r.username,
+    gender: r.gender,
     partnerId: r.partnerId,
     // An unrated player still has to be placed somewhere; mid-scale is the
     // least-wrong guess and their first results correct it fast.
@@ -133,13 +137,14 @@ export async function buildSessionHistory(sessionId: string): Promise<SessionHis
  * back to the round-at-a-time generator when no perfect draw exists (odd player
  * counts, more rounds than there are partnerships) or the search misses.
  *
- * Anything other than `regular` keeps the old path: for balanced or social play
- * the whole point is the per-round cost function, not partnership coverage.
+ * `gender` is the same problem with one extra constraint, so it shares this
+ * path. Anything else keeps the old one: for balanced or social play the whole
+ * point is the per-round cost function, not partnership coverage.
  */
 export async function createAllRounds(
   sessionId: string,
   roundCount: number,
-): Promise<{ rounds: number; perfect: boolean }> {
+): Promise<{ rounds: number; perfect: boolean; genderViolations: number }> {
   const t = await getT();
   const db = getDb();
 
@@ -186,21 +191,32 @@ export async function createAllRounds(
             ] as [string, string, string, string]),
           ),
         );
-        return { rounds: rows.length, perfect: true };
+        return { rounds: rows.length, perfect: true, genderViolations: 0 };
       }
     }
   }
 
-  // Only from a clean slate: bolting a solved schedule onto rounds that already
-  // exist would ignore the partnerships those rounds already spent.
+  /*
+   * Both round robins want the same whole-session draw. The gender-balanced one
+   * hands the planner a gender per seat as well, which changes only which
+   * grouping of a round's teams it settles on — the partnership decomposition,
+   * and so the promise that you partner everyone once, is identical.
+   *
+   * Only from a clean slate: bolting a solved schedule onto rounds that already
+   * exist would ignore the partnerships those rounds already spent.
+   */
+  const wholeSession = format === "regular" || format === "gender";
+  const genders =
+    format === "gender" ? attending.map((p) => p.gender ?? "unspecified") : undefined;
+
   const plan =
-    format === "regular" && existing.length === 0
-      ? planPerfectSchedule(attending.length, session.courtCount, roundCount)
+    wholeSession && existing.length === 0
+      ? planPerfectSchedule(attending.length, session.courtCount, roundCount, { genders })
       : null;
 
   if (!plan) {
     for (let i = 0; i < roundCount; i++) await createNextRound(sessionId);
-    return { rounds: roundCount, perfect: false };
+    return { rounds: roundCount, perfect: false, genderViolations: 0 };
   }
 
   await insertRounds(
@@ -215,7 +231,11 @@ export async function createAllRounds(
     ),
   );
 
-  return { rounds: plan.length, perfect: true };
+  return {
+    rounds: plan.length,
+    perfect: true,
+    genderViolations: genders ? countViolations(plan, genders) : 0,
+  };
 }
 
 /**

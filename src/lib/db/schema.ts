@@ -55,6 +55,7 @@ export const formatEnum = pgEnum("session_format", [
   "manual",
   "regular",
   "custom",
+  "gender",
 ]);
 
 // ---------------------------------------------------------------------------

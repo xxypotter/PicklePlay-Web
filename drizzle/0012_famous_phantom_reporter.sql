@@ -1,0 +1,1 @@
+ALTER TYPE "public"."session_format" ADD VALUE 'gender';
