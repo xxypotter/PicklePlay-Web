@@ -18,6 +18,9 @@ said so explicitly (§3.9 is the one to read twice).
 with an invite code; the native app will use email or phone), payment, and
 anything about the App Store. Those are noted in §12 as gaps, not specified.
 
+**Reflects web app v1.3 (2026-08-29).** §15 lists behaviour that has been
+audited and deliberately left alone — read it before "fixing" anything in §3.
+
 ---
 
 ## 1. What the app is
@@ -189,9 +192,12 @@ afterwards, so the order you walk the four players cannot change the result.
 
 ### 3.6 Reliability — how trustworthy the number is, not how good the player
 
-Counts **distinct partners** and **distinct opposing pairs**, each remembered
-once with the time last seen and a weight. Not raw match count: ten games with
-the same three people teach less than six against six different pairs.
+Three conditions: **distinct partners**, **distinct opposing pairs**, and
+**how much has been played**. The first two are remembered once each with the
+time last seen and a weight — diversity, not raw match count, because ten games
+with the same three people teach less than six against six different pairs. The
+third is there because in a closed group diversity alone saturates almost
+immediately; see below.
 
 ```
 waypoint(x, at60, at100):
@@ -199,14 +205,33 @@ waypoint(x, at60, at100):
     if x <= at60:   0.6 * (x / at60)
     else:           0.6 + 0.4 * min(1, (x - at60) / (at100 - at60))
 
-reliability = max(declaredFloor, min(waypoint(partners), waypoint(teams)))
+reliability = max(declaredFloor,
+                  min(waypoint(partners), waypoint(teams), waypoint(volume)))
 
-PARTNERS_AT_60 = 2   PARTNERS_AT_100 = 4
-TEAMS_AT_60    = 6   TEAMS_AT_100    = 12
+PARTNERS_AT_60 =  4   PARTNERS_AT_100 =  8
+TEAMS_AT_60    = 12   TEAMS_AT_100    = 24
+VOLUME_AT_60   = 24   VOLUME_AT_100   = 72
 RELIABILITY_PASS = 0.6      // below this the rating shows a "?"
 ```
 
-Both conditions must hold, so take the **lower** of the two.
+All three conditions must hold, so take the **lowest**. `volume` is the decayed
+match count (`halfLife`), the same figure §3.4 uses.
+
+**Why volume is there at all.** Diversity alone is far too easy to satisfy in a
+closed group: one nine-player round robin hands you eight partners and eight
+opposing pairs, which under diversity-only waypoints was a **70% reliability
+from a single night**. DUPR asks for vastly more — the player we calibrated
+against sits at 10% after eighteen matches. You cannot reproduce DUPR's numbers
+directly, because its reliability reflects a large open pool while yours is
+capped by roster size: with nine regulars there are only ever eight distinct
+partners to be had. Volume is the one term group size doesn't cap, so it carries
+the tail. At eight games a session, production currently shows ~18–20% after one
+session, ~38% after two and ~56% after three, reaching settled at around nine —
+against a single night before.
+
+If you build a fresh app, **start with these values, not the diversity-only
+ones.** The earlier numbers are recorded in §3.9 only because our history has to
+keep replaying under them.
 
 Each remembered encounter decays: `weight * 0.5^(daysAgo / 90)`. Same decay
 gives `halfLife` = the decayed count of matches played here.
@@ -220,6 +245,10 @@ brand-new group could never bootstrap.
 trusted at face value in a small group. An admin correction can set it; a
 **self** re-seed clears it and wipes the partner/team books, because changing
 your own number reopens the question of whether it's right.
+
+> Two caveats on `declaredFloor` that we have chosen to live with and you may
+> not want to inherit unexamined — it is unverified, and it never decays. §15.1
+> and §15.3.
 
 ### 3.7 Why ALPHA = 1 — the calibration
 
@@ -281,9 +310,9 @@ instead), so a correction stays on the old tuning.
 Verify after any change that replaying real history reproduces stored ratings
 **bit-identically**. That check has caught real mistakes.
 
-> **Do not copy our epoch table.** It contains one historical entry —
-> pre-v1.1 constants, superseded on 2026-08-10 — which describes *this* app's
-> past, not yours. A fresh install has no history to protect, so ship with the
+> **Do not copy our epoch table.** It carries two historical entries — the
+> original constants superseded on 2026-08-10, and diversity-only reliability
+> superseded on 2026-08-16 — which describe *this* app's past, not yours. A fresh install has no history to protect, so ship with the
 > constants in §3.2–§3.6 as your v1.0 and a single open-ended epoch. Add a
 > second entry the first time you retune, and from then on the guarantee is
 > yours to keep. The machinery matters; our dates do not.
@@ -312,7 +341,8 @@ player's history.
 
 ## 4. Match formats and the generators
 
-Four formats offered: **regular**, **balanced**, **fixed**, **custom**.
+Five formats offered: **regular**, **balanced**, **gender**, **fixed**,
+**custom** — in that order in the picker.
 (`king`, `social`, `manual` exist in the enum for old rows; don't offer them.)
 
 Common shape: a round holds one match per court in use;
@@ -325,7 +355,7 @@ The promise is a property of the **whole schedule**, not of any single round, so
 it is solved as one problem. Nine players over nine rounds need exactly the 36
 partnerships that exist, which makes it a decomposition of the complete graph.
 
-Algorithm, per attempt (≈60 randomized restarts):
+Algorithm, per attempt (500 randomized restarts):
 
 1. Choose who rests: most games played rests next; among equals, whoever has
    rested least often.
@@ -335,6 +365,17 @@ Algorithm, per attempt (≈60 randomized restarts):
    opponents (exhaustive — there are few groupings at ≤4 courts).
 4. If a round can't be matched, retry with different rest choices (8 tries),
    then abandon the attempt.
+
+**Score every valid schedule and keep the best, rather than returning the first
+that works.** Partnership uniqueness holds either way; what the extra restarts
+buy is *opponent* spread, which is not a hard constraint and quietly goes wrong.
+Nine players over nine rounds fill 72 opponent slots across 36 pairs — exactly
+two each is available, and a first-fit draw gave one pair four meetings and ten
+pairs three or more. Score by squared error against that ideal, counting pairs
+who never met as if they were two short (otherwise a schedule hides its gaps by
+never creating the encounter). Over 50 draws this takes the worst "faced N
+times" from 4 down to 3 in 48 of them, and costs ~60ms — paid once at layout,
+not per round.
 
 Return null when no perfect schedule exists — `rounds * seats/2 > C(n,2)` —
 and fall back to the per-round generator. **Never silently ship a flawed draw:**
@@ -356,10 +397,14 @@ cost = Σ over courts:
 ```
 
 ```
-regular   { balance:   0, partner: 50, opponent: 3, spread: 0 }
-balanced  { balance: 100, partner:  6, opponent: 2, spread: 4 }
-fixed     { balance: 100, partner: -8, opponent: 2, spread: 4 }
+regular   { balance:   0, partner: 50, opponent: 3, spread: 0, gender:    0 }
+balanced  { balance: 100, partner:  6, opponent: 2, spread: 4, gender:    0 }
+gender    { balance:   0, partner: 50, opponent: 3, spread: 0, gender: 1000 }
+fixed     { balance: 100, partner: -8, opponent: 2, spread: 4, gender:    0 }
 ```
+
+The `gender` term adds its weight once per court that puts two men against two
+women (§4.4). Every other format sets it to zero and never reads gender.
 
 **The balance weight has to be large.** At 10 a repeated partnership cost 6
 while a rating gap of 0.1 cost 1, so the search gave away half a rating point to
@@ -393,11 +438,59 @@ solve for and what remains is a round robin between *teams*.
 - Result for 4 pairs over 6 rounds: a complete double round robin, every pair
   meeting every other exactly twice, six games each.
 
-### 4.4 Custom
+### 4.4 Gender balanced — never two men against two women
+
+Two priorities, and the order is the whole design:
+
+1. **Never MM against FF.** A hard rule, not a preference.
+2. **Otherwise rotate partners as widely as a regular round robin.**
+
+The rule is about the **matchup, not the team**. MM vs MM is fine, FF vs FF is
+fine, anything with a mixed team is fine. Only MM facing FF is out.
+
+```
+teamGender(x, y) = (x == y and x != unspecified) ? x : null
+violates(a1,a2,b1,b2):
+    A = teamGender(a1,a2);  B = teamGender(b1,b2)
+    return A != null and B != null and A != B
+```
+
+A player who left gender unspecified makes their team neutral and can never
+trigger a violation. That is deliberate: "unspecified" is also how someone opts
+out of the gendered rankings, so it is a real choice and must not be guessed at.
+
+**The two priorities look like they should fight, and don't** — because of where
+the rule is enforced. By the time a round's teams are decided nothing is lost
+yet: a round holding both an all-male and an all-female pair is fine so long as
+they are not put across the net from each other. So the constraint belongs in
+**step 3 of §4.1 — the grouping of pairs into matches** — and never in step 2,
+which decides partnerships. Partner coverage is therefore *identical* to
+`regular`: twelve players over eight rounds is still 48 distinct partnerships
+with no repeats.
+
+Implementation is one optional argument to the §4.1 planner: a gender per seat.
+
+- In the grouping step, add a large constant to a grouping's cost when it
+  violates.
+- In the restart ranking, add `violations * 1e6` to the opponent-imbalance
+  score, so a clean draw beats a more evenly-opposed dirty one and balance only
+  separates draws that break the rule equally often.
+- The per-round generator (§4.2) needs the same rule as a weight, because "add
+  another round" mid-session does not go through the planner and the promise has
+  to hold there too.
+
+**Zero is not always reachable, and it must not pretend otherwise.** Ten men and
+two women who each partner everyone once must eventually pair the two women, and
+only two men can then face them. Return the true minimum and report the count;
+do not quietly break the promise the format's name makes. Measured over eight
+roster shapes from 4M/4F to 15M/5F: zero violations in every one, partner
+coverage unchanged, 30–230ms.
+
+### 4.5 Custom
 Rounds are still generated (balanced weights), but the organizer expects to
 rearrange courts by hand.
 
-### 4.5 Suggested round count
+### 4.6 Suggested round count
 
 For a regular round robin there is an exact right length; offer it and warn when
 the chosen number splits unevenly.
@@ -425,8 +518,11 @@ open  ──start──▶  live  ──end──▶  closed
 - **live** — details lock, matches get built, scores get entered.
 - **closed** — a record. Scores can still be corrected by the organizer.
 
-A session auto-closes 24 hours after its start time, so a night nobody ended
-doesn't linger in Upcoming. The sweep runs lazily on page loads plus in the
+A session auto-closes **48 hours** after its start time, so a night nobody ended
+doesn't linger in Upcoming. It was 24, which was too tight: closing narrows
+scoring to the organizer, so an early auto-close takes the pen out of the hands
+of everyone who was actually on court. A Saturday that runs late now has until
+Monday. The sweep runs lazily on page loads plus in the
 weekly cron.
 
 ### Capacity — count who is *playing*, not who signed up
@@ -463,8 +559,9 @@ Three roles: `player` < `admin` < `superadmin`. Exactly one superadmin.
 | Create a session | admin+ |
 | Edit / run / delete a session | its **organizer** (creator), or superadmin |
 | Enter a score, session live | anyone who played in it, or any admin |
-| Enter a score, session closed | organizer only — it's a record now |
-| Void a match | organizer / admin (never on "I played in it" alone) |
+| Enter a score, session closed | the organizing admin, or superadmin — it's a record now |
+| Void a match | **superadmin only** |
+| Restore a voided match | **superadmin only** |
 | Adjust another player's rating | admin, but only players and themselves |
 | Adjust an admin's or the superadmin's rating | superadmin only |
 | Reset a PIN | admin for players; superadmin for admins |
@@ -475,6 +572,24 @@ disagreement into an edit war with no referee.
 
 **Enforce every one of these server-side.** Hiding a button is not a permission
 check.
+
+### Voiding is not scoring
+
+They look alike and are different in kind. A wrong score is a correction anyone
+on court can make; voiding says the game *did not happen* — it leaves four
+people's records and moves everyone's rating. So it is the superadmin's alone,
+checked in the action before it touches the database.
+
+**A voided match stays visible.** The row was always kept, but filtering it out
+of the query made it indistinguishable from a match that never existed — to the
+four people who remember playing it most of all. It stays on the matchups list,
+struck through, score intact, with a note saying it counts for nobody, and one
+tap restores it. Void and restore should be the *same function called twice*;
+splitting them is how the two ends up with different permissions.
+
+Everything else still excludes it: standings, personal records, the "N matches
+still have no score" warning, the sitting-out list, and the history the
+matchmaker learns from all read `completed` only.
 
 ### Private sessions
 Superadmin-only flag. The session appears in Upcoming and History **only** for
@@ -530,6 +645,28 @@ being shown a button that refuses them.
   end session, delete session, drop a player).
 - **My rating** carries the explanation of the method; **My record** carries no
   rating at all, deliberately.
+
+### Everyone's screen has to keep up
+
+A score entered on one phone must reach the others. The web app had this wrong
+in a way worth naming, because the native version will meet it differently:
+**your own edits looked fine, so nothing seemed broken** — the bug was only ever
+visible to the person who *didn't* type the score.
+
+Three separate things were needed, and all three matter:
+
+1. **Invalidate everything a score touches**, not just the page you are on. A
+   score moves standings, the leaderboard, both players' profiles and records,
+   and the admin roster. Missing one leaves a screen that is confidently stale.
+2. **Refresh on returning to the app** — on `visibilitychange` and `focus`.
+   Courtside, a phone spends most of its life in a pocket; the moment it comes
+   out is exactly when the screen is oldest.
+3. **Poll while a session is live**, and only then. Every 20s, skipped entirely
+   when the document is hidden, and guarded so a slow response can't stack up
+   requests behind it.
+
+Reconcile in place rather than remounting — a full reload courtside loses scroll
+position and any half-entered score.
 
 ### Two-tap confirmation
 Used instead of modal dialogs. First tap arms and relabels the button
@@ -654,12 +791,27 @@ Each of these was a real bug found in production.
    was to pin the pre-hydration pass to UTC and let the client correct it.
 9. **A cap that binds on ordinary results stops being a guard** and becomes the
    answer, flattening the signal it was protecting.
+10. **Tightening reliability silently changed how fast ratings move.** K is a
+    function of reliability (§3.4), so slowing the reliability curve left
+    everyone at a high K for far longer — a change to one thing that was really
+    a change to two. When you retune either, measure the other. §15.
+11. **Filtering a voided match out of the query deleted it in the eyes of the
+    people who played it.** Keeping the row is not the same as keeping the
+    record. §6.
+12. **A refresh bug can be invisible to whoever is testing it**, because the
+    person entering a score always sees their own result. Test with two
+    sessions, not one.
+13. **Enforcing a constraint at the wrong stage makes it fight everything
+    else.** The gender rule looked like it had to be traded against partner
+    rotation until it moved from the pairing step to the grouping step, where
+    it costs nothing. Before assuming two goals conflict, check whether they are
+    even being decided at the same moment. §4.4.
 
 ---
 
 ## 14. Test coverage worth porting
 
-212 tests. The ones that earn their keep:
+242 tests. The ones that earn their keep:
 
 - **17 DUPR forecast readings** as a regression fixture (§3.7). If a retune
   breaks the signs, this fails.
@@ -670,4 +822,59 @@ Each of these was a real bug found in production.
 - **Balanced mode** — mean team gap under 0.05 across a whole session.
 - **Dated tuning** — an old match replays to a hardcoded constant, not to
   whatever the engine does today.
+- **Gender balance** — zero violations across eight roster shapes, *and* that
+  partner coverage is unchanged versus the plain round robin, *and* that the
+  impossible case (10M/2F over a full round robin) returns exactly its floor of
+  1 rather than throwing or giving up.
 - **Permission matrix** — every row of §6.
+
+---
+
+## 15. Audited, and deliberately unchanged
+
+A full audit of the rating engine against 496 real rating events (124 matches,
+43 rated players) turned up four things worth knowing. **All four were reviewed
+and left alone on purpose.** They are recorded here so you inherit the reasoning
+rather than the surprise — and so you don't "fix" one and silently diverge from
+a rating the group has already accepted.
+
+If you decide to change any of them, change them as a **new epoch** (§3.9), not
+as an edit.
+
+1. **An admin rating correction can also grant 100% reliability, permanently.**
+   One form does two very different things: correcting someone's number, and
+   declaring them fully settled. Three players were re-seeded to 100% this way.
+   Because `declaredFloor` is a floor that never decays, their K drops to ~0.157
+   and results can barely move them again. In one case a re-seed also superseded
+   eight matches of contrary evidence. Consider separating the two fields, or
+   capping an admin-granted floor below 100% so results always retain some pull.
+
+2. **The first five matches run hotter than any evidence supports.**
+   `CAL_MULT 1.25 × K_BASE 0.98` gives **K = 1.23**, the largest number in the
+   system. The 35 events inside that window averaged a 0.229 move against 0.080
+   for everything else, and every outlier lives there. The DUPR fixture (§3.7)
+   says nothing about it — its subject was already 18 matches in. If you want
+   one simplification, drop `CAL_MULT` to 1.0; `K_BASE` alone is already very
+   fast and *is* anchored to data.
+
+3. **A declared reliability can never be earned back down.** It is a free-text
+   field at signup, unverified, and `max(declaredFloor, …)` makes it permanent.
+   Nine players sit at 100%. Even DUPR decays reliability when you stop playing.
+
+4. **The `regular` format sets `balance: 0` — by design.** Five of seven real
+   sessions used it, producing a mean team rating gap of **0.295** and a worst
+   of **1.104**, against **0.108** for fixed partners. That is the direct cause
+   of the largest rating swings: the engine is faithfully reacting to genuinely
+   lopsided input. Not a bug — but if ratings look volatile, this is why, and
+   the fix is the organizer choosing `balanced`, not a change to the engine.
+
+Two further observations, no action wanted:
+
+- **About 1 result in 10 moves against the scoreline** (5% won-but-lost-rating,
+  5% lost-but-gained). This is *correct* — DUPR's own forecast has an underdog
+  gaining +0.119 for a 9–11 loss — and follows directly from `ALPHA = 1`. It is
+  also the single biggest credibility risk with players, so explain it in the
+  UI rather than tuning it away.
+- **Reliability reads lower across an epoch boundary** for the same player, when
+  old matches replay under old constants. Cosmetic, and the unavoidable price of
+  never moving a result someone has already seen.
