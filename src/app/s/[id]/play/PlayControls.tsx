@@ -15,11 +15,14 @@ import {
   setPartnerAction,
 } from "@/lib/sessions/actions";
 import {
+  addFinalsAction,
+  addMedalRoundAction,
   deleteSessionAction,
   discardRoundAction,
   endSessionAction,
   generateAllRoundsAction,
   generateRoundAction,
+  rebuildMatchupsAction,
   reopenSessionAction,
   startSessionAction,
 } from "@/lib/sessions/play-actions";
@@ -177,6 +180,184 @@ export function GenerateRoundButton({
           </button>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Rebuild the part of the schedule nobody has played yet.
+ *
+ * The gap this closes: an eleventh player turns up to a ten-player session
+ * whose matchups are already made, and there is no way to get them into the
+ * draw short of deleting the night and starting over.
+ *
+ * Deliberately separate from adding the player. Adding is cheap and reversible;
+ * throwing away a schedule people may already be standing on court for is not,
+ * so it is the organizer's explicit second act rather than a side effect.
+ */
+export function RebuildMatchupsButton({
+  sessionId,
+  attendingCount,
+  courtCount,
+  playedRounds,
+  format,
+}: {
+  sessionId: string;
+  attendingCount: number;
+  courtCount: number;
+  /** Rounds with a score or a void in them. These are never touched. */
+  playedRounds: number;
+  format: string;
+}) {
+  const t = useT();
+  const [pending, start] = useTransition();
+  const [armed, setArmed] = useState(false);
+
+  const plan =
+    format === "regular" || format === "gender"
+      ? planRegularRounds(attendingCount, courtCount)
+      : null;
+  const suggested = plan?.rounds ?? planCasualRounds(attendingCount, courtCount);
+
+  const [roundsText, setRoundsText] = useState(String(suggested));
+  const rounds = Number.parseInt(roundsText, 10);
+  const roundsValid = Number.isInteger(rounds) && rounds >= 1 && rounds <= 20;
+
+  if (attendingCount < 4) return null;
+
+  return (
+    <div className="mt-3 border-t border-[var(--border)] pt-3">
+      {armed ? (
+        <div className="mb-2">
+          <label className="label" htmlFor="rebuildCount">
+            {t("play.howManyRounds")}
+          </label>
+          <input
+            id="rebuildCount"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            value={roundsText}
+            onChange={(e) => setRoundsText(e.target.value.replace(/\D/g, "").slice(0, 2))}
+            className="field w-24"
+          />
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        disabled={pending || (armed && !roundsValid)}
+        onClick={() => {
+          if (!armed) {
+            setArmed(true);
+            return;
+          }
+          start(async () => {
+            await rebuildMatchupsAction(sessionId, rounds);
+            setArmed(false);
+          });
+        }}
+        className={`w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 ${
+          armed ? "bg-[var(--accent)] text-white" : "border border-[var(--border)]"
+        }`}
+      >
+        {pending ? t("play.building") : armed ? t("play.rebuildConfirm") : t("play.rebuild")}
+      </button>
+
+      {armed && !pending ? (
+        <>
+          <p className="hint text-center">
+            {playedRounds > 0
+              ? t.plural("play.rebuildKeeping", playedRounds, { count: playedRounds })
+              : t("play.rebuildAll")}
+          </p>
+          <button
+            type="button"
+            onClick={() => setArmed(false)}
+            className="mt-1 w-full text-xs font-semibold text-[var(--muted)] underline"
+          >
+            {t("common.nevermind")}
+          </button>
+        </>
+      ) : (
+        <p className="hint">{t("play.rebuildHint")}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * How a fixed-partner night finishes: semi-finals, then gold and bronze.
+ *
+ * Two buttons rather than one, because the finals cannot be drawn until the
+ * semi-finals have been played — who is in them is the result.
+ */
+export function MedalRoundButton({
+  sessionId,
+  stage,
+  ready,
+  teamCount,
+}: {
+  sessionId: string;
+  /** What still needs adding: the semi-finals, the finals, or nothing. */
+  stage: "semifinal" | "final" | "done";
+  /** Every match that must be scored before this stage has been. */
+  ready: boolean;
+  teamCount: number;
+}) {
+  const t = useT();
+  const [pending, start] = useTransition();
+  const [armed, setArmed] = useState(false);
+
+  if (stage === "done" || teamCount < 4) return null;
+
+  const semis = stage === "semifinal";
+
+  return (
+    <div className="mt-3 border-t border-[var(--border)] pt-3">
+      <button
+        type="button"
+        disabled={pending || !ready}
+        onClick={() => {
+          if (!armed) {
+            setArmed(true);
+            return;
+          }
+          start(async () => {
+            await (semis ? addMedalRoundAction(sessionId) : addFinalsAction(sessionId));
+            setArmed(false);
+          });
+        }}
+        className={`w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-40 ${
+          armed && ready ? "bg-[var(--accent)] text-white" : "border border-[var(--border)]"
+        }`}
+      >
+        {pending
+          ? t("play.building")
+          : armed
+            ? t(semis ? "play.medalConfirm" : "play.finalsConfirm")
+            : t(semis ? "play.medal" : "play.finals")}
+      </button>
+
+      {/* Say why it's greyed out. A disabled button with no reason is a dead end. */}
+      {!ready ? (
+        <p className="hint">{t(semis ? "play.medalLocked" : "play.finalsLocked")}</p>
+      ) : armed && !pending ? (
+        <>
+          <p className="hint text-center">
+            {t(semis ? "play.medalHint" : "play.finalsHint")}
+          </p>
+          <button
+            type="button"
+            onClick={() => setArmed(false)}
+            className="mt-1 w-full text-xs font-semibold text-[var(--muted)] underline"
+          >
+            {t("common.nevermind")}
+          </button>
+        </>
+      ) : (
+        <p className="hint">{t(semis ? "play.medalHint" : "play.finalsHint")}</p>
+      )}
     </div>
   );
 }

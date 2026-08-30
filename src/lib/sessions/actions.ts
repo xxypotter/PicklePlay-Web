@@ -226,8 +226,24 @@ async function resequenceWaitlist(sessionId: string): Promise<void> {
  * Add someone to a session on their behalf.
  *
  * Two real cases: a player turns up who never RSVP'd, and an organizer wants to
- * build a roster without twelve people each logging in. Uses the same capacity
- * rule as a self-RSVP, so an admin can't silently overfill the courts.
+ * build a roster without twelve people each logging in.
+ *
+ * **The organizer's add is never waitlisted.** It used to share the capacity
+ * rule with self-RSVP, on the reasoning that an admin shouldn't silently
+ * overfill the courts — but the effect was the opposite of silent-proof: an
+ * eleventh player arriving at a session capped at ten was filed on the waitlist,
+ * never appeared in the draw, and the button gave no hint that was what had
+ * happened. The same trap as counting signups instead of attendees, one layer
+ * up.
+ *
+ * A person standing on the court is a fact; the cap is a plan. So the cap moves
+ * to fit, exactly as `attended` already governs who holds a place. Self-RSVP is
+ * untouched and still respects the limit — the difference is that this path
+ * only runs when the organizer has deliberately picked someone by name.
+ *
+ * Adding a player does not rebuild the matchups; that stays a separate,
+ * explicit act (`rebuildMatchupsAction`) because it throws away a schedule
+ * people may already be standing on court for.
  */
 export async function addPlayerAction(sessionId: string, playerId: string): Promise<void> {
   const t = await getT();
@@ -242,13 +258,21 @@ export async function addPlayerAction(sessionId: string, playerId: string): Prom
 
   if (!found[0]) throw new Error(t("err.sessionGone"));
 
+  // `do update` rather than `do nothing`: the organizer may be reaching for
+  // someone already on the waitlist or marked out, and "add" should mean the
+  // same thing whichever row already exists.
   await db.execute(sql`
-    insert into ${signups} (session_id, player_id, state, added_by_organizer)
-    select ${sessionId}::uuid, ${playerId}::uuid,
-      case when ${occupiedPlaces(sessionId)} < ${found[0].maxPlayers}
-        then 'in'::signup_state else 'waitlist'::signup_state end,
-      true
-    on conflict (session_id, player_id) do nothing
+    insert into ${signups} (session_id, player_id, state, waitlist_pos, added_by_organizer)
+    values (${sessionId}::uuid, ${playerId}::uuid, 'in'::signup_state, null, true)
+    on conflict (session_id, player_id)
+      do update set state = 'in'::signup_state, waitlist_pos = null
+  `);
+
+  // Let the sheet follow the court. Never lowers the cap.
+  await db.execute(sql`
+    update ${sessions}
+    set max_players = greatest(max_players, ${occupiedPlaces(sessionId)})
+    where id = ${sessionId}::uuid
   `);
 
   await resequenceWaitlist(sessionId);

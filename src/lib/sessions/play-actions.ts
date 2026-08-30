@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Actor } from "@/lib/auth/policy";
@@ -10,6 +10,7 @@ import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
 import { createAllRounds, createNextRound } from "@/lib/matchmaking/service";
 import { requireLogin } from "@/lib/auth/permissions";
 import { canVoidMatch, PermissionError } from "@/lib/auth/policy";
+import { finals, semiFinals, teamStandings, type PlayedMatch } from "./medal";
 import { requireOrganizer, requireScorer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { recomputeAll } from "@/lib/rating/service";
@@ -207,6 +208,232 @@ export async function discardRoundAction(sessionId: string, roundId: string): Pr
   await db.delete(rounds).where(eq(rounds.id, roundId));
 
   revalidatePath(`/s/${sessionId}/play`);
+}
+
+/**
+ * Throw away the unplayed schedule and build a new one.
+ *
+ * The case this exists for: ten people, all the matchups made, and an eleventh
+ * walks in. Until now that was a dead end — the draw was fixed, and the only
+ * way out was deleting the session and starting the night again.
+ *
+ * **Rounds that have been played are never touched.** A round is settled once
+ * any of its matches has a score or has been voided, and settled rounds are
+ * kept exactly as they are; only rounds nobody has played yet are discarded and
+ * replaced. Which is the whole reason this is safe to offer mid-session rather
+ * than only before the first serve.
+ *
+ * Two paths, because they are genuinely different problems:
+ *
+ * - **Nothing played yet** — the common case, an arrival at the start of the
+ *   night. Everything is discarded and the whole-session planner runs from a
+ *   clean slate, so a regular or gender-balanced draw keeps its promise that
+ *   you partner everyone once.
+ * - **Some rounds played** — the planner cannot help; it solves a whole session
+ *   and this one is half spent. Falls back to generating a round at a time,
+ *   which reads the history the played rounds created, so partner and sit-out
+ *   fairness carry across the join.
+ */
+export async function rebuildMatchupsAction(
+  sessionId: string,
+  roundCount: number,
+): Promise<void> {
+  await requireOrganizer(sessionId);
+  await requireLive(sessionId);
+
+  const db = getDb();
+  const wanted = Math.max(1, Math.min(MAX_ROUNDS, Math.floor(roundCount)));
+
+  // Once the bracket is drawn the schedule is finished. New round-robin rounds
+  // would be appended *after* the final, which is not a thing that can happen.
+  const bracket = await db
+    .select({ id: rounds.id })
+    .from(rounds)
+    .where(and(eq(rounds.sessionId, sessionId), ne(rounds.stage, "robin")))
+    .limit(1);
+
+  if (bracket.length > 0) throw new Error((await getT())("err.rebuildAfterMedal"));
+
+  const roundRows = await db
+    .select({ id: rounds.id })
+    .from(rounds)
+    .where(eq(rounds.sessionId, sessionId))
+    .orderBy(asc(rounds.index));
+
+  // Settled means "has a result of any kind", so a voided match protects its
+  // round too — voiding records something that happened, it is not an eraser.
+  const settledRows = roundRows.length
+    ? await db
+        .select({ roundId: matches.roundId })
+        .from(matches)
+        .where(and(eq(matches.sessionId, sessionId), ne(matches.status, "scheduled")))
+    : [];
+
+  const settled = new Set(settledRows.map((r) => r.roundId));
+  const doomed = roundRows.filter((r) => !settled.has(r.id)).map((r) => r.id);
+
+  if (doomed.length > 0) {
+    // Matches first: `matches.round_id` is ON DELETE SET NULL, so dropping the
+    // round alone would leave its matches orphaned and still countable.
+    await db.delete(matches).where(inArray(matches.roundId, doomed));
+    await db.delete(rounds).where(inArray(rounds.id, doomed));
+  }
+
+  if (settled.size === 0) {
+    await createAllRounds(sessionId, wanted);
+  } else {
+    for (let i = 0; i < wanted; i++) await createNextRound(sessionId);
+  }
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+}
+
+/** Scored matches of one stage, in bracket order. */
+async function playedMatches(
+  sessionId: string,
+  stage: "robin" | "semifinal",
+): Promise<PlayedMatch[]> {
+  const rows = await getDb()
+    .select({
+      a1: matches.a1,
+      a2: matches.a2,
+      b1: matches.b1,
+      b2: matches.b2,
+      scoreA: matches.scoreA,
+      scoreB: matches.scoreB,
+    })
+    .from(matches)
+    .innerJoin(rounds, eq(rounds.id, matches.roundId))
+    .where(
+      and(
+        eq(matches.sessionId, sessionId),
+        eq(matches.status, "completed"),
+        eq(rounds.stage, stage),
+      ),
+    )
+    .orderBy(asc(rounds.index), asc(matches.courtNo));
+
+  return rows
+    .filter((r) => r.scoreA !== null && r.scoreB !== null)
+    .map((r) => ({
+      a1: r.a1,
+      a2: r.a2,
+      b1: r.b1,
+      b2: r.b2,
+      scoreA: r.scoreA as number,
+      scoreB: r.scoreB as number,
+    }));
+}
+
+/** Append a round whose pairings are already decided. */
+async function appendRound(
+  sessionId: string,
+  stage: "semifinal" | "final",
+  pairings: Array<[string, string, string, string]>,
+): Promise<void> {
+  const db = getDb();
+
+  const last = await db
+    .select({ index: rounds.index })
+    .from(rounds)
+    .where(eq(rounds.sessionId, sessionId))
+    .orderBy(desc(rounds.index))
+    .limit(1);
+
+  const inserted = await db
+    .insert(rounds)
+    .values({ sessionId, index: (last[0]?.index ?? 0) + 1, state: "active", stage })
+    .returning({ id: rounds.id });
+
+  await db.insert(matches).values(
+    pairings.map(([a1, a2, b1, b2], court) => ({
+      sessionId,
+      roundId: inserted[0].id,
+      courtNo: court + 1,
+      a1,
+      a2,
+      b1,
+      b2,
+      status: "scheduled" as const,
+    })),
+  );
+
+  revalidatePath(`/s/${sessionId}/play`);
+  revalidatePath(`/s/${sessionId}`);
+}
+
+/**
+ * Semi-finals: first seed against fourth, second against third.
+ *
+ * Fixed partners only. It is the one format where a team survives the whole
+ * night, and a bracket between teams that dissolve after every round would mean
+ * nothing.
+ *
+ * Refuses while any match is still unscored. Seeding off a partial table would
+ * rank teams on how many games they had got round to playing.
+ */
+export async function addMedalRoundAction(sessionId: string): Promise<void> {
+  const t = await getT();
+  await requireOrganizer(sessionId);
+  await requireLive(sessionId);
+  const db = getDb();
+
+  const found = await db
+    .select({ format: sessions.format })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (found[0]?.format !== "fixed") throw new Error(t("err.medalFixedOnly"));
+
+  const unscored = await db
+    .select({ id: matches.id })
+    .from(matches)
+    .where(and(eq(matches.sessionId, sessionId), eq(matches.status, "scheduled")))
+    .limit(1);
+
+  if (unscored.length > 0) throw new Error(t("err.medalNeedsAllScores"));
+
+  const existing = await db
+    .select({ id: rounds.id })
+    .from(rounds)
+    .where(and(eq(rounds.sessionId, sessionId), ne(rounds.stage, "robin")))
+    .limit(1);
+
+  if (existing.length > 0) throw new Error(t("err.medalExists"));
+
+  const bracket = semiFinals(teamStandings(await playedMatches(sessionId, "robin")));
+  if (!bracket) throw new Error(t("err.medalNeedsFourTeams"));
+
+  await appendRound(sessionId, "semifinal", bracket);
+}
+
+/**
+ * The finals: semi-final winners for gold, semi-final losers for bronze.
+ *
+ * Separate from the semi-finals because it cannot be known until those are
+ * played, which is also why the medal round is two rounds and not one bracket
+ * generated in a single go.
+ */
+export async function addFinalsAction(sessionId: string): Promise<void> {
+  const t = await getT();
+  await requireOrganizer(sessionId);
+  await requireLive(sessionId);
+  const db = getDb();
+
+  const already = await db
+    .select({ id: rounds.id })
+    .from(rounds)
+    .where(and(eq(rounds.sessionId, sessionId), eq(rounds.stage, "final")))
+    .limit(1);
+
+  if (already.length > 0) throw new Error(t("err.finalsExist"));
+
+  const semis = await playedMatches(sessionId, "semifinal");
+  if (semis.length !== 2) throw new Error(t("err.finalsNeedSemis"));
+
+  await appendRound(sessionId, "final", finals([semis[0], semis[1]]));
 }
 
 /**

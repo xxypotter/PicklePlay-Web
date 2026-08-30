@@ -21,6 +21,8 @@ export interface MatchCardData {
   scoreB: number | null;
   completed: boolean;
   voided?: boolean;
+  /** "Semi-final 1", "Gold final" — absent for an ordinary round-robin game. */
+  stageLabel?: string | null;
 }
 
 const MAX_SCORE = 99;
@@ -119,7 +121,19 @@ export default function MatchCard({
   return (
     <form action={action} className={`card ${highlight ? "border-2 border-[var(--accent)]" : ""}`}>
       <div className="flex items-baseline justify-between">
-        <h3 className="text-base font-bold">{match.courtLabel}</h3>
+        {/*
+          The stage leads when there is one. On a medal night "Gold final" is
+          what the match *is*; which court it happens to be on is a detail, and
+          burying it beside the court name would let it pass for another game.
+        */}
+        <h3 className="text-base font-bold">
+          {match.stageLabel ?? match.courtLabel}
+          {match.stageLabel ? (
+            <span className="ml-2 text-xs font-normal text-[var(--muted)]">
+              {match.courtLabel}
+            </span>
+          ) : null}
+        </h3>
         {match.completed ? (
           <span className="text-xs font-semibold text-[var(--accent)]">{t("schedule.recorded")}</span>
         ) : null}

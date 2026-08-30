@@ -36,12 +36,20 @@ export interface RoundMatch {
    * never created, and the people who played it remember playing it.
    */
   voided: boolean;
+  /**
+   * What this match is, when it is not just another round-robin game —
+   * "Semi-final 1", "Gold final". Derived from the round's stage and the court
+   * order rather than stored, so the bracket has exactly one description.
+   */
+  stageLabel: string | null;
 }
 
 export interface CurrentRound {
   id: string;
   index: number;
   matches: RoundMatch[];
+  /** `robin` unless this is part of a fixed-partner medal round. */
+  stage: "robin" | "semifinal" | "final";
 }
 
 /**
@@ -60,7 +68,7 @@ export async function getAllRounds(
 
   const [roundRows, matchRows] = await Promise.all([
     db
-      .select({ id: rounds.id, index: rounds.index })
+      .select({ id: rounds.id, index: rounds.index, stage: rounds.stage })
       .from(rounds)
       .where(eq(rounds.sessionId, sessionId))
       .orderBy(asc(rounds.index)),
@@ -100,13 +108,29 @@ export async function getAllRounds(
     avatar: byId.get(id)?.avatar ?? null,
   });
 
+  /*
+   * Court order is the bracket order: the first semi-final is the one the top
+   * seed is in, and gold sits on court one because that is where the two
+   * winners come from. Both are set when the round is built.
+   */
+  const stageLabel = (
+    stage: "robin" | "semifinal" | "final",
+    position: number,
+  ): string | null => {
+    if (stage === "semifinal") return t("match.semifinal", { index: position + 1 });
+    if (stage === "final") return t(position === 0 ? "match.gold" : "match.bronze");
+    return null;
+  };
+
   return roundRows.map((round) => ({
     id: round.id,
     index: round.index,
+    stage: round.stage,
     matches: matchRows
       .filter((m) => m.roundId === round.id)
-      .map((r) => ({
+      .map((r, position) => ({
         id: r.id,
+        stageLabel: stageLabel(round.stage, position),
         courtNo: r.courtNo,
         courtLabel: courtLabel(t, courtNames, r.courtNo),
         teamA: [person(r.a1), person(r.a2)],

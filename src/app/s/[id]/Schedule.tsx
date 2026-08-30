@@ -143,11 +143,16 @@ export default function Schedule({
               session's court count. A round can hold fewer matches than the
               venue has courts, and saying "2 courts" over a single game is
               simply untrue.
+
+              A bracket round is named instead of numbered: "Round 9 · 2 courts"
+              says nothing about the fact that the night is being decided.
             */}
-            {t.plural("schedule.round", round.matches.length, {
-              index: round.index,
-              count: round.matches.length,
-            })}
+            {round.stage === "robin"
+              ? t.plural("schedule.round", round.matches.length, {
+                  index: round.index,
+                  count: round.matches.length,
+                })
+              : t(`schedule.stage.${round.stage}`)}
           </p>
 
           <div className="mt-3 flex flex-col gap-2.5">

@@ -21,6 +21,8 @@ import {
   DiscardRoundButton,
   EndSessionButton,
   GenerateRoundButton,
+  MedalRoundButton,
+  RebuildMatchupsButton,
   ReopenSessionButton,
   StartSessionButton,
 } from "./PlayControls";
@@ -92,6 +94,31 @@ export default async function PlayPage({
     .flatMap((r) => r.matches)
     .filter((m) => !m.completed && !m.voided).length;
 
+  /*
+   * A round is settled once anything has happened in it. Rebuilding keeps those
+   * and replaces the rest, so this is what the organizer is told will survive.
+   */
+  const playedRounds = allRounds.filter((r) =>
+    r.matches.some((m) => m.completed || m.voided),
+  ).length;
+
+  // Where the bracket has got to. Only fixed-partner nights have one.
+  const semis = allRounds.find((r) => r.stage === "semifinal");
+  const medalStage = allRounds.some((r) => r.stage === "final")
+    ? "done"
+    : semis
+      ? "final"
+      : "semifinal";
+  const medalReady =
+    medalStage === "final"
+      ? !!semis && semis.matches.every((m) => m.completed)
+      : allRounds.length > 0 && unscored === 0;
+
+  // Pairs among the people actually here — the bracket needs four of them.
+  const teamCount = Math.floor(
+    roster.filter((r) => r.attended && r.partnerId).length / 2,
+  );
+
   return (
     <>
       <LiveRefresh active={session.status === "live"} />
@@ -131,10 +158,16 @@ export default async function PlayPage({
       </section>
 
       {session.format === "fixed" ? (
+        /*
+          Editable while the night is live, not only before it starts. Two
+          latecomers who want to play as a pair have to be paired *after* the
+          session began, and changing a pairing only affects rounds built from
+          here on — matches already played store their four players outright.
+        */
         <PartnerPicker
           sessionId={id}
           players={roster.filter((r) => r.attended)}
-          locked={session.status !== "open"}
+          locked={session.status === "closed"}
         />
       ) : null}
 
@@ -169,6 +202,31 @@ export default async function PlayPage({
               roundsSoFar={allRounds.length}
               format={session.format}
             />
+
+            {/*
+              Only once a schedule exists — before that "Create all matches"
+              above already is the rebuild, and offering both would be two
+              buttons for one job.
+            */}
+            {allRounds.length > 0 && medalStage === "semifinal" ? (
+              <RebuildMatchupsButton
+                sessionId={id}
+                attendingCount={attendingCount}
+                courtCount={session.courtNames.length}
+                playedRounds={playedRounds}
+                format={session.format}
+              />
+            ) : null}
+
+            {session.format === "fixed" && allRounds.length > 0 ? (
+              <MedalRoundButton
+                sessionId={id}
+                stage={medalStage}
+                ready={medalReady}
+                teamCount={teamCount}
+              />
+            ) : null}
+
             {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
           </>
         ) : (
@@ -208,7 +266,9 @@ export default async function PlayPage({
               <div key={round.id}>
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-lg font-semibold">
-                    {t("play.roundHeading", { index: round.index })}
+                    {round.stage === "robin"
+                      ? t("play.roundHeading", { index: round.index })
+                      : t(`schedule.stage.${round.stage}`)}
                   </h2>
                   {unplayed && round.index === allRounds.length ? (
                     <DiscardRoundButton sessionId={id} roundId={round.id} />

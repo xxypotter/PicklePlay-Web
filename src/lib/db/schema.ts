@@ -40,6 +40,16 @@ export const roleEnum = pgEnum("role", ["player", "admin", "superadmin"]);
 export const signupStateEnum = pgEnum("signup_state", ["in", "waitlist", "out"]);
 export const sessionStatusEnum = pgEnum("session_status", ["draft", "open", "live", "closed"]);
 export const roundStateEnum = pgEnum("round_state", ["pending", "active", "done"]);
+
+/**
+ * What a round is for.
+ *
+ * Everything is `robin` unless a fixed-partner night ends with a medal round,
+ * where the bracket needs to be told apart from the round robin that seeded it:
+ * seeding reads `robin` results only, so a semi-final can't reorder the seeds
+ * that produced it.
+ */
+export const roundStageEnum = pgEnum("round_stage", ["robin", "semifinal", "final"]);
 export const matchStatusEnum = pgEnum("match_status", ["scheduled", "completed", "void"]);
 export const seedSourceEnum = pgEnum("seed_source", ["dupr", "picker", "admin"]);
 /**
@@ -245,6 +255,7 @@ export const rounds = pgTable(
       .references(() => sessions.id, { onDelete: "cascade" }),
     index: integer("index").notNull(),
     state: roundStateEnum("state").notNull().default("pending"),
+    stage: roundStageEnum("stage").notNull().default("robin"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("rounds_session_index_idx").on(t.sessionId, t.index)],
