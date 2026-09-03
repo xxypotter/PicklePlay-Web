@@ -33,6 +33,48 @@ export interface PlanOptions {
    * ahead of every other consideration.
    */
   genders?: readonly Gender[];
+  /**
+   * Rating per seat. When given, the draw prefers matchups where the two teams
+   * are close — under the gender rule and under partner rotation, never over
+   * them. See `BALANCE_WEIGHT`.
+   */
+  ratings?: readonly number[];
+}
+
+/**
+ * What an even matchup is worth when choosing who faces whom.
+ *
+ * Third priority, and it costs the first two nothing. Partner rotation is not
+ * in this trade at all — it is a hard constraint settled before we get here —
+ * and neither is the gender rule, which outranks everything at 1e6. Measured
+ * over 30 draws of a real 8M/2F roster, partnership coverage is 40 of 40 and
+ * violations are zero at every weight tried. The only thing balance actually
+ * competes with is opponent variety.
+ *
+ * That trade, on the same 30 draws (mean team gap / matches over 0.5 / pairs
+ * who never meet, out of 45):
+ *
+ *     0  →  0.372 / 5.7 / 0.6      the night that prompted this
+ *     4  →  0.301 / 4.1 / 1.6
+ *    10  →  0.246 / 2.7 / 2.6      here
+ *    25  →  0.196 / 1.5 / 5.5      too far
+ *
+ * At 25 the worst pair meets four times and five pairs never meet at all,
+ * which is precisely the opponent clustering that had to be fixed once
+ * already. At 10 the lopsided courts are more than halved and the opponent
+ * spread barely moves.
+ */
+const BALANCE_WEIGHT = 10;
+
+/** Mean team gap, summed across a whole schedule. */
+function totalGap(schedule: PlannedRound[], ratings: readonly number[]): number {
+  let sum = 0;
+  for (const round of schedule) {
+    for (const [a1, a2, b1, b2] of round) {
+      sum += Math.abs((ratings[a1] + ratings[a2]) / 2 - (ratings[b1] + ratings[b2]) / 2);
+    }
+  }
+  return sum;
 }
 
 /**
@@ -128,6 +170,7 @@ function groupIntoMatches(
   pairs: Array<[number, number]>,
   opponents: Map<string, number>,
   genders?: readonly Gender[],
+  ratings?: readonly number[],
 ): PlannedRound {
   const best: { round: PlannedRound; cost: number } = { round: [], cost: Infinity };
 
@@ -145,14 +188,19 @@ function groupIntoMatches(
       (opponents.get(key(x[1], y[0])) ?? 0) +
       (opponents.get(key(x[1], y[1])) ?? 0);
 
-    if (!genders) return opposed;
+    const gap = ratings
+      ? BALANCE_WEIGHT *
+        Math.abs((ratings[x[0]] + ratings[x[1]]) / 2 - (ratings[y[0]] + ratings[y[1]]) / 2)
+      : 0;
+
+    if (!genders) return opposed + gap;
     const violates = matchViolates(
       genders[x[0]],
       genders[x[1]],
       genders[y[0]],
       genders[y[1]],
     );
-    return opposed + (violates ? VIOLATION_COST : 0);
+    return opposed + gap + (violates ? VIOLATION_COST : 0);
   };
 
   const recurse = (remaining: Array<[number, number]>, acc: PlannedRound, total: number) => {
@@ -256,7 +304,7 @@ export function planPerfectSchedule(
    * worst "faced N times" from 4 down to 3 in 48 of them, and costs ~60ms —
    * paid once when a session is laid out, not per round.
    */
-  const { restarts = 500, random = Math.random, genders } = options;
+  const { restarts = 500, random = Math.random, genders, ratings } = options;
 
   if (!perfectSchedulePossible(playerCount, courtCount, rounds)) return null;
 
@@ -284,7 +332,7 @@ export function planPerfectSchedule(
         sitters = chooseSitters(playerCount, sitCount, games, rests, random);
         const seated = [...Array(playerCount).keys()].filter((p) => !sitters.includes(p));
         const pairs = matchSeated(seated, used, random);
-        if (pairs) round = groupIntoMatches(pairs, opponents, genders);
+        if (pairs) round = groupIntoMatches(pairs, opponents, genders, ratings);
       }
 
       if (!round) {
@@ -316,12 +364,15 @@ export function planPerfectSchedule(
        */
       const imbalance =
         opponentImbalance(schedule, playerCount) +
-        (genders ? countViolations(schedule, genders) * VIOLATION_COST : 0);
+        (genders ? countViolations(schedule, genders) * VIOLATION_COST : 0) +
+        (ratings ? BALANCE_WEIGHT * totalGap(schedule, ratings) : 0);
 
       if (imbalance < bestImbalance) {
         bestImbalance = imbalance;
         best = schedule;
-        if (imbalance === 0) break; // cannot do better than perfect
+        // Only a gender-blind, rating-blind draw can be perfect on this score;
+        // with either term in play zero is unreachable and the loop runs on.
+        if (imbalance === 0) break;
       }
     }
   }

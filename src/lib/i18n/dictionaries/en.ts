@@ -399,6 +399,9 @@ export const en = {
     "Round robin now spreads opponents more evenly, so you're far less likely to face the same pair three or four times in a night.",
   "notes.v12.reliability":
     "Reliability is harder to earn. It used to reach 70% after a single night; now it builds over several sessions, which is closer to how DUPR works and makes a settled rating mean more.",
+  "notes.v14.firstNight": "Your first session no longer swings your rating quite so far. New players were moving further in one evening than the rest of the group moves in a month, so the extra boost on a player's first few matches has been dropped — you still find your level in a night or two, just less violently. Matches already played keep the numbers they had; nothing was rewritten.",
+  "notes.v14.floor": "A rating that is still settling can no longer be pushed to the very bottom of the scale. One rough first night used to be enough to land there, which said more about the draw than about the player.",
+  "notes.v14.genderBalance": "Gender balanced now evens up the two teams as well. It still never puts two men against two women, and still rotates partners just as widely — closer teams are only the tie-breaker between the draws that already do both. Measured on a real night, that roughly halves the one-sided games.",
   "notes.v14.rebuild": "Someone arriving late no longer means starting the night over. Add them on the play console and tap Rebuild matchups: rounds that already have scores are kept, and only the ones nobody has played are redrawn. Adding a player yourself now also raises the limit to fit them, instead of quietly putting them on the waitlist.",
   "notes.v14.medal": "Fixed-partner sessions can finish with a medal round. The top four teams play off — 1 v 4 and 2 v 3 — then the winners meet for gold and the losers for bronze.",
   "notes.v13.genderMode":

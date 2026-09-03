@@ -209,9 +209,14 @@ export async function createAllRounds(
   const genders =
     format === "gender" ? attending.map((p) => p.gender ?? "unspecified") : undefined;
 
+  // Ratings go in for the gender format only. The regular round robin is
+  // deliberately rating-blind, and passing them would quietly change it.
   const plan =
     wholeSession && existing.length === 0
-      ? planPerfectSchedule(attending.length, session.courtCount, roundCount, { genders })
+      ? planPerfectSchedule(attending.length, session.courtCount, roundCount, {
+          genders,
+          ratings: genders ? attending.map((p) => p.rating) : undefined,
+        })
       : null;
 
   if (!plan) {

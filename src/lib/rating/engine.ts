@@ -470,7 +470,17 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
       const p = pending[i];
       const onTeamA = i < 2;
       const won = onTeamA === aWon;
-      const after = clamp(p.before + p.delta, RATING.MIN, RATING.MAX);
+      /*
+       * A provisional rating stops short of the bottom of the scale (§5.3).
+       * Only ever a floor: it catches a fall and cannot lift anyone, so a
+       * player already under it — settled there, then re-seeded provisional —
+       * is left where they are rather than being handed rating points.
+       */
+      const floor =
+        tuning.PROVISIONAL_FLOOR !== undefined && isProvisional(p.reliability)
+          ? Math.min(Math.max(RATING.MIN, tuning.PROVISIONAL_FLOOR), p.before)
+          : RATING.MIN;
+      const after = clamp(p.before + p.delta, floor, RATING.MAX);
 
       s.rating = after;
       s.peak = Math.max(s.peak, after);

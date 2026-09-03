@@ -75,12 +75,16 @@ export type Format =
  * `gender` — regular's weights with one rule on top: never two men against two
  *   women. Priced at 1000 so it beats twenty repeated partnerships, which is
  *   what "top priority" has to mean for a search that trades things off.
+ *   Balance sits third, below partner rotation: at 20 a repeated partnership
+ *   still outranks a quarter-point of rating gap, so the format keeps its
+ *   promise to rotate partners and merely stops picking the lopsided courts
+ *   from among the draws that keep it.
  * `spread` keeps a 4.5 and a 2.5 off the same court where possible — balanced
  *   on paper but miserable to play.
  */
 export const WEIGHTS: Record<Exclude<Format, "manual" | "custom">, Weights> = {
   regular: { balance: 0, partner: 50, opponent: 3, spread: 0, gender: 0 },
-  gender: { balance: 0, partner: 50, opponent: 3, spread: 0, gender: 1000 },
+  gender: { balance: 20, partner: 50, opponent: 3, spread: 0, gender: 1000 },
   /*
    * Balance has to be worth far more than variety, or it quietly loses.
    *

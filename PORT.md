@@ -18,7 +18,7 @@ said so explicitly (§3.9 is the one to read twice).
 with an invite code; the native app will use email or phone), payment, and
 anything about the App Store. Those are noted in §12 as gaps, not specified.
 
-**Reflects web app v1.3 (2026-08-29).** §15 lists behaviour that has been
+**Reflects web app v1.4 (2026-09-03).** §15 lists behaviour that has been
 audited and deliberately left alone — read it before "fixing" anything in §3.
 
 ---
@@ -81,7 +81,10 @@ no-shows), `partner_id?` (fixed-partner pairing; both rows point at each other).
 Unique on `(session_id, player_id)`.
 
 ### rounds
-`session_id`, `index` (1-based), `state`. Unique on `(session_id, index)`.
+`session_id`, `index` (1-based), `state`, `stage`
+(`robin`\|`semifinal`\|`final`, default `robin`). Unique on
+`(session_id, index)`. `stage` is what keeps a medal round (§4.7) apart from the
+round robin that seeded it — seeding reads `robin` results only.
 
 ### matches
 `session_id?`, `round_id?`, `court_no?`, `a1 a2 b1 b2` (player ids — **always
@@ -157,7 +160,7 @@ if localMatches < SEED_FLOOR_MATCHES: k  = max(k, K_SEED_FLOOR)
 
 K_BASE = 0.98    K_EXPONENT = 1.06
 K_SETTLED = 0.188   HALF_LIFE_SCALE = 40
-CAL_MATCHES = 5     CAL_MULT = 1.25
+CAL_MATCHES = 5     CAL_MULT = 1.0
 SEED_FLOOR_MATCHES = 5   K_SEED_FLOOR = 0.15
 ```
 
@@ -170,6 +173,16 @@ Two regimes, crossing at about **89% reliability**:
 
 The floor matters: the power law reaches exactly zero at 100%, which would
 freeze a fully established player forever. DUPR does not do that.
+
+**`CAL_MULT` is 1.0 — do not reintroduce a first-matches boost.** It was 1.25,
+which made `K = 1.23` for a player's first five games: the largest number in the
+whole system, sitting exactly where the evidence is thinnest. Nothing in the
+DUPR data supports it — the account it was calibrated against was eighteen
+matches in — and across 160 real matches every single outlier lived inside that
+window. It eventually produced a **+1.269 move in one evening**, a player going
+2.50 → 3.77 in eight games. `K_BASE` alone already finds someone's level in a
+night or two and *is* anchored to measured forecasts. The constant is kept in
+the tuning only so old matches can still replay under it.
 
 ### 3.5 Applying it
 
@@ -186,6 +199,28 @@ delta = clamp(k * surprise * compression, -cap, +cap)
 The caps are backstops against nonsense (a score typed as 99–0), **not** working
 limits. DUPR itself forecasts +0.411 for a single match, so a tight cap would
 contradict the data.
+
+A provisional rating is additionally floored:
+
+```
+floor = provisional && PROVISIONAL_FLOOR !== undefined
+          ? min(max(MIN, PROVISIONAL_FLOOR), ratingBefore)
+          : MIN
+after = clamp(before + delta, floor, MAX)
+
+PROVISIONAL_FLOOR = 2.5
+```
+
+`MIN` is the bottom of the scale, not a plausible skill level — essentially
+nobody real plays below 2.5, and the lowest option the skill picker offers *is*
+2.5. Without this a player who had a bad first night landed at **2.063**, six
+hundredths off the absolute floor, on eight games of evidence: nothing left
+below them, and a first impression of the app that reads as a verdict.
+
+Note the inner `min(..., ratingBefore)`. It is a floor, never a lift: someone
+already under it stays where they are rather than being handed points, which
+matters because a settled player who fell to 2.2 and then re-seeds themselves
+goes provisional again. Once reliability passes, the whole scale is available.
 
 Every delta in a match is computed from the **pre-match** ratings and applied
 afterwards, so the order you walk the four players cannot change the result.
@@ -310,9 +345,10 @@ instead), so a correction stays on the old tuning.
 Verify after any change that replaying real history reproduces stored ratings
 **bit-identically**. That check has caught real mistakes.
 
-> **Do not copy our epoch table.** It carries two historical entries — the
-> original constants superseded on 2026-08-10, and diversity-only reliability
-> superseded on 2026-08-16 — which describe *this* app's past, not yours. A fresh install has no history to protect, so ship with the
+> **Do not copy our epoch table.** It carries three historical entries — the
+> original constants superseded on 2026-08-10, diversity-only reliability
+> superseded on 2026-08-16, and the first-matches K boost superseded on
+> 2026-08-31 — which describe *this* app's past, not yours. A fresh install has no history to protect, so ship with the
 > constants in §3.2–§3.6 as your v1.0 and a single open-ended epoch. Add a
 > second entry the first time you retune, and from then on the guarantee is
 > yours to keep. The machinery matters; our dates do not.
@@ -399,7 +435,7 @@ cost = Σ over courts:
 ```
 regular   { balance:   0, partner: 50, opponent: 3, spread: 0, gender:    0 }
 balanced  { balance: 100, partner:  6, opponent: 2, spread: 4, gender:    0 }
-gender    { balance:   0, partner: 50, opponent: 3, spread: 0, gender: 1000 }
+gender    { balance:  20, partner: 50, opponent: 3, spread: 0, gender: 1000 }
 fixed     { balance: 100, partner: -8, opponent: 2, spread: 4, gender:    0 }
 ```
 
@@ -440,10 +476,11 @@ solve for and what remains is a round robin between *teams*.
 
 ### 4.4 Gender balanced — never two men against two women
 
-Two priorities, and the order is the whole design:
+Three priorities, and the order is the whole design:
 
 1. **Never MM against FF.** A hard rule, not a preference.
-2. **Otherwise rotate partners as widely as a regular round robin.**
+2. **Rotate partners as widely as a regular round robin.**
+3. **Then even up the two teams by rating.**
 
 The rule is about the **matchup, not the team**. MM vs MM is fine, FF vs FF is
 fine, anything with a mixed team is fine. Only MM facing FF is out.
@@ -486,6 +523,36 @@ do not quietly break the promise the format's name makes. Measured over eight
 roster shapes from 4M/4F to 15M/5F: zero violations in every one, partner
 coverage unchanged, 30–230ms.
 
+**Balance is third, and it costs the first two nothing.** The first real
+gender-balanced night produced seven blowouts in twenty — worse than any other
+session — for a structural reason worth understanding before you copy the
+design. With only two women present the rule *correctly* refuses to pair them
+(that would force a violation), so instead of one weak team you get one weaker
+player spread across fourteen of the twenty matches. Combined with inheriting
+`balance: 0` from the regular round robin, that is a lot of one-sided games.
+
+So the planner takes an optional rating per seat and adds
+`BALANCE_WEIGHT * |avg(teamA) − avg(teamB)|` to the same grouping cost the
+gender rule uses, plus the schedule total to the restart ranking. Partner
+rotation is untouched — it is a hard constraint settled before that step — and
+the gender rule outranks everything at 1e6. The only thing balance actually
+trades against is opponent variety. Measured over 30 draws of that real 8M/2F
+roster (mean team gap / matches over 0.5 / pairs who never meet, of 45):
+
+```
+   0  →  0.372 / 5.7 / 0.6      the night that prompted this
+   4  →  0.301 / 4.1 / 1.6
+  10  →  0.246 / 2.7 / 2.6      chosen
+  25  →  0.196 / 1.5 / 5.5      too far
+```
+
+Partnership coverage was 40 of 40 and violations zero at *every* weight. At 25
+the worst pair meets four times and five pairs never meet at all, which is
+exactly the opponent clustering §4.1 exists to prevent. **`BALANCE_WEIGHT = 10`.**
+
+Pass ratings for this format only. The regular round robin is deliberately
+rating-blind and handing it ratings would quietly turn it into something else.
+
 ### 4.5 Custom
 Rounds are still generated (balanced weights), but the organizer expects to
 rearrange courts by hand.
@@ -503,6 +570,39 @@ gamesEach    = rounds * seats / players
 
 Nine players on two courts → 9 rounds, 8 games each, one sitting out per round,
 and you partner everyone exactly once.
+
+### 4.7 Medal round — how a fixed-partner night finishes
+
+Fixed partners only. It is the one format where a team survives the whole night,
+and a bracket between teams that dissolve every round would mean nothing.
+
+- **Semi-finals**: seed 1 v seed 4, seed 2 v seed 3, in that court order.
+- **Finals**: the two semi-final winners play for gold, the two losers for
+  bronze. Playing the losers off is the point — otherwise they share third.
+
+Two separate actions, not one, because who is in the final *is* the result of
+the semi-finals.
+
+**Seeding rules that matter:**
+
+- Seed from **round-robin results only**, so a semi-final cannot reorder the
+  seeds that produced it. This is what the `rounds.stage` column
+  (`robin | semifinal | final`) is for.
+- Seed from **matches actually played**, never from the roster's stored pairs.
+  Pairs can be edited between rounds; the bracket must reflect the night that
+  happened.
+- Order by wins, then point difference, then points scored, then a stable key.
+  The last one is not decoration: without it two organizers seeding the same
+  night can get two different brackets.
+- **Refuse while any match is unscored.** A partial table ranks teams on how
+  many games they got round to playing.
+- Teams ranked fifth and below are done. A placement match for them is a
+  different feature.
+
+Court order carries the bracket, so the labels players see ("Semi-final 1",
+"Gold final") are derived from stage plus court, not stored.
+
+Medal matches rate exactly like any other game.
 
 ---
 
@@ -524,6 +624,45 @@ scoring to the organizer, so an early auto-close takes the pen out of the hands
 of everyone who was actually on court. A Saturday that runs late now has until
 Monday. The sweep runs lazily on page loads plus in the
 weekly cron.
+
+### Letting a latecomer in
+
+Ten players, all the matchups built, and an eleventh walks in. Two separate
+things block this, and the first is invisible — get both.
+
+**The roster.** If the organizer's add shares the capacity rule with self-RSVP,
+the eleventh player is filed on the waitlist, never reaches the draw, and the
+button gives no sign that is what happened. The same shape of trap as counting
+signups instead of attendees, one layer up. A person standing on the court is a
+fact and the cap is a plan, so **an organizer's add is never waitlisted** and
+raises `max_players` to fit. Self-RSVP still respects the limit — the difference
+is that this path only runs when someone was deliberately picked by name. Use
+`on conflict do update`, not `do nothing`: the organizer may be reaching for
+somebody already waitlisted or marked out, and "add" should mean the same thing
+whichever row exists.
+
+**The schedule.** A separate, explicit "rebuild matchups" action, because
+throwing away a draw people may already be standing on court for is not
+something to do as a side effect of adding a player.
+
+- A round is **settled** once any of its matches has a score *or a void* —
+  voiding records something that happened, it is not an eraser. Settled rounds
+  are never touched.
+- Delete the unsettled rounds, **matches first** if your schema nulls the round
+  reference on delete rather than cascading.
+- **Nothing played yet** → discard everything and re-run the whole-session
+  planner from a clean slate, so a regular or gender draw keeps its
+  partner-once promise.
+- **Some rounds played** → the planner cannot help; it solves a whole session
+  and this one is half spent. Generate a round at a time instead, reading the
+  history the played rounds created, so partner and sit-out fairness carry
+  across the join.
+- Refuse once a medal round exists: round-robin rounds cannot follow a final.
+
+For fixed partners the pairs must also be editable **while the session is
+live** — two latecomers who want to play together have to be paired after the
+night began. Safe because played matches store their four players outright, so a
+pairing change only affects rounds built from then on.
 
 ### Capacity — count who is *playing*, not who signed up
 
@@ -806,12 +945,26 @@ Each of these was a real bug found in production.
     rotation until it moved from the pairing step to the grouping step, where
     it costs nothing. Before assuming two goals conflict, check whether they are
     even being decided at the same moment. §4.4.
+14. **The largest constant in a system belongs where the evidence is
+    thickest, not thinnest.** A 1.25 multiplier on a new player's first five
+    matches made K larger than anywhere else in the engine, on the least data.
+    Every outlier in 160 matches lived inside it. §3.4.
+15. **A scale minimum is not a plausible value.** Letting an unsettled rating
+    reach the floor put a first-time player 0.06 off the bottom of the whole
+    scale after one evening. §3.5.
+16. **A capacity rule that is right for a player is wrong for the organizer.**
+    Sharing it silently waitlisted the walk-in standing on the court. §5.
+17. **Removing a constraint can make the *inputs* worse.** Correctly refusing
+    to pair the only two women meant their weakness was spread across fourteen
+    of twenty matches instead of concentrated in a few, which is why the first
+    gender-balanced night was also the most one-sided. Check what a rule does
+    to the distribution, not just to the rule. §4.4.
 
 ---
 
 ## 14. Test coverage worth porting
 
-242 tests. The ones that earn their keep:
+261 tests. The ones that earn their keep:
 
 - **17 DUPR forecast readings** as a regression fixture (§3.7). If a retune
   breaks the signs, this fails.
@@ -826,47 +979,71 @@ Each of these was a real bug found in production.
   partner coverage is unchanged versus the plain round robin, *and* that the
   impossible case (10M/2F over a full round robin) returns exactly its floor of
   1 rather than throwing or giving up.
+- **Medal bracket** — 1 v 4 and 2 v 3 from the table; gold provably the two
+  semi-final *winners* and bronze the two *losers*; an upset carried through
+  rather than the seeding being replayed; and a dead tie ordered the same way
+  twice, so two organizers cannot get two brackets.
+- **Dated tuning, both directions** — that the first-matches boost is gone
+  under the current tuning *and* still applies under the previous one, so an
+  old match keeps what it was played under.
+- **The provisional floor is a floor** — it catches a fall, and never lifts
+  somebody who was already below it.
+- **Full-history replay** — every stored rating reproduces bit-identically
+  after any engine change. This is the one that catches real mistakes; run it
+  against production data, not a fixture.
 - **Permission matrix** — every row of §6.
 
 ---
 
-## 15. Audited, and deliberately unchanged
+## 15. Audit findings — two fixed, two open
 
-A full audit of the rating engine against 496 real rating events (124 matches,
-43 rated players) turned up four things worth knowing. **All four were reviewed
-and left alone on purpose.** They are recorded here so you inherit the reasoning
-rather than the surprise — and so you don't "fix" one and silently diverge from
-a rating the group has already accepted.
+An audit of the rating engine against real play (now 160 matches, 592 rating
+events, 65 rated players) turned up four things. **Two have since been fixed and
+two are open on purpose.** Recorded so you inherit the reasoning rather than the
+surprise, and so you don't "fix" an open one and silently diverge from a rating
+the group has already accepted.
 
-If you decide to change any of them, change them as a **new epoch** (§3.9), not
-as an edit.
+Anything you do change here goes in as a **new epoch** (§3.9), never as an edit.
 
-1. **An admin rating correction can also grant 100% reliability, permanently.**
-   One form does two very different things: correcting someone's number, and
-   declaring them fully settled. Three players were re-seeded to 100% this way.
-   Because `declaredFloor` is a floor that never decays, their K drops to ~0.157
-   and results can barely move them again. In one case a re-seed also superseded
-   eight matches of contrary evidence. Consider separating the two fields, or
-   capping an admin-granted floor below 100% so results always retain some pull.
+### Fixed in v1.4
 
-2. **The first five matches run hotter than any evidence supports.**
-   `CAL_MULT 1.25 × K_BASE 0.98` gives **K = 1.23**, the largest number in the
-   system. The 35 events inside that window averaged a 0.229 move against 0.080
-   for everything else, and every outlier lives there. The DUPR fixture (§3.7)
-   says nothing about it — its subject was already 18 matches in. If you want
-   one simplification, drop `CAL_MULT` to 1.0; `K_BASE` alone is already very
-   fast and *is* anchored to data.
+**1. The first five matches ran hotter than any evidence supported.**
+`CAL_MULT 1.25 × K_BASE 0.98` gave **K = 1.23** — the largest number in the
+system, where the evidence is thinnest. Events inside that window averaged a
+0.229 move against 0.080 everywhere else, and every outlier lived there. It
+finally produced **+1.269 in one evening** (2.50 → 3.77 in eight games), half
+again as large as anything the system had ever done. `CAL_MULT` is now 1.0. Do
+not put it back; see §3.4.
 
-3. **A declared reliability can never be earned back down.** It is a free-text
-   field at signup, unverified, and `max(declaredFloor, …)` makes it permanent.
-   Nine players sit at 100%. Even DUPR decays reliability when you stop playing.
+**2. A provisional rating could be driven to the bottom of the scale.**
+A player's *first ever* session left them at **2.063** against a `MIN` of 2.000,
+on eight games of evidence. `PROVISIONAL_FLOOR = 2.5` now catches that; see
+§3.5. Replaying the same night under the new tuning puts them at 2.500 instead.
 
-4. **The `regular` format sets `balance: 0` — by design.** Five of seven real
-   sessions used it, producing a mean team rating gap of **0.295** and a worst
-   of **1.104**, against **0.108** for fixed partners. That is the direct cause
-   of the largest rating swings: the engine is faithfully reacting to genuinely
-   lopsided input. Not a bug — but if ratings look volatile, this is why, and
-   the fix is the organizer choosing `balanced`, not a change to the engine.
+### Still open — leave them alone unless asked
+
+**3. An admin rating correction can also grant 100% reliability, permanently.**
+One form does two very different things: correcting someone's number, and
+declaring them fully settled. Three players were re-seeded to 100% this way.
+Because `declaredFloor` never decays, their K drops to ~0.157 and results can
+barely move them again; in one case a re-seed also superseded eight matches of
+contrary evidence. Consider separating the two fields, or capping an
+admin-granted floor below 100% so results always retain some pull.
+
+**4. A declared reliability can never be earned back down.** It is a free-text
+field at signup, unverified, and `max(declaredFloor, …)` makes it permanent.
+Nine players sit at 100%. Even DUPR decays reliability when you stop playing.
+
+### The one that was never a bug
+
+**`regular` sets `balance: 0` deliberately.** Across real sessions it produces a
+mean team gap of **0.27–0.46** and a worst of **1.44**, against **0.06–0.13**
+for fixed partners. That is the direct cause of the largest rating swings — the
+engine reacting faithfully to genuinely lopsided input. If ratings look
+volatile, this is why, and the answer is the organizer choosing a format that
+balances, not a change to the engine. The gender format *did* get a balance term
+in v1.4 (§4.4) because its structure made the problem materially worse; the
+plain round robin keeps its rating-blind draw.
 
 Two further observations, no action wanted:
 

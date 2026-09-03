@@ -101,9 +101,23 @@ export const RATING = {
   K_SEED_FLOOR: 0.15,
   SEED_FLOOR_MATCHES: 5,
 
-  /** Calibration window: K is boosted for a player's first few local matches. */
+  /**
+   * Calibration window. Kept as a hook, but no longer a boost.
+   *
+   * It used to multiply K by 1.25 for a player's first five matches, which put
+   * the largest number in the whole system — K = 1.23 — exactly where the
+   * evidence is thinnest. Nothing in the DUPR data supports it: the account we
+   * calibrated against was eighteen matches in, so the multiplier was an
+   * invention sitting on top of a measured law.
+   *
+   * It showed. Across 160 matches every outlier lived inside this window, and
+   * it eventually produced a +1.269 move in a single evening — a player going
+   * from 2.50 to 3.77 in eight games, half again as large as anything else the
+   * system has ever done. K_BASE alone is already fast enough to find someone's
+   * level in a night or two, and it is anchored to real forecasts.
+   */
   CAL_MATCHES: 5,
-  CAL_MULT: 1.25,
+  CAL_MULT: 1.0,
 
   /**
    * Per-match movement caps — a guard against absurdity, not a working limit.
@@ -121,6 +135,23 @@ export const RATING = {
    */
   CAP_PROVISIONAL: 0.6,
   CAP_RELIABLE: 0.5,
+
+  /**
+   * How low an unsettled rating may go.
+   *
+   * `MIN` is the bottom of the scale, not a plausible skill level: essentially
+   * nobody real plays below 2.5, and the picker's own lowest option is 2.5. A
+   * player who had a bad first night was landing at 2.063 — six hundredths off
+   * the absolute floor — on eight games of evidence, with nothing left below
+   * them and a first impression of the app that reads as a verdict.
+   *
+   * So while a rating is still provisional it cannot be pushed under this. It
+   * is a floor, never a lift: it stops a fall, and does nothing to a player who
+   * is already above it. Once reliability passes and the number means
+   * something, the whole scale is available again and a settled player can go
+   * wherever their record takes them.
+   */
+  PROVISIONAL_FLOOR: 2.5,
 
   /**
    * Evidence decay (§5.4). Matches halve in weight every 90 days, which
@@ -223,6 +254,8 @@ export interface Tuning {
   CAL_MULT: number;
   CAP_PROVISIONAL: number;
   CAP_RELIABLE: number;
+  /** Undefined before v1.3, when a provisional rating could reach `MIN`. */
+  PROVISIONAL_FLOOR?: number;
   /**
    * Reliability waypoints. Versioned too, because reliability feeds K — change
    * these without dating them and every match ever played is re-scored.
@@ -297,6 +330,35 @@ export const TUNING_V1_1: Tuning = {
 };
 
 /**
+ * v1.2 — reliability tightened, but K still boosted for the first five matches
+ * and a provisional rating still free to reach the bottom of the scale.
+ *
+ * Identical to v1.1 except for the reliability waypoints, which is why it reads
+ * as the current constants with the two v1.3 changes undone.
+ */
+export const TUNING_V1_2: Tuning = {
+  ALPHA: 1.0,
+  D_POINTS: 1.33,
+  K_LAW: "reliability-power",
+  K_BASE: 0.98,
+  K_EXPONENT: 1.06,
+  K_SETTLED: 0.188,
+  HALF_LIFE_SCALE: 40,
+  K_SEED_FLOOR: 0.15,
+  SEED_FLOOR_MATCHES: 5,
+  CAL_MATCHES: 5,
+  CAL_MULT: 1.25,
+  CAP_PROVISIONAL: 0.6,
+  CAP_RELIABLE: 0.5,
+  PARTNERS_AT_60: RATING.PARTNERS_AT_60,
+  PARTNERS_AT_100: RATING.PARTNERS_AT_100,
+  TEAMS_AT_60: RATING.TEAMS_AT_60,
+  TEAMS_AT_100: RATING.TEAMS_AT_100,
+  VOLUME_AT_60: RATING.VOLUME_AT_60,
+  VOLUME_AT_100: RATING.VOLUME_AT_100,
+};
+
+/**
  * Every tuning this engine has used, newest first.
  *
  * A match replays under whichever was in force the day it was played, so
@@ -309,8 +371,11 @@ export const TUNING_V1_1: Tuning = {
  * behind it.
  */
 export const TUNING_EPOCHS: ReadonlyArray<{ from: Date; tuning: Tuning }> = [
+  // v1.3 — the first-five-matches boost dropped, and a floor under provisional
+  // ratings. Last match under v1.2: 2026-08-30T23:59Z.
+  { from: new Date("2026-08-31T00:00:00.000Z"), tuning: RATING },
   // v1.2 — reliability tightened. Last match under v1.1: 2026-08-15T18:09Z.
-  { from: new Date("2026-08-16T00:00:00.000Z"), tuning: RATING },
+  { from: new Date("2026-08-16T00:00:00.000Z"), tuning: TUNING_V1_2 },
   // v1.1 — DUPR recalibration. Last match under v1.0: 2026-08-09T13:24Z.
   { from: new Date("2026-08-10T00:00:00.000Z"), tuning: TUNING_V1_1 },
   // v1.0 — the original engine.

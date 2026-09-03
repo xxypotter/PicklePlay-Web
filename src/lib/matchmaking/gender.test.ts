@@ -141,6 +141,63 @@ describe("planPerfectSchedule with genders", () => {
     expect(partnerships(plan!)).toEqual({ distinct: 66, repeated: 0 });
   });
 
+  it("balances the matchups without spending either higher priority", () => {
+    /*
+     * The real 8M/2F roster of 2026-08-30, with the ratings they carried into
+     * it — the night that produced seven blowouts in twenty and prompted this.
+     * Balance is third: it must improve, and it must cost the gender rule and
+     * partner rotation nothing at all.
+     */
+    const roster: Array<[Gender, number]> = [
+      ["male", 3.629],
+      ["male", 2.9],
+      ["male", 3.559],
+      ["male", 3.872],
+      ["male", 2.855],
+      ["male", 2.5],
+      ["male", 2.858],
+      ["female", 3.043],
+      ["female", 2.667],
+      ["male", 3.55],
+    ];
+    const genders = roster.map(([g]) => g);
+    const ratings = roster.map(([, r]) => r);
+
+    const meanGap = (plan: PlannedRound[]) => {
+      const gaps = plan.flatMap((round) =>
+        round.map(([a1, a2, b1, b2]) =>
+          Math.abs((ratings[a1] + ratings[a2]) / 2 - (ratings[b1] + ratings[b2]) / 2),
+        ),
+      );
+      return gaps.reduce((x, y) => x + y, 0) / gaps.length;
+    };
+
+    let blind = 0;
+    let balanced = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const a = planPerfectSchedule(10, 2, 10, { genders, random: mulberry(seed) })!;
+      const b = planPerfectSchedule(10, 2, 10, {
+        genders,
+        ratings,
+        random: mulberry(seed),
+      })!;
+
+      // Neither higher priority may be spent to get there.
+      expect(countViolations(a, genders)).toBe(0);
+      expect(countViolations(b, genders)).toBe(0);
+      expect(partnerships(a)).toEqual({ distinct: 40, repeated: 0 });
+      expect(partnerships(b)).toEqual({ distinct: 40, repeated: 0 });
+
+      blind += meanGap(a);
+      balanced += meanGap(b);
+    }
+
+    expect(balanced / 8).toBeLessThan(blind / 8);
+    // Measured at roughly 0.25 against 0.37; assert the direction and a
+    // margin, not the exact figure, so a retune doesn't fail on noise.
+    expect(balanced / 8).toBeLessThan(0.32);
+  });
+
   it("leaves the plain round robin untouched when no genders are given", () => {
     const a = planPerfectSchedule(12, 3, 8, { random: mulberry(99) });
     const b = planPerfectSchedule(12, 3, 8, { random: mulberry(99) });
