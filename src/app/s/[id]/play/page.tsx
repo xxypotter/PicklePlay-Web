@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import LiveRefresh from "@/components/LiveRefresh";
@@ -11,6 +11,8 @@ import { getAttending } from "@/lib/matchmaking/service";
 import { sortByUsername } from "@/lib/players/sort";
 import { getT } from "@/lib/i18n/server";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
+import { teamStandings, type PlayedMatch } from "@/lib/sessions/medal";
+import ManualRound, { type ManualPlayer } from "./ManualRound";
 import MatchCard from "../MatchCard";
 import Standings from "../Standings";
 import {
@@ -119,6 +121,87 @@ export default async function PlayPage({
     roster.filter((r) => r.attended && r.partnerId).length / 2,
   );
 
+  /*
+   * The roster for hand-picking a round, in the order that makes the common
+   * case a straight run down the list.
+   *
+   * The request that prompted this was "let me put the first team against the
+   * second", so the ordering is the feature as much as the builder is: sorted
+   * by standing, with a fixed-partner night sorted by *team* standing and
+   * partners kept adjacent. Alphabetical would make the same job a hunt.
+   */
+  const avatarRows = attending.length
+    ? await db
+        .select({ id: players.id, avatar: players.avatar })
+        .from(players)
+        .where(inArray(players.id, attending.map((p) => p.id)))
+    : [];
+  const avatarOf = new Map(avatarRows.map((r) => [r.id, r.avatar]));
+
+  // Games already assigned tonight, voided ones excluded — they were taken out.
+  const gamesOf = new Map<string, number>();
+  for (const round of allRounds) {
+    for (const m of round.matches) {
+      if (m.voided) continue;
+      for (const p of [...m.teamA, ...m.teamB]) {
+        gamesOf.set(p.id, (gamesOf.get(p.id) ?? 0) + 1);
+      }
+    }
+  }
+
+  const playedRobin: PlayedMatch[] = allRounds
+    .filter((r) => r.stage === "robin")
+    .flatMap((r) => r.matches)
+    .filter((m) => m.completed && !m.voided && m.scoreA !== null && m.scoreB !== null)
+    .map((m) => ({
+      a1: m.teamA[0].id,
+      a2: m.teamA[1].id,
+      b1: m.teamB[0].id,
+      b2: m.teamB[1].id,
+      scoreA: m.scoreA as number,
+      scoreB: m.scoreB as number,
+    }));
+
+  const partnerOf = new Map(roster.map((r) => [r.playerId, r.partnerId]));
+  const byTeam = session.format === "fixed" && teamCount >= 2 && playedRobin.length > 0;
+
+  /** Where each attending player sits in the ordering, and the rank to show. */
+  const orderOf = new Map<string, { seq: number; rank: number | null }>();
+
+  if (byTeam) {
+    // Team standing, partners adjacent, so two consecutive taps are two teams.
+    teamStandings(playedRobin).forEach((row, i) => {
+      const [x, y] = row.team.split("|");
+      orderOf.set(x, { seq: i * 2, rank: i + 1 });
+      orderOf.set(y, { seq: i * 2 + 1, rank: i + 1 });
+    });
+  } else {
+    standings.forEach((row, i) => orderOf.set(row.playerId, { seq: i, rank: i + 1 }));
+  }
+
+  const manualPlayers: ManualPlayer[] = attending
+    .map((p) => ({
+      id: p.id,
+      username: p.username,
+      avatar: avatarOf.get(p.id) ?? null,
+      games: gamesOf.get(p.id) ?? 0,
+      rank: orderOf.get(p.id)?.rank ?? null,
+      // Anyone with no result yet goes after everyone who has one. A fixed
+      // partner with no games still sits beside their partner.
+      seq:
+        orderOf.get(p.id)?.seq ??
+        (byTeam ? orderOf.get(partnerOf.get(p.id) ?? "")?.seq : undefined) ??
+        Number.MAX_SAFE_INTEGER,
+    }))
+    .sort((a, b) => a.seq - b.seq || a.username.localeCompare(b.username))
+    .map((p): ManualPlayer => ({
+      id: p.id,
+      username: p.username,
+      avatar: p.avatar,
+      games: p.games,
+      rank: p.rank,
+    }));
+
   return (
     <>
       <LiveRefresh active={session.status === "live"} />
@@ -217,6 +300,19 @@ export default async function PlayPage({
                 format={session.format}
               />
             ) : null}
+
+            {/*
+              Available whenever the session is live, including before the
+              scheduled rounds are finished — the whole point is that the
+              organizer may want a particular matchup at any moment.
+            */}
+            <ManualRound
+              sessionId={id}
+              courtNames={session.courtNames}
+              players={manualPlayers}
+              nextRoundIndex={allRounds.length + 1}
+              orderedBy={byTeam ? "teams" : standings.length > 0 ? "standings" : "none"}
+            />
 
             {session.format === "fixed" && allRounds.length > 0 ? (
               <MedalRoundButton

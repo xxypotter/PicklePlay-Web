@@ -7,10 +7,11 @@ import type { Actor } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
 import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
-import { createAllRounds, createNextRound } from "@/lib/matchmaking/service";
+import { createAllRounds, createNextRound, getAttending } from "@/lib/matchmaking/service";
 import { requireLogin } from "@/lib/auth/permissions";
 import { canVoidMatch, PermissionError } from "@/lib/auth/policy";
 import { finals, semiFinals, teamStandings, type PlayedMatch } from "./medal";
+import { checkManualRound } from "./manual-round";
 import { requireOrganizer, requireScorer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { recomputeAll } from "@/lib/rating/service";
@@ -329,7 +330,7 @@ async function playedMatches(
 /** Append a round whose pairings are already decided. */
 async function appendRound(
   sessionId: string,
-  stage: "semifinal" | "final",
+  stage: "robin" | "semifinal" | "final",
   pairings: Array<[string, string, string, string]>,
 ): Promise<void> {
   const db = getDb();
@@ -361,6 +362,58 @@ async function appendRound(
 
   revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);
+}
+
+/**
+ * A round the organizer built by hand.
+ *
+ * "Add another round" draws at random, which is right almost always and wrong
+ * exactly when somebody has a plan: after six rounds of fixed partners, put the
+ * first team against the second and the third against the fourth. That is a
+ * round robin ending in a placement round, and no amount of shuffling produces
+ * it.
+ *
+ * Available in **every** format and at any point in a live session — before the
+ * scheduled rounds are finished as much as after. It does not replace the random
+ * draw or the fixed-partner medal round (§4.7); it sits alongside both.
+ *
+ * Recorded as an ordinary `robin` round, because that is what it is: four people
+ * on a court whose result counts exactly like any other. In particular it stays
+ * eligible to seed a medal round, and does not itself block one.
+ *
+ * **Everything here is untrusted.** The client says *which* players, and nothing
+ * else — the roster it is checked against is re-read from the database under the
+ * caller's own session, never taken from the request.
+ */
+export async function createManualRoundAction(
+  sessionId: string,
+  pairings: Array<[string, string, string, string]>,
+): Promise<void> {
+  const t = await getT();
+  await requireOrganizer(sessionId);
+  await requireLive(sessionId);
+
+  const db = getDb();
+
+  const found = await db
+    .select({ courtCount: sessions.courtCount })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (!found[0]) throw new Error(t("err.sessionGone"));
+
+  /*
+   * The roster comes from the database, never from the request. A well-formed
+   * list of four ids can still name somebody who never signed up, was marked
+   * out, or belongs to another session entirely — which is precisely what a
+   * shape check cannot catch.
+   */
+  const present = new Set((await getAttending(sessionId)).map((p) => p.id));
+  const checked = checkManualRound(pairings, found[0].courtCount, present);
+  if (!checked.ok) throw new Error(t(checked.error, checked.values));
+
+  await appendRound(sessionId, "robin", checked.pairings);
 }
 
 /**
