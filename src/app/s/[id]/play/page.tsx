@@ -12,7 +12,11 @@ import { sortByUsername } from "@/lib/players/sort";
 import { getT } from "@/lib/i18n/server";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import { teamStandings, type PlayedMatch } from "@/lib/sessions/medal";
+import { bracketFrom, teamRowsFrom } from "@/lib/sessions/team-view";
 import ManualRound, { type ManualPlayer } from "./ManualRound";
+import MedalRoundCustom, { type MedalTeam } from "./MedalRoundCustom";
+import MedalBracket from "../MedalBracket";
+import TeamStandings from "../TeamStandings";
 import MatchCard from "../MatchCard";
 import Standings from "../Standings";
 import {
@@ -179,6 +183,24 @@ export default async function PlayPage({
     standings.forEach((row, i) => orderOf.set(row.playerId, { seq: i, rank: i + 1 }));
   }
 
+  /*
+   * A fixed-partner night is read as teams: the pair is the competitor, and the
+   * medal belongs to both halves of it. Built from rounds already loaded, so it
+   * costs no extra query.
+   */
+  const isFixed = session.format === "fixed";
+  const deltaOf = new Map(standings.map((r) => [r.playerId, r.ratingDelta]));
+  const teamRows = isFixed ? teamRowsFrom(allRounds, deltaOf) : [];
+  const bracket = isFixed ? bracketFrom(allRounds) : null;
+
+  const medalTeams: MedalTeam[] = isFixed
+    ? teamRows.map((r, i) => ({
+        key: r.team,
+        players: r.players,
+        rank: r.placement ?? i + 1,
+      }))
+    : [];
+
   const manualPlayers: ManualPlayer[] = attending
     .map((p) => ({
       id: p.id,
@@ -315,12 +337,26 @@ export default async function PlayPage({
             />
 
             {session.format === "fixed" && allRounds.length > 0 ? (
-              <MedalRoundButton
-                sessionId={id}
-                stage={medalStage}
-                ready={medalReady}
-                teamCount={teamCount}
-              />
+              <>
+                <MedalRoundButton
+                  sessionId={id}
+                  stage={medalStage}
+                  ready={medalReady}
+                  teamCount={teamCount}
+                />
+                {/*
+                  The same two stages, drawn by hand. Offered only when the
+                  automatic one would also be allowed, so the two never disagree
+                  about whether the night is ready for a bracket.
+                */}
+                {medalStage !== "done" && medalReady ? (
+                  <MedalRoundCustom
+                    sessionId={id}
+                    stage={medalStage}
+                    teams={medalTeams}
+                  />
+                ) : null}
+              </>
             ) : null}
 
             {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
@@ -390,7 +426,15 @@ export default async function PlayPage({
         </section>
       )}
 
-      <Standings rows={standings} meId={me.id} backHere={here} locale={me.locale} />
+      {bracket ? (
+        <MedalBracket bracket={bracket} meId={me.id} locale={me.locale} />
+      ) : null}
+
+      {isFixed ? (
+        <TeamStandings rows={teamRows} meId={me.id} locale={me.locale} />
+      ) : (
+        <Standings rows={standings} meId={me.id} backHere={here} locale={me.locale} />
+      )}
 
       {session.status === "live" ? (
         <EndSessionButton sessionId={id} unscored={unscored} />

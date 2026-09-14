@@ -22,7 +22,13 @@ export const RELEASES: Release[] = [
   {
     version: "1.5",
     date: "2026-09-12",
-    notes: ["notes.v15.manualRound"],
+    notes: [
+      "notes.v15.manualRound",
+      "notes.v15.medalCustom",
+      "notes.v15.teamStandings",
+      "notes.v15.bracket",
+      "notes.v15.fixedDraw",
+    ],
   },
   {
     version: "1.4",

@@ -402,54 +402,137 @@ export type PlannedPairRound = PlannedPairMatch[];
  * pair has met every other, so unlike `planPerfectSchedule` this does not give
  * up when it runs out of fresh pairings; it just starts reusing the least-used.
  */
+/**
+ * Pair up the seated teams, refusing any matchup already used more than `limit`
+ * times.
+ *
+ * Backtracking, not greed. Choosing each team's least-met opponent in turn looks
+ * reasonable and is wrong in the way that matters: it commits early and can
+ * leave the last two teams holding a matchup they have already played, while
+ * two other pairings go unused. A real eight-team night came out with 26
+ * distinct matchups instead of 28, two of them twice — in seven rounds, where a
+ * perfect draw exists.
+ */
+function matchTeams(
+  seated: number[],
+  met: Map<string, number>,
+  limit: number,
+  random: () => number,
+): PlannedPairRound | null {
+  const pairs: PlannedPairRound = [];
+  const taken = new Set<number>();
+
+  const recurse = (): boolean => {
+    const next = seated.find((t) => !taken.has(t));
+    if (next === undefined) return true;
+
+    taken.add(next);
+    for (const other of shuffled(seated, random)) {
+      if (other === next || taken.has(other)) continue;
+      if ((met.get(key(next, other)) ?? 0) > limit) continue;
+
+      taken.add(other);
+      pairs.push([next, other]);
+      if (recurse()) return true;
+      pairs.pop();
+      taken.delete(other);
+    }
+    taken.delete(next);
+    return false;
+  };
+
+  return recurse() ? pairs : null;
+}
+
+/** One go at a whole fixed-partner schedule, with the repeats it cost. */
+function attemptPairSchedule(
+  pairCount: number,
+  perRound: number,
+  rounds: number,
+  random: () => number,
+): { schedule: PlannedPairRound[]; repeats: number } | null {
+  const met = new Map<string, number>();
+  const games = new Array(pairCount).fill(0);
+  const schedule: PlannedPairRound[] = [];
+  let repeats = 0;
+
+  for (let r = 0; r < rounds; r++) {
+    let round: PlannedPairRound | null = null;
+
+    /*
+     * Raise the tolerance only when it is genuinely needed. Past the point
+     * where every pairing has been used — eight teams have 28 of them, so a
+     * ninth round must repeat something — a schedule has to reuse matchups, and
+     * the second-time-round draw should be as even as the first.
+     *
+     * Who sits also decides whether a round can be matched at all, so try a few
+     * different rests before conceding a repeat rather than after.
+     */
+    for (let limit = 0; limit < rounds && !round; limit++) {
+      for (let tries = 0; tries < 8 && !round; tries++) {
+        const order = shuffled([...Array(pairCount).keys()], random).sort(
+          (a, b) => games[a] - games[b],
+        );
+        round = matchTeams(order.slice(0, perRound * 2), met, limit, random);
+      }
+    }
+
+    if (!round) return null;
+
+    for (const [a, b] of round) {
+      const k = key(a, b);
+      const before = met.get(k) ?? 0;
+      repeats += before; // every prior meeting of this pair is one repeat
+      met.set(k, before + 1);
+      games[a]++;
+      games[b]++;
+    }
+
+    schedule.push(round);
+  }
+
+  return { schedule, repeats };
+}
+
+/**
+ * Schedule a fixed-partner session.
+ *
+ * Once the pairs are decided the problem changes shape: partners are no longer
+ * something to solve for, so what's left is a round robin between *teams*. Eight
+ * teams over seven rounds is a complete one — every team meets every other
+ * exactly once — and that is a decomposition of K8, not something a greedy walk
+ * reliably finds.
+ *
+ * So: backtracking for each round, restarted, keeping whichever attempt repeats
+ * the fewest matchups. Unlike `planPerfectSchedule` this never gives up — a
+ * night longer than the round robin simply has to replay opponents, and the
+ * search then spreads those repeats instead of refusing.
+ *
+ * Returns null only when the shape is impossible: fewer than two pairs, or no
+ * courts.
+ */
 export function planFixedPartnerRounds(
   pairCount: number,
   courtCount: number,
   rounds: number,
   options: PlanOptions = {},
 ): PlannedPairRound[] | null {
-  const { random = Math.random } = options;
+  const { restarts = 300, random = Math.random } = options;
   if (pairCount < 2 || courtCount < 1 || rounds < 1) return null;
 
   const perRound = Math.min(courtCount, Math.floor(pairCount / 2));
   if (perRound < 1) return null;
 
-  const met = new Map<string, number>();
-  const games = new Array(pairCount).fill(0);
-  const schedule: PlannedPairRound[] = [];
+  let best: PlannedPairRound[] | null = null;
+  let fewest = Infinity;
 
-  for (let r = 0; r < rounds; r++) {
-    // Pairs with the fewest games sit down last, so court time stays even.
-    const order = shuffled([...Array(pairCount).keys()], random).sort(
-      (a, b) => games[a] - games[b],
-    );
-    const seated = order.slice(0, perRound * 2);
-    const remaining = new Set(seated);
-    const round: PlannedPairRound = [];
-
-    while (remaining.size >= 2) {
-      const [first] = remaining;
-      remaining.delete(first);
-      // Whoever this pair has faced least often, ties broken by who has played
-      // least — which keeps a strong pair from monopolising the fresh opponents.
-      let best = -1;
-      let bestCost = Infinity;
-      for (const other of remaining) {
-        const cost = (met.get(key(first, other)) ?? 0) * 10 + games[other];
-        if (cost < bestCost) {
-          bestCost = cost;
-          best = other;
-        }
-      }
-      remaining.delete(best);
-      round.push([first, best]);
-      met.set(key(first, best), (met.get(key(first, best)) ?? 0) + 1);
-      games[first]++;
-      games[best]++;
+  for (let attempt = 0; attempt < Math.max(1, restarts) && fewest > 0; attempt++) {
+    const got = attemptPairSchedule(pairCount, perRound, rounds, random);
+    if (got && got.repeats < fewest) {
+      fewest = got.repeats;
+      best = got.schedule;
     }
-
-    schedule.push(round);
   }
 
-  return schedule;
+  return best;
 }

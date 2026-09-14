@@ -134,7 +134,6 @@ export default function ManualRound({
         >
           {t("play.manual")}
         </button>
-        <p className="hint">{t("play.manualHint")}</p>
       </div>
     );
   }

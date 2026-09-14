@@ -336,7 +336,7 @@ export function MedalRoundButton({
           ? t("play.building")
           : armed
             ? t(semis ? "play.medalConfirm" : "play.finalsConfirm")
-            : t(semis ? "play.medal" : "play.finals")}
+            : t(semis ? "play.medalAuto" : "play.finals")}
       </button>
 
       {/* Say why it's greyed out. A disabled button with no reason is a dead end. */}
@@ -345,7 +345,7 @@ export function MedalRoundButton({
       ) : armed && !pending ? (
         <>
           <p className="hint text-center">
-            {t(semis ? "play.medalHint" : "play.finalsHint")}
+            {t(semis ? "play.medalAutoHint" : "play.finalsHint")}
           </p>
           <button
             type="button"
@@ -356,7 +356,7 @@ export function MedalRoundButton({
           </button>
         </>
       ) : (
-        <p className="hint">{t(semis ? "play.medalHint" : "play.finalsHint")}</p>
+        <p className="hint">{t(semis ? "play.medalAutoHint" : "play.finalsHint")}</p>
       )}
     </div>
   );

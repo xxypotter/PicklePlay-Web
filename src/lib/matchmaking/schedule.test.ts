@@ -178,6 +178,65 @@ describe("planFixedPartnerRounds", () => {
     expect(Math.max(...games) - Math.min(...games)).toBeLessThanOrEqual(1);
   });
 
+  it("runs a complete team round robin when one exists", () => {
+    /*
+     * The regression. A real night — eight teams, four courts, seven rounds —
+     * came out with 26 distinct matchups instead of 28, two of them played
+     * twice, because the matching was greedy and stranded the last two teams
+     * with a pairing they had already had.
+     *
+     * Eight teams over seven rounds is a decomposition of K8: 28 matchups, four
+     * per round, every team meeting every other exactly once. Checked across
+     * many seeds, because the bug only showed on some draws.
+     */
+    for (let seed = 1; seed <= 25; seed++) {
+      const schedule = planFixedPartnerRounds(8, 4, 7, { random: seeded(seed) })!;
+      const seen = flat(schedule).map(([a, b]) => (a < b ? `${a}|${b}` : `${b}|${a}`));
+
+      expect(seen).toHaveLength(28);
+      expect(new Set(seen).size).toBe(28);
+
+      const games = new Array(8).fill(0);
+      for (const [a, b] of flat(schedule)) {
+        games[a]++;
+        games[b]++;
+      }
+      expect(new Set(games)).toEqual(new Set([7]));
+    }
+  });
+
+  it("runs a complete round robin at other sizes too", () => {
+    for (const [teams, courts, rounds] of [
+      [6, 3, 5],
+      [10, 5, 9],
+      [10, 4, 9],
+      [8, 2, 7],
+    ] as const) {
+      const schedule = planFixedPartnerRounds(teams, courts, rounds, {
+        random: seeded(teams * 10 + courts),
+      })!;
+      const seen = flat(schedule).map(([a, b]) => (a < b ? `${a}|${b}` : `${b}|${a}`));
+      expect(new Set(seen).size).toBe(seen.length);
+    }
+  });
+
+  it("repeats no more often than the arithmetic forces", () => {
+    /*
+     * Eight teams over eight rounds is 32 match slots against 28 possible
+     * matchups, so exactly four have to happen twice — and none three times.
+     * Asserting the floor is what stops a regression quietly repeating six.
+     */
+    const schedule = planFixedPartnerRounds(8, 4, 8, { random: seeded(9) })!;
+    const counts = new Map<string, number>();
+    for (const [a, b] of flat(schedule)) {
+      const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    expect(counts.size).toBe(28);
+    expect([...counts.values()].filter((n) => n > 1)).toHaveLength(4);
+    expect(Math.max(...counts.values())).toBe(2);
+  });
+
   it("keeps going past the point where fresh matchups run out", () => {
     // Unlike the perfect-schedule search, this must not give up: a long
     // fixed-partner night simply replays opponents.

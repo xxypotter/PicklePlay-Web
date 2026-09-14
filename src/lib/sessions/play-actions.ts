@@ -463,6 +463,88 @@ export async function addMedalRoundAction(sessionId: string): Promise<void> {
 }
 
 /**
+ * A medal round the organizer drew themselves.
+ *
+ * The automatic bracket seeds 1v4 and 2v3 off the table, which is the right
+ * default and not always what the night calls for — a seeding can be unfair to a
+ * team that lost a game to injury, or the group may simply want a different
+ * final. This draws whichever two matchups they pick, at either stage.
+ *
+ * `stage` decides both what is being drawn and what has to be true first, so the
+ * gate is the same one the automatic version uses: semi-finals need every match
+ * scored, finals need both semi-finals played.
+ *
+ * Teams must be real fixed pairs. The builder can only offer pairs, but this is
+ * a POST endpoint and the format's whole promise is that partners stay together.
+ */
+export async function createCustomMedalRoundAction(
+  sessionId: string,
+  stage: "semifinal" | "final",
+  pairings: Array<[string, string, string, string]>,
+): Promise<void> {
+  const t = await getT();
+  await requireOrganizer(sessionId);
+  await requireLive(sessionId);
+
+  const db = getDb();
+
+  const found = await db
+    .select({ format: sessions.format })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (found[0]?.format !== "fixed") throw new Error(t("err.medalFixedOnly"));
+
+  const bracketRounds = await db
+    .select({ stage: rounds.stage })
+    .from(rounds)
+    .where(and(eq(rounds.sessionId, sessionId), ne(rounds.stage, "robin")));
+
+  if (stage === "semifinal") {
+    if (bracketRounds.length > 0) throw new Error(t("err.medalExists"));
+
+    const unscored = await db
+      .select({ id: matches.id })
+      .from(matches)
+      .where(and(eq(matches.sessionId, sessionId), eq(matches.status, "scheduled")))
+      .limit(1);
+
+    if (unscored.length > 0) throw new Error(t("err.medalNeedsAllScores"));
+  } else {
+    if (bracketRounds.some((r) => r.stage === "final")) throw new Error(t("err.finalsExist"));
+    if ((await playedMatches(sessionId, "semifinal")).length !== 2) {
+      throw new Error(t("err.finalsNeedSemis"));
+    }
+  }
+
+  // Exactly two matches, whichever stage: two semi-finals, or gold and bronze.
+  if (!Array.isArray(pairings) || pairings.length !== 2) {
+    throw new Error(t("err.medalNeedsTwo"));
+  }
+
+  const attending = await getAttending(sessionId);
+  const present = new Set(attending.map((p) => p.id));
+  const partnerOf = new Map(attending.map((p) => [p.id, p.partnerId]));
+
+  const checked = checkManualRound(pairings, 2, present);
+  if (!checked.ok) throw new Error(t(checked.error, checked.values));
+
+  for (const [a1, a2, b1, b2] of checked.pairings) {
+    for (const [x, y] of [
+      [a1, a2],
+      [b1, b2],
+    ]) {
+      if (partnerOf.get(x) !== y || partnerOf.get(y) !== x) {
+        throw new Error(t("err.medalNotAPair"));
+      }
+    }
+  }
+
+  await appendRound(sessionId, stage, checked.pairings);
+}
+
+/**
  * The finals: semi-final winners for gold, semi-final losers for bronze.
  *
  * Separate from the semi-finals because it cannot be known until those are

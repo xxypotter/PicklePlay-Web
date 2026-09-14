@@ -19,13 +19,16 @@ import { matches, players, playerStats, sessions, signups } from "@/lib/db/schem
 import { getInviteCode } from "@/lib/invite";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
+import { bracketFrom, teamRowsFrom } from "@/lib/sessions/team-view";
 import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { shareDescription } from "@/lib/sessions/share";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
 import Schedule from "./Schedule";
 import ShareLink from "./ShareLink";
+import MedalBracket from "./MedalBracket";
 import Standings from "./Standings";
+import TeamStandings from "./TeamStandings";
 import { DeleteSessionButton, EndSessionButton } from "./play/PlayControls";
 
 
@@ -195,6 +198,18 @@ export default async function SessionPage({
   const spotsLeft = Math.max(0, session.maxPlayers - playing.length);
 
   const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed).length;
+
+  /*
+   * Fixed partners is read as teams — the pair is the competitor, so the table
+   * ranks pairs and the medal goes to both halves of the one that won it. The
+   * bracket sits above, because "who won the night" is the first thing anybody
+   * opens this tab for and the table alone does not answer it.
+   */
+  const isFixed = session.format === "fixed";
+  const teamRows = isFixed
+    ? teamRowsFrom(allRounds, new Map(standings.map((r) => [r.playerId, r.ratingDelta])))
+    : [];
+  const bracket = isFixed ? bracketFrom(allRounds) : null;
   const base = `/s/${id}`;
   // A session is reached from Home, My sessions, the play console, or a shared
   // link. Only the caller knows which, so back follows `from` and falls back
@@ -233,7 +248,16 @@ export default async function SessionPage({
           live only on Matchups, where you find the match you actually played.
         */}
         {active === "standings" ? (
-          <Standings rows={standings} meId={me?.id} backHere={backHere} locale={me?.locale} />
+          <>
+            {bracket ? (
+              <MedalBracket bracket={bracket} meId={me?.id} locale={me?.locale} />
+            ) : null}
+            {isFixed ? (
+              <TeamStandings rows={teamRows} meId={me?.id} locale={me?.locale} />
+            ) : (
+              <Standings rows={standings} meId={me?.id} backHere={backHere} locale={me?.locale} />
+            )}
+          </>
         ) : active === "schedule" ? (
           <Schedule
             rounds={allRounds}
