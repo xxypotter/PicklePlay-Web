@@ -19,11 +19,30 @@ export const RATING = {
 
   /**
    * Spread constants for the two expectation curves (§5.3 step 1).
-   * D_POINTS: a 1.00 rating gap predicts ~78.6% point share (roughly 11-3).
+   * D_POINTS: a 1.00 rating gap predicts ~75.6% point share (roughly 11-4).
    * D_WIN:    a 1.00 rating gap predicts a ~90% win probability.
-   * D_WIN is deliberately steeper than D_POINTS.
+   *
+   * D_POINTS is fitted to this group's own games, not to DUPR. It was 1.33,
+   * which reproduced DUPR's Forecast tool exactly and did not fit how these
+   * players actually score. Tested across 323 matches, the rating picked the
+   * winner well but expected far bigger margins than happen here — at a 0.3–0.5
+   * gap it predicted the favourite takes 67% of the points, and they took 56%.
+   *
+   * Because every update is "actual share minus expected share", an inflated
+   * expectation punishes ordinary wins: about one match in five, the team that
+   * won lost rating. Courts where everyone is settled fit ~2.05, so this is not
+   * new-player noise. Replaying the whole history under each candidate, 2.05
+   * sits in the middle of the good range (1.8–2.3), cuts winners-losing-rating
+   * from 17% to 12%, and improves prediction for regulars by 14% — while keeping
+   * the average move per match where it was (0.083 against 0.084), which is why
+   * K did not need to change with it.
+   *
+   * The trade was made deliberately: the app serves the people who play here
+   * every week, so it is fitted to them rather than to a forecast tool.
+   *
+   * D_WIN is unused while ALPHA is 1 — it only ever enters multiplied by zero.
    */
-  D_POINTS: 1.33,
+  D_POINTS: 2.05,
   D_WIN: 1.0,
 
   /**
@@ -359,6 +378,35 @@ export const TUNING_V1_2: Tuning = {
 };
 
 /**
+ * v1.3 — the DUPR-fitted margin curve, before it was refitted to this group.
+ *
+ * Everything else about it is current: no first-matches boost, a floor under
+ * provisional ratings, v1.2's reliability. Only D_POINTS moved afterwards.
+ */
+export const TUNING_V1_3: Tuning = {
+  ALPHA: 1.0,
+  D_POINTS: 1.33,
+  K_LAW: "reliability-power",
+  K_BASE: 0.98,
+  K_EXPONENT: 1.06,
+  K_SETTLED: 0.188,
+  HALF_LIFE_SCALE: 40,
+  K_SEED_FLOOR: 0.15,
+  SEED_FLOOR_MATCHES: 5,
+  CAL_MATCHES: 5,
+  CAL_MULT: 1.0,
+  CAP_PROVISIONAL: 0.6,
+  CAP_RELIABLE: 0.5,
+  PROVISIONAL_FLOOR: 2.5,
+  PARTNERS_AT_60: RATING.PARTNERS_AT_60,
+  PARTNERS_AT_100: RATING.PARTNERS_AT_100,
+  TEAMS_AT_60: RATING.TEAMS_AT_60,
+  TEAMS_AT_100: RATING.TEAMS_AT_100,
+  VOLUME_AT_60: RATING.VOLUME_AT_60,
+  VOLUME_AT_100: RATING.VOLUME_AT_100,
+};
+
+/**
  * Every tuning this engine has used, newest first.
  *
  * A match replays under whichever was in force the day it was played, so
@@ -371,9 +419,12 @@ export const TUNING_V1_2: Tuning = {
  * behind it.
  */
 export const TUNING_EPOCHS: ReadonlyArray<{ from: Date; tuning: Tuning }> = [
+  // v1.4 — margin curve fitted to this group (D_POINTS 1.33 -> 2.05).
+  // Last match under v1.3: 2026-09-21T00:54Z.
+  { from: new Date("2026-09-21T12:00:00.000Z"), tuning: RATING },
   // v1.3 — the first-five-matches boost dropped, and a floor under provisional
   // ratings. Last match under v1.2: 2026-08-30T23:59Z.
-  { from: new Date("2026-08-31T00:00:00.000Z"), tuning: RATING },
+  { from: new Date("2026-08-31T00:00:00.000Z"), tuning: TUNING_V1_3 },
   // v1.2 — reliability tightened. Last match under v1.1: 2026-08-15T18:09Z.
   { from: new Date("2026-08-16T00:00:00.000Z"), tuning: TUNING_V1_2 },
   // v1.1 — DUPR recalibration. Last match under v1.0: 2026-08-09T13:24Z.

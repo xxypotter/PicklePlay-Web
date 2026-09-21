@@ -5,7 +5,7 @@
  * DUPR behavior they broke.
  */
 import { describe, expect, it } from "vitest";
-import { RATING, TUNING_V1_0, tuningFor, RECALIBRATED_FROM } from "./constants";
+import { RATING, TUNING_V1_0, TUNING_V1_3, tuningFor, RECALIBRATED_FROM } from "./constants";
 import {
   compression,
   evidenceWeight,
@@ -38,11 +38,21 @@ describe("expectation curves (§5.3 step 1)", () => {
     expect(expectedShare(4, 4, RATING.D_WIN)).toBeCloseTo(0.5, 10);
   });
 
-  it("calibrates a 1.00 gap to ~11-2 on points and ~90% on wins", () => {
+  it("calibrated a 1.00 gap to ~11-2 while it tracked DUPR (v1.1–v1.3)", () => {
     // D_POINTS came down to 1.33 in v1.1 to match the expected score DUPR's
-    // Forecast actually predicts, which is more lopsided than we assumed.
-    expect(expectedShare(4.5, 3.5, RATING.D_POINTS)).toBeCloseTo(0.85, 2);
+    // Forecast actually predicts. Matches from that era still replay under it.
+    expect(expectedShare(4.5, 3.5, TUNING_V1_3.D_POINTS)).toBeCloseTo(0.85, 2);
     expect(expectedShare(4.5, 3.5, RATING.D_WIN)).toBeCloseTo(0.909, 3);
+  });
+
+  it("now predicts a 1.00 gap at ~75% of the points, between 11-3 and 11-4", () => {
+    /*
+     * Fitted to this group's own games. At 1.33 the engine expected the
+     * favourite to take 67% of the points at a 0.3–0.5 gap, and they took 56%;
+     * courts where everyone was settled fit ~2.05.
+     */
+    expect(RATING.D_POINTS).toBe(2.05);
+    expect(expectedShare(4.5, 3.5, RATING.D_POINTS)).toBeCloseTo(0.7545, 3);
   });
 
   it("keeps the win curve steeper than the points curve at every gap", () => {
@@ -66,7 +76,43 @@ describe("expectation curves (§5.3 step 1)", () => {
  * The visible consequence: "up in a loss" and "down in a win" are now much
  * stronger than they were, because nothing is being paid for the win itself.
  */
-describe("worked examples (§5.5)", () => {
+describe("worked examples under the fitted curve (v1.4)", () => {
+  it("lets an ordinary win by the favourite earn rating", () => {
+    /*
+     * The point of the refit, in one match. A favourite by 0.30 wins 11-7 —
+     * a normal, convincing win. The DUPR-fitted curve expected 11-6.5 and took
+     * rating off them for it; the fitted curve expects about 11-8 and pays out.
+     * Across the whole history this is why winners losing rating fell from one
+     * match in six to one in eight.
+     */
+    expect(matchSurprise(3.8, 3.5, 11, 7, TUNING_V1_3)).toBeLessThan(0);
+    expect(matchSurprise(3.8, 3.5, 11, 7)).toBeGreaterThan(0);
+  });
+
+  it("still takes rating off a favourite who only just scrapes it", () => {
+    // Winning is still not worth anything by itself — ALPHA is unchanged.
+    expect(matchSurprise(4.5, 3.5, 11, 9)).toBeLessThan(0);
+  });
+
+  it("puts the expected score of a 1.00 gap between 11-3 and 11-4", () => {
+    expect(matchSurprise(4.5, 3.5, 11, 4)).toBeLessThan(0);
+    expect(matchSurprise(4.5, 3.5, 11, 3)).toBeGreaterThan(0);
+  });
+
+  it("changes nothing between even teams — the curve only bends away from 50%", () => {
+    expect(matchSurprise(MID, MID, 11, 9)).toBeCloseTo(
+      matchSurprise(MID, MID, 11, 9, TUNING_V1_3),
+      12,
+    );
+  });
+
+  it("switches over at the cutover, so older matches keep their curve", () => {
+    expect(tuningFor(new Date("2026-09-20T18:00:00Z")).D_POINTS).toBe(1.33);
+    expect(tuningFor(new Date("2026-09-22T18:00:00Z")).D_POINTS).toBe(2.05);
+  });
+});
+
+describe("worked examples (§5.5), under the DUPR-fitted curve", () => {
   it("even teams, win 11-9 → +0.0047 (barely better than expected)", () => {
     const s = matchSurprise(MID, MID, 11, 9);
     expect(s).toBeCloseTo(0.05, 4);
@@ -80,25 +126,25 @@ describe("worked examples (§5.5)", () => {
   });
 
   it("underdog by 1.00, wins 11-9 → +0.0376", () => {
-    const s = matchSurprise(3.5, 4.5, 11, 9);
+    const s = matchSurprise(3.5, 4.5, 11, 9, TUNING_V1_3);
     expect(s).toBeCloseTo(0.3996, 4);
     expect(delta(s)).toBeCloseTo(0.0376, 4);
   });
 
   it("favorite by 1.00, wins 11-2 → about nothing (that is the expected score)", () => {
-    const s = matchSurprise(4.5, 3.5, 11, 2);
+    const s = matchSurprise(4.5, 3.5, 11, 2, TUNING_V1_3);
     expect(s).toBeCloseTo(-0.0034, 4);
     expect(delta(s, 4.5)).toBeCloseTo(0, 3);
   });
 
   it("favorite by 1.00, wins 11-9 → -0.0282 (down in a win)", () => {
-    const s = matchSurprise(4.5, 3.5, 11, 9);
+    const s = matchSurprise(4.5, 3.5, 11, 9, TUNING_V1_3);
     expect(s).toBeLessThan(0);
     expect(delta(s, 4.5)).toBeCloseTo(-0.0282, 4);
   });
 
   it("underdog by 1.00, loses 9-11 → +0.0282 (up in a loss)", () => {
-    const s = matchSurprise(3.5, 4.5, 9, 11);
+    const s = matchSurprise(3.5, 4.5, 9, 11, TUNING_V1_3);
     expect(s).toBeGreaterThan(0);
     expect(delta(s)).toBeCloseTo(0.0282, 4);
   });

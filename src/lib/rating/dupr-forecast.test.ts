@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RATING, TUNING_V1_0 } from "./constants";
+import { TUNING_V1_0, TUNING_V1_3 } from "./constants";
 import { kFactor, matchSurprise, ratingDelta } from "./engine";
 
 /**
@@ -15,7 +15,14 @@ import { kFactor, matchSurprise, ratingDelta } from "./engine";
  * This is the only hard evidence we have about what DUPR actually does, so it
  * is a test rather than a comment. If someone retunes the engine and the signs
  * go back the wrong way, this fails.
+ *
+ * **It pins `TUNING_V1_3`, not the current tuning — on purpose.** From v1.4 the
+ * margin curve is fitted to this group's own games (D_POINTS 2.05), which no
+ * longer reproduces DUPR's forecast and was never meant to. But every match
+ * played before that cutover still replays under the DUPR-fitted tuning, so
+ * this remains the regression that guards those ratings.
  */
+const DUPR = TUNING_V1_3;
 const TEAM_A = (3.813 + 3.884) / 2;
 const TEAM_B = (4.22 + 4.369) / 2;
 const XIAYU_RATING = 3.813;
@@ -76,26 +83,29 @@ const SAM_HALF_LIFE = 25;
 const ours = (scoreA: number, scoreB: number) =>
   ratingDelta(
     XIAYU_RATING,
-    kFactor(XIAYU_RELIABILITY, XIAYU_MATCHES, RATING, XIAYU_HALF_LIFE),
-    matchSurprise(TEAM_A, TEAM_B, scoreA, scoreB),
+    kFactor(XIAYU_RELIABILITY, XIAYU_MATCHES, DUPR, XIAYU_HALF_LIFE),
+    matchSurprise(TEAM_A, TEAM_B, scoreA, scoreB, DUPR),
     true,
+    DUPR,
   );
 
 const sams = (scoreA: number, scoreB: number) =>
   ratingDelta(
     SAM_RATING,
-    kFactor(SAM_RELIABILITY, SAM_MATCHES, RATING, SAM_HALF_LIFE),
-    matchSurprise(TEAM_A, TEAM_B, scoreA, scoreB),
+    kFactor(SAM_RELIABILITY, SAM_MATCHES, DUPR, SAM_HALF_LIFE),
+    matchSurprise(TEAM_A, TEAM_B, scoreA, scoreB, DUPR),
     false,
+    DUPR,
   );
 
 const alecs = (scoreA: number, scoreB: number) =>
   ratingDelta(
     ALEC_RATING,
-    kFactor(1, ALEC_MATCHES, RATING, ALEC_HALF_LIFE),
+    kFactor(1, ALEC_MATCHES, DUPR, ALEC_HALF_LIFE),
     // Alec sits on the strong side, so the teams swap.
-    matchSurprise(TEAM_B, TEAM_A, scoreA, scoreB),
+    matchSurprise(TEAM_B, TEAM_A, scoreA, scoreB, DUPR),
     false,
+    DUPR,
   );
 
 describe("DUPR forecast: what the real thing does", () => {
@@ -211,7 +221,7 @@ describe("our engine against that forecast", () => {
 
 describe("the constants this evidence set", () => {
   it("weighs the score, not the win", () => {
-    expect(RATING.ALPHA).toBe(1);
+    expect(DUPR.ALPHA).toBe(1);
   });
 
   it("follows k = (1 - reliability), which is what the two players imply", () => {
@@ -219,7 +229,7 @@ describe("the constants this evidence set", () => {
     // straight line between them predicts a negative K for anyone fully
     // established, which is why the law is a power rather than a line.
     const fromReliability = (rel: number) =>
-      (RATING.K_BASE ?? 0) * Math.pow(1 - rel, RATING.K_EXPONENT ?? 1);
+      (DUPR.K_BASE ?? 0) * Math.pow(1 - rel, DUPR.K_EXPONENT ?? 1);
 
     expect(fromReliability(0.1)).toBeCloseTo(0.877, 2);
     expect(fromReliability(0.6)).toBeCloseTo(0.371, 2);
@@ -234,28 +244,28 @@ describe("the constants this evidence set", () => {
     // Reliability saturates at 100% and stops separating anyone; volume takes
     // over. Our most-played member noticing that his rating still moves — and
     // moves more than longer-serving opponents — is this effect.
-    const fresh = kFactor(1, 50, RATING, 0);
-    const seasoned = kFactor(1, 50, RATING, 120);
+    const fresh = kFactor(1, 50, DUPR, 0);
+    const seasoned = kFactor(1, 50, DUPR, 120);
     expect(fresh).toBeGreaterThan(0);
     expect(seasoned).toBeGreaterThan(0);
     expect(seasoned).toBeLessThan(fresh / 3);
   });
 
   it("matches the one 100% reliability reading we have", () => {
-    expect(kFactor(1, 118, RATING, 40)).toBeCloseTo(0.094, 3);
+    expect(kFactor(1, 118, DUPR, 40)).toBeCloseTo(0.094, 3);
   });
 
   it("hands over from the reliability law to the volume floor near 89%", () => {
     // Below the crossover the power law is larger and decides everything.
     const law = (rel: number) =>
-      (RATING.K_BASE ?? 0) * Math.pow(1 - rel, RATING.K_EXPONENT ?? 1);
-    expect(kFactor(0.6, 50, RATING, 40)).toBeCloseTo(law(0.6), 4);
-    expect(kFactor(0.95, 50, RATING, 40)).toBeGreaterThan(law(0.95));
+      (DUPR.K_BASE ?? 0) * Math.pow(1 - rel, DUPR.K_EXPONENT ?? 1);
+    expect(kFactor(0.6, 50, DUPR, 40)).toBeCloseTo(law(0.6), 4);
+    expect(kFactor(0.95, 50, DUPR, 40)).toBeGreaterThan(law(0.95));
   });
 
   it("uses the expected-score curve implied by DUPR's own prediction", () => {
     // DUPR forecast 5.5-11 off a 0.446 team-rating gap, and the fitted
     // break-even share was 0.316; both imply D around 1.33.
-    expect(RATING.D_POINTS).toBeCloseTo(1.33, 2);
+    expect(DUPR.D_POINTS).toBeCloseTo(1.33, 2);
   });
 });

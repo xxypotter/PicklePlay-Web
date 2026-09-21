@@ -5,7 +5,7 @@ import MarginChart from "@/components/MarginChart";
 import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
-import { matches, players, ratingEvents } from "@/lib/db/schema";
+import { matches, players, ratingEvents, sessions } from "@/lib/db/schema";
 import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
@@ -19,6 +19,8 @@ import {
 } from "@/lib/profile/record";
 
 import { titleFor } from "@/lib/i18n/metadata";
+import type { InsightMatch } from "@/lib/profile/insights";
+import Insights from "./Insights";
 
 export const generateMetadata = titleFor("record.title");
 
@@ -61,6 +63,7 @@ export default async function RecordPage({
       .select({
         matchId: matches.id,
         playedAt: matches.playedAt,
+        sessionId: matches.sessionId,
         a1: matches.a1,
         a2: matches.a2,
         b1: matches.b1,
@@ -103,7 +106,11 @@ export default async function RecordPage({
    * has a row here and no event. Missing means "this game didn't count",
    * which the row says out loud rather than showing a misleading 0.000.
    */
-  const [nameRows, deltaRows] = await Promise.all([
+  const sessionIds = [
+    ...new Set(played.map((m) => m.sessionId).filter((id): id is string => id !== null)),
+  ];
+
+  const [nameRows, deltaRows, formatRows, beforeRows] = await Promise.all([
     involved.size
       ? db
           .select({ id: players.id, username: players.username })
@@ -125,10 +132,59 @@ export default async function RecordPage({
             ),
           )
       : Promise.resolve([]),
+    // Which format each game was played in, for "which format suits them".
+    sessionIds.length
+      ? db
+          .select({ id: sessions.id, format: sessions.format })
+          .from(sessions)
+          .where(inArray(sessions.id, sessionIds))
+      : Promise.resolve([]),
+    /*
+     * Every player's rating going into each game, not just this player's: the
+     * expectation compares the two *teams*. Casual games have no events and so
+     * no expectation, which the insights handle by leaving them out of it.
+     */
+    matchIds.length
+      ? db
+          .select({
+            matchId: ratingEvents.matchId,
+            playerId: ratingEvents.playerId,
+            before: ratingEvents.ratingBefore,
+          })
+          .from(ratingEvents)
+          .where(inArray(ratingEvents.matchId, matchIds))
+      : Promise.resolve([]),
   ]);
 
   const nameOf = new Map(nameRows.map((n) => [n.id, n.username]));
   const movementOf = new Map(deltaRows.map((d) => [d.matchId, d]));
+
+  const formatOf = new Map(formatRows.map((r) => [r.id, r.format]));
+  const sessionOf = new Map(played.map((m) => [m.matchId, m.sessionId]));
+  const beforeOf = new Map<string, Map<string, number>>();
+  for (const r of beforeRows) {
+    if (!beforeOf.has(r.matchId)) beforeOf.set(r.matchId, new Map());
+    beforeOf.get(r.matchId)!.set(r.playerId, r.before);
+  }
+
+  const insightMatches: InsightMatch[] = record.matches.map((m) => {
+    const rb = beforeOf.get(m.matchId);
+    const us = rb?.get(player.id);
+    const mate = rb?.get(m.partnerId);
+    const o1 = rb?.get(m.opponentIds[0]);
+    const o2 = rb?.get(m.opponentIds[1]);
+    const rated = us !== undefined && mate !== undefined && o1 !== undefined && o2 !== undefined;
+    const sessionId = sessionOf.get(m.matchId);
+    return {
+      playedAt: m.playedAt,
+      won: m.won,
+      scoreFor: m.scoreFor,
+      scoreAgainst: m.scoreAgainst,
+      format: sessionId ? (formatOf.get(sessionId) ?? null) : null,
+      ours: rated ? (us + mate) / 2 : null,
+      theirs: rated ? (o1 + o2) / 2 : null,
+    };
+  });
 
   // Career = brought with them plus played here, matching Me and the rankings.
   const careerPlayed = player.importedMatches + record.played;
@@ -153,7 +209,11 @@ export default async function RecordPage({
         back={safeFrom(from, `/p/${player.username}`)}
       />
       <main className="screen pt-4">
-        {/* Deliberately no rating on this screen — that lives on My rating. */}
+        {/*
+          No rating *number* on this screen — that lives on My rating. Ratings
+          do appear indirectly: each match shows what it did to the rating, and
+          the insights use them to say what a result was expected to be.
+        */}
         <section className="card">
           <dl className="grid grid-cols-4 gap-2 text-center">
             <Stat label={t("common.played")} value={String(careerPlayed)} />
@@ -206,6 +266,8 @@ export default async function RecordPage({
             </p>
           </section>
         ) : null}
+
+        <Insights matches={insightMatches} isMe={isMe} t={t} />
 
         {facts.length > 0 ? (
           <section className="card mt-5">

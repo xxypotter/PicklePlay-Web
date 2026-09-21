@@ -17,6 +17,7 @@ import { auditLog, players, playerStats } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import { getInviteCode } from "@/lib/invite";
 import BackupCard from "./BackupCard";
+import DeletedSessions, { type DeletionEntry } from "./DeletedSessions";
 import InviteCard from "./InviteCard";
 import RosterCard from "./RosterCard";
 
@@ -31,6 +32,28 @@ export default async function AdminPage() {
 
   const t = await getT(me.locale);
   const db = getDb();
+
+  /*
+   * Deleted sessions are the super admin's to see and nobody else's. Gated on
+   * the query as well as the render, so an admin's page never even loads them.
+   */
+  const isSuper = isAtLeast(me.role, "superadmin");
+  const deletions: DeletionEntry[] = isSuper
+    ? (
+        await db
+          .select({
+            id: auditLog.id,
+            at: auditLog.createdAt,
+            detail: auditLog.detail,
+            actor: players.username,
+          })
+          .from(auditLog)
+          .leftJoin(players, eq(players.id, auditLog.actorId))
+          .where(eq(auditLog.action, "session.delete"))
+          .orderBy(desc(auditLog.createdAt))
+          .limit(30)
+      ).map((r) => ({ id: r.id, at: r.at, detail: r.detail, actor: r.actor }))
+    : [];
   const [code, rosterRows, headerList, lastBackupRow] = await Promise.all([
     getInviteCode(),
     db
@@ -115,6 +138,8 @@ export default async function AdminPage() {
         meRole={me.role}
         meId={me.id}
       />
+
+      {isSuper ? <DeletedSessions entries={deletions} t={t} /> : null}
       </main>
     </>
   );

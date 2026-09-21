@@ -184,7 +184,18 @@ export default function RegisterForm({
           <label className="label" htmlFor="skill">
             {t("auth.skillLevel")}
           </label>
-          <select id="skill" name="skill" className="field" defaultValue="intermediate">
+          {/*
+            No level is pre-selected. It used to default to Intermediate, and
+            26 of the first 36 players to register afterwards were rated at
+            exactly 3.00 — not because they were, but because they didn't touch
+            the box. Their first night then moved them by up to a full point.
+            An empty choice that has to be made is one tap, and it is a real
+            answer rather than a default nobody meant.
+          */}
+          <select id="skill" name="skill" className="field" defaultValue="" required>
+            <option value="" disabled>
+              {t("auth.skillChoose")}
+            </option>
             {SKILL_PICKER.map((s) => (
               <option key={s.key} value={s.key}>
                 {t(`skill.${s.key}`)}

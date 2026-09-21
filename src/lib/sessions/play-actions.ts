@@ -164,13 +164,30 @@ export async function deleteSessionAction(sessionId: string): Promise<void> {
   // Ownership is already settled by requireOrganizer; all we still need is
   // whether deleting this session has to roll ratings back.
   const found = await db
-    .select({ rated: sessions.rated })
+    .select({
+      rated: sessions.rated,
+      title: sessions.title,
+      startsAt: sessions.startsAt,
+      format: sessions.format,
+      status: sessions.status,
+    })
     .from(sessions)
     .where(eq(sessions.id, sessionId))
     .limit(1);
 
   const session = found[0];
   if (!session) return;
+
+  /*
+   * Recorded before the delete, because afterwards there is nothing to read.
+   * The log used to hold only the id of a session that no longer exists, so a
+   * deletion could be counted but never explained. The super admin sees these
+   * on the admin screen; nobody else does.
+   */
+  const played = await db
+    .select({ id: matches.id })
+    .from(matches)
+    .where(and(eq(matches.sessionId, sessionId), eq(matches.status, "completed")));
 
   await db.delete(sessions).where(eq(sessions.id, sessionId));
 
@@ -179,6 +196,13 @@ export async function deleteSessionAction(sessionId: string): Promise<void> {
     action: "session.delete",
     targetType: "session",
     targetId: sessionId,
+    detail: JSON.stringify({
+      title: session.title,
+      startsAt: session.startsAt.toISOString(),
+      format: session.format,
+      status: session.status,
+      played: played.length,
+    }),
   });
 
   if (session.rated) await recomputeAll();
@@ -607,9 +631,28 @@ export async function saveScoreAction(
   if (scoreA === scoreB) return { error: t("schedule.error.tie") };
   if (scoreA > 99 || scoreB > 99) return { error: t("schedule.error.range") };
 
+  /*
+   * `editedAt` marks a correction, so it is only set when there was already a
+   * score to correct. It used to be stamped on every save including the first,
+   * which made all 323 matches look "corrected" and left no way to tell how
+   * often a wrong score actually gets fixed.
+   */
+  const previous = await db
+    .select({ status: matches.status })
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .limit(1);
+  const correcting = previous[0]?.status === "completed";
+
   await db
     .update(matches)
-    .set({ scoreA, scoreB, status: "completed", enteredBy: me.id, editedAt: new Date() })
+    .set({
+      scoreA,
+      scoreB,
+      status: "completed",
+      enteredBy: me.id,
+      ...(correcting ? { editedAt: new Date() } : {}),
+    })
     .where(eq(matches.id, matchId));
 
   await recomputeIfRated(sessionId);
