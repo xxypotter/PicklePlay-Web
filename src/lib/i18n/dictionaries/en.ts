@@ -402,6 +402,7 @@ export const en = {
   "notes.v14.firstNight": "Your first session no longer swings your rating quite so far. New players were moving further in one evening than the rest of the group moves in a month, so the extra boost on a player's first few matches has been dropped — you still find your level in a night or two, just less violently. Matches already played keep the numbers they had; nothing was rewritten.",
   "notes.v14.floor": "A rating that is still settling can no longer be pushed to the very bottom of the scale. One rough first night used to be enough to land there, which said more about the draw than about the player.",
   "notes.v14.genderBalance": "Gender balanced now evens up the two teams as well. It still never puts two men against two women, and still rotates partners just as widely — closer teams are only the tie-breaker between the draws that already do both. Measured on a real night, that roughly halves the one-sided games.",
+  "notes.v16.copySession": "Finished sessions can be copied. Open a past session and tap Copy to a new session: the form opens with the same setup — title, place, courts, format, notes — on the coming occurrence of the same weekday and time. Players aren’t copied, and nothing is created until you press Create.",
   "notes.v16.rating": "Ratings now fit how this group actually plays. The rating expected bigger winning margins than games here usually have, so about one match in five, the team that won still lost rating. The expected score is now fitted to your own results, which cuts that roughly in half. Matches already played keep the numbers they had; nothing was rewritten.",
   "notes.v16.record": "My record has a new How you play section: how you do against stronger, even and weaker teams, your recent form, which format suits you, and how you do in close games. Results are measured against what the ratings predicted, so losing to a much stronger team isn’t held against you. Each part appears once there are enough games for it to mean something.",
   "notes.v16.signup": "New players now choose their level when they sign up, instead of starting on a preset one.",
@@ -812,6 +813,11 @@ export const en = {
   "admin.deletedPlayed": "{count} matches played",
   "admin.deletedBy": "Deleted by {name}",
   "admin.deletedHint": "Only the super admin can see this. Matches played in red means a session with real results was thrown away.",
+  "session.copyAsNew": "Copy to a new session",
+  "form.copySession": "Copy session",
+  "form.copyingFrom": "Copying “{title}”",
+  "form.copyingHint": "Same setup, no players. Nothing is created until you press Create.",
+  "form.copyDateHint": "Moved to the same weekday and time, this coming week — check it before creating.",
   "err.roundScored": "That round already has scores. Void the matches instead.",
 } as const;
 

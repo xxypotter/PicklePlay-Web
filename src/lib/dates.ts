@@ -38,3 +38,25 @@ export function comingSaturday(now: Date = new Date()): Date {
   d.setHours(SESSION_START_HOUR);
   return d;
 }
+
+/**
+ * The same weekday and wall-clock time as `from`, a whole number of weeks
+ * later, and strictly after `now`.
+ *
+ * Used to copy a past session: last Saturday's 6pm becomes this Saturday's
+ * 6pm. Always at least one week on from `from`, even if `from` is somehow
+ * still ahead — a copy is the next one, never a second session in the same
+ * slot.
+ *
+ * Steps with `setDate` on the local calendar, not by adding milliseconds. A
+ * week is not always 168 hours: across the end of daylight saving it is 169,
+ * and adding a fixed seven days of milliseconds would turn a 6pm session into
+ * a 5pm one. Stepping the calendar keeps the wall clock where it was.
+ */
+export function nextWeekly(from: Date, now: Date = new Date()): Date {
+  const d = new Date(from);
+  do {
+    d.setDate(d.getDate() + 7);
+  } while (d.getTime() <= now.getTime());
+  return d;
+}

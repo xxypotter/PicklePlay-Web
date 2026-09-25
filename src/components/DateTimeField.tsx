@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { comingSaturday, toLocalInput } from "@/lib/dates";
+import { comingSaturday, nextWeekly, toLocalInput } from "@/lib/dates";
 
 /**
  * A date-and-time field showing the *viewer's* wall clock.
@@ -23,11 +23,19 @@ export default function DateTimeField({
   name,
   /** ISO instant to show, or null to default to the coming Saturday at 6pm. */
   initialIso = null,
+  /**
+   * Copying a session: show the coming occurrence of this instant's weekday
+   * and time instead. Worked out here rather than on the server for the same
+   * reason as everything else in this field — only the browser knows which
+   * weekday and hour the organizer means.
+   */
+  weeklyAfter = null,
   required = true,
 }: {
   id: string;
   name: string;
   initialIso?: string | null;
+  weeklyAfter?: string | null;
   required?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -35,8 +43,14 @@ export default function DateTimeField({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.value = toLocalInput(initialIso ? new Date(initialIso) : comingSaturday());
-  }, [initialIso]);
+    el.value = toLocalInput(
+      weeklyAfter
+        ? nextWeekly(new Date(weeklyAfter))
+        : initialIso
+          ? new Date(initialIso)
+          : comingSaturday(),
+    );
+  }, [initialIso, weeklyAfter]);
 
   return (
     <input

@@ -6,6 +6,7 @@ import type { FormState } from "@/lib/auth/types";
 import DateTimeField from "@/components/DateTimeField";
 import LocationField, { noteForVenue } from "@/components/LocationField";
 import { useT } from "@/lib/i18n/client";
+import type { CopySource } from "@/lib/sessions/copy";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
 const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "custom"] as const;
@@ -22,18 +23,27 @@ export interface PickablePlayer {
 export default function SessionForm({
   roster,
   canMakePrivate = false,
+  copy = null,
 }: {
   roster: PickablePlayer[];
   /** Super admin only; the checkbox simply isn't rendered for anyone else. */
   canMakePrivate?: boolean;
+  /**
+   * A past session to start from. Everything is filled in except the players
+   * and the date, which moves to the coming occurrence of the same weekday and
+   * time. Nothing is created until the organizer presses Create, so the new
+   * date can be checked first.
+   */
+  copy?: CopySource | null;
 }) {
   const t = useT();
   const [state, action, pending] = useActionState(createSessionAction, {} as FormState);
-  const [courts, setCourts] = useState("1, 2");
-  const [format, setFormat] = useState("regular");
+  const [courts, setCourts] = useState(copy?.courts ?? "1, 2");
+  const [format, setFormat] = useState<string>(copy?.format ?? "regular");
+  // Never copied: a new night is a new sign-up.
   const [invited, setInvited] = useState<string[]>([]);
-  const [location, setLocation] = useState("");
-  const [notes, setNotes] = useState("");
+  const [location, setLocation] = useState(copy?.location ?? "");
+  const [notes, setNotes] = useState(copy?.notes ?? "");
 
   /* Picking Katy fills in its booking note; leaving Katy takes it back out.
      noteForVenue never touches anything the organizer typed themselves. */
@@ -50,7 +60,7 @@ export default function SessionForm({
    * onto a stubborn "1". The field now accepts anything you type, including
    * empty, and validity is reported separately.
    */
-  const [maxPlayersText, setMaxPlayersText] = useState("9");
+  const [maxPlayersText, setMaxPlayersText] = useState(String(copy?.maxPlayers ?? 9));
 
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
   const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
@@ -81,6 +91,13 @@ export default function SessionForm({
         hidden.value = local ? new Date(local).toISOString() : "";
       }}
     >
+      {copy ? (
+        <div className="card-tight border border-[var(--accent)] bg-[var(--accent-soft)] px-4 py-3">
+          <p className="text-sm font-semibold">{t("form.copyingFrom", { title: copy.title })}</p>
+          <p className="hint mt-0.5">{t("form.copyingHint")}</p>
+        </div>
+      ) : null}
+
       <div>
         <label className="label" htmlFor="title">
           {t("form.title")}
@@ -90,9 +107,9 @@ export default function SessionForm({
           name="title"
           className="field"
           maxLength={80}
-          defaultValue={t("form.defaultTitle")}
+          defaultValue={copy?.title ?? t("form.defaultTitle")}
           required
-          autoFocus
+          autoFocus={!copy}
         />
       </div>
 
@@ -107,8 +124,9 @@ export default function SessionForm({
         <label className="label" htmlFor="startsAtLocal">
           {t("form.datetime")}
         </label>
-        <DateTimeField id="startsAtLocal" name="startsAtLocal" />
+        <DateTimeField id="startsAtLocal" name="startsAtLocal" weeklyAfter={copy?.startsAt} />
         <input type="hidden" name="startsAt" />
+        {copy ? <p className="hint">{t("form.copyDateHint")}</p> : null}
       </div>
 
       <div>
@@ -274,7 +292,12 @@ export default function SessionForm({
       ) : null}
 
       <label className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-4">
-        <input type="checkbox" name="rated" defaultChecked className="size-5 accent-[var(--accent)]" />
+        <input
+          type="checkbox"
+          name="rated"
+          defaultChecked={copy ? copy.rated : true}
+          className="size-5 accent-[var(--accent)]"
+        />
         <span>
           <span className="font-medium">{t("form.rated")}</span>
           <span className="hint block">{t("form.ratedHint")}</span>
@@ -283,7 +306,12 @@ export default function SessionForm({
 
       {canMakePrivate ? (
         <label className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-4">
-          <input type="checkbox" name="isPrivate" className="size-5 accent-[var(--accent)]" />
+          <input
+            type="checkbox"
+            name="isPrivate"
+            defaultChecked={copy?.isPrivate ?? false}
+            className="size-5 accent-[var(--accent)]"
+          />
           <span>
             <span className="font-medium">{t("form.private")}</span>
             <span className="hint block">{t("form.privateHint")}</span>

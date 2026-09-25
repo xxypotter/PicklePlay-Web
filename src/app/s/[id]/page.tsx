@@ -8,6 +8,7 @@ import LocalDateTime from "@/components/LocalDateTime";
 import Tabs from "@/components/Tabs";
 import TopBar, { safeFrom } from "@/components/TopBar";
 import {
+  canManageSessions,
   canOrganizeSession,
   canScoreMatch,
   canSeeSession,
@@ -193,6 +194,11 @@ export default async function SessionPage({
    * once the session closes and the result becomes a record.
    */
   const organizer = !!me && canOrganizeSession(me, session);
+  /*
+   * Any admin may copy a finished session — copying only pre-fills the create
+   * form, which any admin can already use — not just the one who ran it.
+   */
+  const canCopy = session.status === "closed" && !!me && canManageSessions(me.role);
   const canScoreAny = !!me && canScoreMatch(me, session, false);
   const canScoreMine = !!me && canScoreMatch(me, session, true);
   const spotsLeft = Math.max(0, session.maxPlayers - playing.length);
@@ -371,7 +377,7 @@ export default async function SessionPage({
               started, so the play console moves to a secondary link and the
               headline action becomes the one that's actually left to do.
             */}
-            {organizer ? (
+            {organizer || canCopy ? (
               <div className="mt-4 flex flex-col gap-2">
                 {session.status === "open" ? (
                   <>
@@ -394,9 +400,26 @@ export default async function SessionPage({
                     </Link>
                   </>
                 ) : (
-                  <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
-                    {t("session.manage")}
-                  </Link>
+                  <>
+                    {/*
+                      A finished session's most useful next step is running it
+                      again. This only fills in the create form; nothing exists
+                      until the organizer checks the new date and presses Create.
+                    */}
+                    {canCopy ? (
+                      <Link
+                        href={`/sessions/new?copy=${id}&from=${encodeURIComponent(backHere)}`}
+                        className="btn-accent block text-center"
+                      >
+                        {t("session.copyAsNew")}
+                      </Link>
+                    ) : null}
+                    {organizer ? (
+                      <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">
+                        {t("session.manage")}
+                      </Link>
+                    ) : null}
+                  </>
                 )}
               </div>
             ) : null}
