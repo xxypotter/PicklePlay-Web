@@ -1,5 +1,42 @@
 # Shared work log
 
+## Active: flexible Mini MLP within v1.7 — Codex, 2026-09-26
+
+Baseline e5c8984, branch codex/v1.7-flexible-mlp. User requested 4/5/6 teams
+and clarified that every gender combination is valid, including all men or all
+women. This supersedes the original six-team/gender constraints below.
+
+- Four courts and four players per team remain fixed; capacity=16/20/24 selects
+  the count. Complete RR schedules have 6/10/15 encounters and 24/40/60 games.
+- Top four still qualify (all teams when there are four). Five teams get one bye
+  each. Two fixed pairs and the opening lineups remain locked during play.
+- Neutral labels: each fixed pair has Player 1 (legacy w slot) and Player 2 (m).
+  Opening doubles pair the two Player 1s and two Player 2s; then fixed pairs play.
+- Keep schema, historical matches and the six-team schedule unchanged. No DB
+  migration or rating retuning. All three languages, PORT and PORT-v1.7 updated.
+- Files: MLP rules/actions/setup/board + new MlpTeamCount selector; session
+  create/edit capacity guards, play-page count prop, three dictionaries, shared
+  map and both port files. Schema changes are comments only.
+- 336 standard tests pass; five opt-in DB workflow tests pass separately on
+  pickleplay_dev. Complete 36/52/72-game tournaments checked through finals;
+  real profiles cover all-men, all-women, 3+1, 1+3, 2+2 and unspecified gender.
+  Tested unique opponents, equal workloads, five-team byes, lineup locking,
+  capacity validation, top-four seeding, ties and existing fixed-pair safeguards.
+- Browser: edited capacity 5→6→5; create form selects 4 teams/16 players;
+  unrestricted 20-option setup saved; five-team draw created 40 games/10 waves.
+  Neutral game labels and mobile standings verified without horizontal overflow.
+  Added spacing between mobile standings columns. Development preview at
+  ignored .scratch/v1.7-flexible-standings.png.
+- Typecheck, lint and final production build pass, including the mobile spacing
+  adjustment. Synthetic development fixtures cleaned up. Commit/push and
+  production deployment verification are pending.
+- Sanitized production backup saved to ignored local-backups/
+  v1.7-flexible-before-2026-09-26T23-05-03-431Z.json: 116 players, 121 seeds,
+  21 sessions, 198 signups, 180 rounds, 381 matches; no production MLP teams yet.
+  No production data edits or migrations. This agent owns the active release.
+
+## Original v1.7 release history (constraints superseded above)
+
 ## Completed: v1.7 — Codex, 2026-09-26
 
 Baseline: main 0a9a320 (v1.6), 316 tests / 19 files, typecheck/lint/build pass.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GAME_KINDS, lineups, outcome, ROBIN_BLOCKS, standings, validateTeams, type Encounter, type Team } from "./rules";
+import { GAME_KINDS, lineups, outcome, robinBlocks, roundRobinReady, standings, validMlpConfig, validateTeams, type Encounter, type Team } from "./rules";
 
 const teams: Team[] = Array.from({length:6},(_,i)=>({id:`t${i}`,slot:i+1,name:`Team ${i+1}`,
   m1:`${i}m1`,m2:`${i}m2`,w1:`${i}w1`,w2:`${i}w2`}));
@@ -9,12 +9,18 @@ const encounter = (scores:number[][], extra:Partial<Encounter>={}): Encounter =>
 });
 
 describe("Mini MLP",()=>{
-  it("plays every opponent once, with no double-booked players in either wave",()=>{
+  it.each([4,5,6])("%i teams: every opponent once, no double bookings, equal games and correct byes",(count)=>{
     const pairs=new Set<string>(), counts=new Map<string,number>();
-    for(const block of ROBIN_BLOCKS){
+    const blocks=robinBlocks(count);
+    expect(blocks).toHaveLength(count===6?8:count===5?5:3);
+    const byes=Array(count).fill(0);
+    for(const block of blocks){
+      const playing=new Set(block.flat());
+      for(let i=0;i<count;i++) if(!playing.has(i)) byes[i]++;
       expect(block.length).toBeLessThanOrEqual(2);
       const waves=[new Set<string>(),new Set<string>()];
       for(const [a,b] of block){
+        expect(a).toBeLessThan(count); expect(b).toBeLessThan(count); expect(a).not.toBe(b);
         const key=[a,b].sort().join("|"); expect(pairs.has(key)).toBe(false); pairs.add(key);
         lineups(teams[a],teams[b]).forEach((g,gi)=>g.players.forEach(p=>{
           const wave=waves[Math.floor(gi/2)]; expect(wave.has(p)).toBe(false); wave.add(p);
@@ -22,8 +28,10 @@ describe("Mini MLP",()=>{
         }));
       }
     }
-    expect(pairs.size).toBe(15); expect(counts.size).toBe(24);
-    expect([...counts.values()]).toEqual(Array(24).fill(10));
+    expect(pairs.size).toBe(count*(count-1)/2); expect(counts.size).toBe(count*4);
+    expect([...counts.values()]).toEqual(Array(count*4).fill((count-1)*2));
+    if(count===5) expect(byes).toEqual([1,1,1,1,1]);
+    if(count===4) expect(byes).toEqual([0,0,0,0]);
   });
   it("keeps setup mixed partners against every opponent, including playoff encounters",()=>{
     for(const a of teams) for(const b of teams.filter(t=>t!==a)) {
@@ -32,13 +40,40 @@ describe("Mini MLP",()=>{
       expect(games[3].players).toEqual([a.m2,a.w2,b.m2,b.w2]);
     }
   });
-  it("validates six unique named teams, genders and all 24 distinct players",()=>{
-    const roster=new Map(teams.flatMap(t=>[[t.m1,"male"],[t.m2,"male"],[t.w1,"female"],[t.w2,"female"]] as [string,string][]));
-    expect(validateTeams(teams,roster)).toBe(true);
-    expect(validateTeams(teams.slice(1),roster)).toBe(false);
+  it.each([4,5,6])("validates exactly %i teams using distinct roster members, without gender restrictions", count=>{
+    const selected=teams.slice(0,count);
+    const roster=new Set(selected.flatMap(t=>[t.m1,t.m2,t.w1,t.w2]));
+    expect(validateTeams(selected,roster,count)).toBe(true);
+    // Swap across historical gender-named slots; only membership matters now.
+    expect(validateTeams([{...selected[0],m1:selected[0].w1,w1:selected[0].m1},...selected.slice(1)],roster,count)).toBe(true);
+    expect(validateTeams(selected.slice(1),roster,count)).toBe(false);
+    expect(validateTeams(selected,new Set([...roster,"extra"]),count)).toBe(false);
     for(const changes of [{m1:teams[1].m1},{m1:teams[0].w1},{name:" "},{name:teams[1].name},{w1:"outsider"}]) {
-      expect(validateTeams([{...teams[0],...changes},...teams.slice(1)],roster)).toBe(false);
+      expect(validateTeams([{...selected[0],...changes},...selected.slice(1)],roster,count)).toBe(false);
     }
+  });
+  it("rejects unsupported capacities/courts and schedules",()=>{
+    for(const count of [4,5,6]) expect(validMlpConfig(4,count*4)).toBe(true);
+    for(const count of [0,3,4.5,7,NaN]) {
+      expect(validMlpConfig(4,count*4)).toBe(false);
+      expect(()=>robinBlocks(count)).toThrow();
+    }
+    expect(validMlpConfig(3,16)).toBe(false);
+    expect(validMlpConfig(5,20)).toBe(false);
+  });
+  it.each([4,5,6])("%i teams: playoffs require every unique opponent, with all four games resolved",count=>{
+    const selected=teams.slice(0,count);
+    const ties=robinBlocks(count).flatMap((block,bi)=>block.map(([a,b],i)=>encounter(
+      [[11,8],[11,8],[11,8],[11,8]],{id:`${bi}-${i}`,teamAId:selected[a].id,teamBId:selected[b].id},
+    )));
+    expect(roundRobinReady(selected,ties)).toBe(true);
+    expect(roundRobinReady(selected,ties.slice(1))).toBe(false);
+    expect(roundRobinReady(selected,[ties[1],...ties.slice(1)])).toBe(false);
+    expect(roundRobinReady(selected,[{...ties[0],games:ties[0].games.slice(1)},...ties.slice(1)])).toBe(false);
+    expect(roundRobinReady(selected,[{...ties[0],teamBId:"outsider"},...ties.slice(1)])).toBe(false);
+    const tied={...ties[0],games:encounter([[11,8],[8,11],[11,8],[8,11]]).games};
+    expect(roundRobinReady(selected,[tied,...ties.slice(1)])).toBe(false);
+    expect(roundRobinReady(selected,[{...tied,tiebreakWinner:tied.teamAId},...ties.slice(1)])).toBe(true);
   });
   it("uses game wins first, then total points only at 2–2",()=>{
     expect(outcome(encounter([[11,10],[11,10],[11,10],[0,11]])).winner).toBe("t0");

@@ -32,7 +32,7 @@ import {
  */
 /**
  * Gender supports rankings, the gender-balanced draw restriction, and Mini
- * MLP's two-men/two-women roster. Unspecified is allowed outside Mini MLP.
+ * MLP profiles. Mini MLP lineup slots accept any gender, including unspecified.
  */
 export const genderEnum = pgEnum("gender", ["male", "female", "unspecified"]);
 
@@ -262,7 +262,9 @@ export const rounds = pgTable(
   (t) => [uniqueIndex("rounds_session_index_idx").on(t.sessionId, t.index)],
 );
 
-/** Mini MLP: six named teams, each with four fixed members. */
+/** Mini MLP: 4–6 named teams, each with four fixed members.
+ * Legacy m/w columns are lineup slots, not gender constraints: fixed pairs are
+ * m1+w1 and m2+w2; opening doubles use w1+w2 and m1+m2. */
 export const mlpTeams = pgTable("mlp_teams", {
   id: uuid("id").primaryKey().defaultRandom(),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),

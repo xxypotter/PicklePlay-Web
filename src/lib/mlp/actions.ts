@@ -7,38 +7,38 @@ import { requireOrganizer } from "@/lib/sessions/guards";
 import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
 import { auditLog, matches, mlpTeams, mlpTies, players, rounds, sessions, signups } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
-import { lineups, outcome, ROBIN_BLOCKS, standings, validateTeams, type Encounter, type Stage, type Team } from "./rules";
+import { lineups, outcome, robinBlocks, roundRobinReady, standings, validMlpConfig, validateTeams, type Encounter, type Stage, type Team } from "./rules";
 
 function refresh(id: string) {
   revalidatePath(`/s/${id}`); revalidatePath(`/s/${id}/play`);
 }
 
-async function organize<T>(id: string, work: (db: Transaction, actorId: string) => Promise<T>, live: boolean | null = true) {
+async function organize<T>(id: string, work: (db: Transaction, context: { actorId: string; teamCount: number }) => Promise<T>, live: boolean | null = true) {
   const { me } = await requireOrganizer(id);
   const t = await getT();
   return inTransaction(async db => {
     await lockSession(db, id);
     const [session] = await db.select().from(sessions).where(eq(sessions.id,id));
     if (!session || !canOrganizeSession(me,session)) throw new Error(t("err.notOrganizer"));
-    if (session.format !== "mlp" || session.courtCount !== 4 || session.maxPlayers !== 24) {
+    if (session.format !== "mlp" || !validMlpConfig(session.courtCount,session.maxPlayers)) {
       throw new Error(t("mlp.error.setup"));
     }
     if (live !== null && (live ? session.status !== "live" : !["open","live"].includes(session.status))) {
       throw new Error(t("err.startFirst"));
     }
-    return work(db,me.id);
+    return work(db,{actorId:me.id,teamCount:session.maxPlayers/4});
   });
 }
 
 export async function saveMlpTeamsAction(sessionId: string, input: unknown): Promise<void> {
   const t = await getT();
-  await organize(sessionId, async db => {
+  await organize(sessionId, async (db,{teamCount}) => {
     const existing = await db.select({id:rounds.id}).from(rounds).where(eq(rounds.sessionId,sessionId)).limit(1);
     if (existing.length) throw new Error(t("mlp.error.teamsLocked"));
-    const roster = await db.select({id:players.id,gender:players.gender}).from(signups)
+    const roster = await db.select({id:players.id}).from(signups)
       .innerJoin(players,eq(players.id,signups.playerId))
       .where(and(eq(signups.sessionId,sessionId),eq(signups.state,"in"),eq(signups.attended,true)));
-    if (roster.length !== 24 || !validateTeams(input,new Map(roster.map(p=>[p.id,p.gender])))) {
+    if (!validateTeams(input,new Set(roster.map(p=>p.id)),teamCount)) {
       throw new Error(t("mlp.error.teams"));
     }
     await db.delete(mlpTeams).where(eq(mlpTeams.sessionId,sessionId));
@@ -89,17 +89,17 @@ async function appendBlocks(db: Transaction, sessionId: string, teams: Team[],
 
 export async function createMlpScheduleAction(sessionId: string): Promise<void> {
   const t = await getT();
-  await organize(sessionId,async db=>{
+  await organize(sessionId,async (db,{teamCount})=>{
     const existing = await db.select({id:rounds.id}).from(rounds).where(eq(rounds.sessionId,sessionId)).limit(1);
     if (existing.length) throw new Error(t("mlp.error.teamsLocked"));
     const teams=await db.select().from(mlpTeams).where(eq(mlpTeams.sessionId,sessionId)).orderBy(asc(mlpTeams.slot));
-    const roster=await db.select({id:players.id,gender:players.gender}).from(signups)
+    const roster=await db.select({id:players.id}).from(signups)
       .innerJoin(players,eq(players.id,signups.playerId)).where(and(eq(signups.sessionId,sessionId),
         eq(signups.state,"in"),eq(signups.attended,true)));
-    if (roster.length!==24 || !validateTeams(teams,new Map(roster.map(p=>[p.id,p.gender])))) {
+    if (!validateTeams(teams,new Set(roster.map(p=>p.id)),teamCount)) {
       throw new Error(t("mlp.error.teams"));
     }
-    await appendBlocks(db,sessionId,teams,ROBIN_BLOCKS,"robin");
+    await appendBlocks(db,sessionId,teams,robinBlocks(teamCount),"robin");
   });
   refresh(sessionId);
 }
@@ -133,7 +133,7 @@ export async function addMlpPlayoffAction(sessionId: string): Promise<void> {
       await appendBlocks(db,sessionId,finalists,[[[0,1]]],"final");
     } else {
       const robin=ties.filter(t=>t.stage==="robin");
-      if (teams.length!==6 || robin.length!==15 || robin.some(r=>!outcome(r).winner)) {
+      if (!roundRobinReady(teams,robin)) {
         throw new Error(t("mlp.error.playoffReady"));
       }
       const seeds=standings(teams,robin).map(r=>r.team);
@@ -145,7 +145,7 @@ export async function addMlpPlayoffAction(sessionId: string): Promise<void> {
 
 export async function setMlpTiebreakAction(sessionId: string, tieId: string, winner: string): Promise<void> {
   const t=await getT();
-  await organize(sessionId,async (db,actorId)=>{
+  await organize(sessionId,async (db,{actorId})=>{
     const ties=await readEncounters(db,sessionId);
     const tie=ties.find(t=>t.id===tieId);
     if (!tie || ![tie.teamAId,tie.teamBId].includes(winner)) throw new Error(t("mlp.error.tie"));

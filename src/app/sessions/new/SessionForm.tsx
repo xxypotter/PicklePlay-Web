@@ -6,6 +6,7 @@ import type { FormState } from "@/lib/auth/types";
 import DateTimeField from "@/components/DateTimeField";
 import LocationField, { noteForVenue } from "@/components/LocationField";
 import { useT } from "@/lib/i18n/client";
+import MlpTeamCount from "@/components/mlp/MlpTeamCount";
 import type { CopySource } from "@/lib/sessions/copy";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
@@ -154,6 +155,7 @@ export default function SessionForm({
       </div>
 
       <div>
+        {format === "mlp" ? <MlpTeamCount players={maxPlayersText} onChange={setMaxPlayersText} /> : null}
         <label className="label" htmlFor="maxPlayers">
           {t("form.maxPlayers")}
         </label>
@@ -173,7 +175,7 @@ export default function SessionForm({
           <p className="mt-1.5 text-sm font-medium text-[var(--danger)]">
             {t("form.maxPlayersBad", { cap: seatCap })}
           </p>
-        ) : (
+        ) : format !== "mlp" ? (
           <p className="hint">
             {t("form.maxPlayersHint", {
               perCourt: PLAYERS_PER_COURT,
@@ -181,7 +183,7 @@ export default function SessionForm({
               courts: Math.min(MAX_COURTS, Math.max(1, courtCount)),
             })}
           </p>
-        )}
+        ) : null}
       </div>
 
       {/* Format cards rather than a dropdown: the descriptions are the whole
@@ -196,7 +198,7 @@ export default function SessionForm({
               <button
                 key={key}
                 type="button"
-                onClick={() => { setFormat(key); if (key === "mlp") { setCourts("1, 2, 3, 4"); setMaxPlayersText("24"); } }}
+                onClick={() => { setFormat(key); if (key === "mlp" && format !== "mlp") { setCourts("1, 2, 3, 4"); setMaxPlayersText("24"); } }}
                 aria-pressed={on}
                 className={`rounded-xl border p-3 text-left transition ${
                   on

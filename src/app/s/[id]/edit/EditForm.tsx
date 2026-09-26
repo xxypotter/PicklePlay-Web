@@ -6,6 +6,7 @@ import { updateSessionAction } from "@/lib/sessions/edit-actions";
 import DateTimeField from "@/components/DateTimeField";
 import LocationField, { noteForVenue } from "@/components/LocationField";
 import { useT } from "@/lib/i18n/client";
+import MlpTeamCount from "@/components/mlp/MlpTeamCount";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
 const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
@@ -111,6 +112,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
       </div>
 
       <div>
+        {format === "mlp" ? <MlpTeamCount players={maxPlayersText} onChange={setMaxPlayersText} /> : null}
         <label className="label" htmlFor="maxPlayers">
           {t("form.maxPlayers")}
         </label>
@@ -130,7 +132,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
           <p className="mt-1.5 text-sm font-medium text-[var(--danger)]">
             {t("form.maxPlayersFloor", { low: session.confirmed, cap: seatCap })}
           </p>
-        ) : (
+        ) : format !== "mlp" ? (
           <p className="hint">
             {t("form.maxPlayersHint", {
               perCourt: PLAYERS_PER_COURT,
@@ -138,7 +140,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
               courts: Math.min(MAX_COURTS, Math.max(1, courtCount)),
             })}
           </p>
-        )}
+        ) : null}
       </div>
 
       <div>
@@ -151,7 +153,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
               <button
                 key={key}
                 type="button"
-                onClick={() => { setFormat(key); if (key === "mlp") { setCourts("1, 2, 3, 4"); setMaxPlayersText("24"); } }}
+                onClick={() => { setFormat(key); if (key === "mlp" && format !== "mlp") { setCourts("1, 2, 3, 4"); setMaxPlayersText("24"); } }}
                 aria-pressed={on}
                 className={`rounded-xl border p-3 text-left transition ${
                   on

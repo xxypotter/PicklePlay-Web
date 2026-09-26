@@ -10,6 +10,7 @@ import { getDb } from "@/lib/db";
 import { rounds, sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
 import { getT } from "@/lib/i18n/server";
+import { validMlpConfig } from "@/lib/mlp/rules";
 
 import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
 import { requireMutableRoster } from "@/lib/mlp/guards";
@@ -95,7 +96,7 @@ export async function createSessionAction(
 
   const format = str(formData, "format") as Format;
   if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
-  if (format === "mlp" && (courtCount !== 4 || maxPlayers !== 24)) return { error: t("mlp.error.setup") };
+  if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
 
   const db = getDb();
 
@@ -209,7 +210,7 @@ export async function addPlayerAction(sessionId:string,playerId:string):Promise<
       const [{n}]=await db.select({n:sql<number>`count(*)::int`}).from(signups).where(and(
         eq(signups.sessionId,sessionId),eq(signups.state,"in"),eq(signups.attended,true)));
       const [existing]=await db.select().from(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
-      if(n>=24 && !(existing?.state==="in" && existing.attended)) throw new Error((await getT())("mlp.error.teams"));
+      if(n>=session.maxPlayers && !(existing?.state==="in" && existing.attended)) throw new Error((await getT())("mlp.error.teams"));
     }
     await db.execute(sql`insert into ${signups} (session_id,player_id,state,waitlist_pos,added_by_organizer,attended)
       values (${sessionId}::uuid,${playerId}::uuid,'in',null,true,true)
@@ -240,7 +241,7 @@ export async function setAttendanceAction(sessionId:string,playerId:string,atten
       const [{n}]=await db.select({n:sql<number>`count(*)::int`}).from(signups).where(and(
         eq(signups.sessionId,sessionId),eq(signups.state,"in"),eq(signups.attended,true)));
       const [existing]=await db.select().from(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
-      if(n>=24 && !existing?.attended) throw new Error((await getT())("mlp.error.teams"));
+      if(n>=session.maxPlayers && !existing?.attended) throw new Error((await getT())("mlp.error.teams"));
     }
     await db.update(signups).set({attended}).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
     if(!attended) { await promote(db,sessionId,session.maxPlayers); await resequence(db,sessionId); }

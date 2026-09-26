@@ -266,7 +266,7 @@ export default async function PlayPage({
         <AddPlayers sessionId={id} candidates={notSignedUp} />
       </section> : null}
 
-      {mlp ? <MlpSetup sessionId={id} teams={mlp.teams} roster={sortByUsername(attending)} locked={allRounds.length>0 || session.status==="closed"} live={session.status==="live"} /> : null}
+      {mlp ? <MlpSetup key={session.maxPlayers} teamCount={session.maxPlayers/4} sessionId={id} teams={mlp.teams} roster={sortByUsername(attending)} locked={allRounds.length>0 || session.status==="closed"} live={session.status==="live"} /> : null}
 
 
       {session.format === "fixed" ? (

@@ -441,7 +441,7 @@ fixed     { balance: 100, partner: -8, opponent: 2, spread: 4, gender:    0 }
 
 In v1.7 a gender violation gives infinite cost. The weight is retained for
 compatibility but is no longer a finite trade-off. Other ordinary formats do
-not read gender. Mini MLP requires explicit male/female team membership.
+not read gender. Mini MLP accepts any gender mix, including unspecified gender; its lineup slots are organizer-selected.
 
 **The balance weight has to be large.** At 10 a repeated partnership cost 6
 while a rating gap of 0.1 cost 1, so the search gave away half a rating point to
@@ -1080,27 +1080,48 @@ Nothing is created until the organizer reviews the form and submits.
 
 ### v1.7: Mini MLP
 
-Six squads, each 2 men + 2 women, exactly 4 courts and 24 players. Persist six
-named squad rows plus separate encounter rows. Each squad defines its two fixed
-mixed pairs before generation: m1+w1 and m2+w2. The app creates opposing matchups.
-Once the draw exists, team membership, attendance and mixed pairings lock for
-the entire session, including playoffs. No per-encounter lineup editor.
+Choose 4, 5 or 6 squads, each exactly four distinct players, on exactly four
+courts. Capacity stores the choice as 16, 20 or 24 players. Select the team count
+when creating or editing an unstarted session. Any gender combination is valid:
+all men, all women, 3+1, 1+3, 2+2, or profiles with unspecified gender. Gender
+must not filter the picker or reject a team on the server.
 
-Each encounter contains four ordinary doubles games: women, men, mixed1,
-mixed2. Women/men share a wave on two courts, followed by both mixed games on
-those same courts. The following zero-indexed team blocks cover all 15 opponents
-exactly once, at most two disjoint encounters per four-court block:
+Each squad defines two fixed pairs. Each pair has Player 1 and Player 2. Opening
+wave: the two Player 1s partner in Doubles 1; the two Player 2s partner in Doubles
+2. Second wave: Fixed pair 1 and Fixed pair 2 play their opposing counterparts.
+The app decides opposing matchups. Both opening and fixed-pair lineups stay
+unchanged through playoffs. Once the draw exists, roster and pair edits lock.
+
+Compatibility: persisted `m1/m2/w1/w2` and game kinds `women/men/mixed1/mixed2`
+retain their original identifiers; they now denote slots, not gender. UI Player
+1 = w, Player 2 = m. Thus opening games remain w1+w2 and m1+m2, followed by
+m1+w1 and m2+w2. Existing stored matches/pairs are never rewritten. No schema
+migration is required for the flexible-team update within v1.7.
+
+At most two disjoint encounters share four courts; each encounter uses two
+courts for two waves. Complete verified zero-indexed schedules:
 
 ```
-[(0,5),(1,4)], [(2,3),(0,4)], [(5,3),(1,2)], [(0,3),(4,2)],
-[(5,1),(0,2)], [(3,1),(4,5)], [(0,1),(2,5)], [(3,4)]
+4 teams: [(0,3),(1,2)], [(0,2),(3,1)], [(0,1),(2,3)]
+5 teams: [(1,4),(2,3)], [(0,4),(1,2)], [(0,3),(4,2)],
+         [(0,2),(3,1)], [(0,1),(3,4)]
+6 teams: [(0,5),(1,4)], [(2,3),(0,4)], [(5,3),(1,2)], [(0,3),(4,2)],
+         [(5,1),(0,2)], [(3,1),(4,5)], [(0,1),(2,5)], [(3,4)]
 ```
 
-Each block takes two waves. That is 60 round-robin games / 16 waves / 10 games
-per player. After all 15 encounters resolve, seed 1v4 and 2v3; then their
-winners contest one final. Each playoff encounter also has four games. No
-DreamBreaker or bronze match. Total: 72 games / 20 waves; no promise of a
-particular duration because individual game scoring is organizer-dependent.
+| Teams | Players | RR encounters | RR games | RR waves | Games/player in RR | Games including playoffs |
+| --- | --- | --- | --- | --- | --- | --- |
+| 4 | 16 | 6 | 24 | 6 | 6 | 36 |
+| 5 | 20 | 10 | 40 | 10 | 8 | 52 |
+| 6 | 24 | 15 | 60 | 16 | 10 | 72 |
+
+Five teams have one bye each over five encounter blocks; no team or player
+is double-booked. Preserve the original six-team sequence. After every unique
+round-robin encounter resolves, seed top four 1v4 and 2v3, then winners contest
+one final. With four teams, all qualify and the round robin determines seeding.
+Each playoff encounter adds four games (12 total) and the playoffs add four
+court waves. No DreamBreaker or bronze match. No promised duration; score
+format is organizer-dependent.
 
 Encounter winner: most games won; at 2–2, greater sum of points; equal sums
 require the organizer to record a winner. All four games must have valid,
@@ -1108,7 +1129,7 @@ non-tied integer scores (0–99). A void leaves an encounter unresolved until
 restored. Round-robin standings order by team wins, game difference, point
 difference, points scored, then setup slot. This final tie rule is displayed.
 Playoffs never change the round-robin seeding table. Team cards display both
-mixed pairs; aggregate cards and the bracket show team results.
+fixed pairs; aggregate cards and the bracket show team results.
 
 Keep each underlying game in the player's normal record and rating history;
 there is no second rating event for an encounter win. Reuse score permissions:

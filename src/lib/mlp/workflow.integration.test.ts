@@ -13,7 +13,7 @@ import { makeBackup } from "@/lib/db/backup";
 import { addMlpPlayoffAction, createMlpScheduleAction, removeMlpPlayoffsAction, saveMlpTeamsAction, setMlpTiebreakAction } from "./actions";
 import { createManualRoundAction, discardRoundAction, generateAllRoundsAction, rebuildMatchupsAction, restoreMatchAction, saveScoreAction, voidMatchAction } from "@/lib/sessions/play-actions";
 import { addPlayerAction, removePlayerAction, setAttendanceAction, setPartnerAction } from "@/lib/sessions/actions";
-import { lineups, type TeamInput } from "./rules";
+import { lineups, outcome, standings, type Encounter, type TeamInput } from "./rules";
 import { deletePlayerAction } from "@/app/admin/actions";
 
 let actor:Actor;
@@ -24,7 +24,14 @@ vi.mock("@/lib/i18n/server",()=>({getT:async()=>makeT("en")}));
 describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflow",()=>{
   const personIds:string[]=Array.from({length:25},()=>randomUUID());
   const id=randomUUID(), otherId=randomUUID(), fixedId=randomUUID();
+  const flexibleIds=[randomUUID(),randomUUID()];
   let verified=false;
+  // Exercise every composition in actual stored player profiles, including unknown gender.
+  const genders:("male"|"female"|"unspecified")[]=[
+    "male","male","male","male", "female","female","female","female",
+    "male","male","male","female", "male","female","female","female",
+    "male","female","male","female", "unspecified","unspecified","unspecified","unspecified", "male",
+  ];
   const input:TeamInput[]=Array.from({length:6},(_,i)=>({name:`Test team ${i+1}`,m1:personIds[i*4],w1:personIds[i*4+1],m2:personIds[i*4+2],w2:personIds[i*4+3]}));
   beforeAll(async()=>{
     config({path:".env.local",quiet:true});
@@ -33,7 +40,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     if(probe.rows[0]?.name!=="pickleplay_dev") throw new Error("Development DB required");
     verified=true;
     actor={id:personIds[0],role:"admin"};
-    await getDb().insert(players).values(personIds.map((pid,i)=>({id:pid,username:`v17test_${pid}`,usernameLower:`v17test_${pid}`,pinHash:"disabled-test-only",role:i===0?"admin" as const:"player" as const,gender:i%2===0?"male" as const:"female" as const})));
+    await getDb().insert(players).values(personIds.map((pid,i)=>({id:pid,username:`v17test_${pid}`,usernameLower:`v17test_${pid}`,pinHash:"disabled-test-only",role:i===0?"admin" as const:"player" as const,gender:genders[i]})));
     await getDb().insert(sessions).values([{id,title:"Mini MLP integration",createdBy:actor.id,format:"mlp",courtCount:4,courtNames:["1","2","3","4"],maxPlayers:24,status:"live",rated:false,startsAt:new Date()},
       {id:otherId,title:"Other integration",createdBy:personIds[24],status:"live",rated:false,startsAt:new Date()},
       {id:fixedId,title:"Fixed integration",createdBy:actor.id,format:"fixed",courtCount:4,courtNames:["1","2","3","4"],maxPlayers:16,status:"live",rated:false,startsAt:new Date()}]);
@@ -42,7 +49,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   },30000);
   afterAll(async()=>{
     if(!verified)return;
-    await getDb().delete(sessions).where(inArray(sessions.id,[id,otherId,fixedId]));
+    await getDb().delete(sessions).where(inArray(sessions.id,[id,otherId,fixedId,...flexibleIds]));
     await getDb().delete(auditLog).where(inArray(auditLog.actorId,personIds));
     await getDb().delete(players).where(inArray(players.id,personIds));
   },30000);
@@ -97,6 +104,53 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     games=await db.select().from(matches).where(eq(matches.sessionId,id));
     expect(games).toHaveLength(72);expect(games.every(g=>g.status==="completed")).toBe(true);
   },300000);
+  it.each([4,5])("runs a %i-team tournament with all-men, all-women and asymmetric teams, enforcing capacity and playoff seeding",async count=>{
+    const db=getDb(),sessionId=flexibleIds[count-4],roster=personIds.slice(0,count*4);
+    const selected=input.slice(0,count);
+    await db.insert(sessions).values({id:sessionId,title:`Flexible MLP ${count}`,createdBy:actor.id,
+      format:"mlp",courtCount:4,courtNames:["1","2","3","4"],maxPlayers:count*4,status:"live",rated:false,startsAt:new Date()});
+    await db.insert(signups).values(roster.map(playerId=>({sessionId,playerId,state:"in" as const})));
+    await expect(addPlayerAction(sessionId,personIds[count*4])).rejects.toThrow();
+    await expect(saveMlpTeamsAction(sessionId,input)).rejects.toThrow();
+    await saveMlpTeamsAction(sessionId,selected);
+    await setAttendanceAction(sessionId,roster[0],false);
+    await expect(createMlpScheduleAction(sessionId)).rejects.toThrow();
+    await setAttendanceAction(sessionId,roster[0],true);
+    await createMlpScheduleAction(sessionId);
+    await expect(saveMlpTeamsAction(sessionId,selected)).rejects.toThrow();
+    await expect(addMlpPlayoffAction(sessionId)).rejects.toThrow();
+    const teams=await db.select().from(mlpTeams).where(eq(mlpTeams.sessionId,sessionId));
+    const robin=await db.select().from(mlpTies).where(eq(mlpTies.sessionId,sessionId));
+    const games=await db.select().from(matches).where(eq(matches.sessionId,sessionId));
+    expect(robin).toHaveLength(count*(count-1)/2);
+    expect(games).toHaveLength(count*(count-1)*2);
+    expect(await db.select().from(rounds).where(eq(rounds.sessionId,sessionId))).toHaveLength(count===4?6:10);
+    for(const tie of robin) {
+      const expected=lineups(teams.find(t=>t.id===tie.teamAId)!,teams.find(t=>t.id===tie.teamBId)!);
+      for(const g of expected) {
+        const actual=games.find(m=>m.mlpTieId===tie.id&&m.mlpGame===g.kind)!;
+        expect([actual.a1,actual.a2,actual.b1,actual.b2]).toEqual(g.players);
+        expect(await score(actual.id,11,8)).toEqual({});
+      }
+    }
+    const completed:Encounter[]=robin.map(t=>({...t,games:games.filter(g=>g.mlpTieId===t.id)
+      .map(g=>({kind:g.mlpGame,scoreA:11,scoreB:8,status:"completed"}))}));
+    const seeds=standings(teams,completed).map(r=>r.team.id);
+    await addMlpPlayoffAction(sessionId);
+    const semis=await db.select().from(mlpTies).where(and(eq(mlpTies.sessionId,sessionId),eq(mlpTies.stage,"semifinal")));
+    expect(new Set(semis.map(t=>[t.teamAId,t.teamBId].join("/")))).toEqual(new Set([
+      [seeds[0],seeds[3]].join("/"),[seeds[1],seeds[2]].join("/"),
+    ]));
+    for(const m of await db.select().from(matches).where(inArray(matches.mlpTieId,semis.map(t=>t.id)))) expect(await score(m.id,11,8)).toEqual({});
+    await addMlpPlayoffAction(sessionId);
+    const [final]=await db.select().from(mlpTies).where(and(eq(mlpTies.sessionId,sessionId),eq(mlpTies.stage,"final")));
+    expect([final.teamAId,final.teamBId].sort()).toEqual([seeds[0],seeds[1]].sort());
+    const finalGames=await db.select().from(matches).where(eq(matches.mlpTieId,final.id));
+    for(const m of finalGames) expect(await score(m.id,11,8)).toEqual({});
+    expect(outcome({...final,games:finalGames.map(g=>({kind:g.mlpGame,scoreA:11,scoreB:8,status:"completed"}))}).winner).toBe(final.teamAId);
+    expect(await db.select().from(matches).where(eq(matches.sessionId,sessionId))).toHaveLength(count*(count-1)*2+12);
+    await expect(addMlpPlayoffAction(sessionId)).rejects.toThrow();
+  },180000);
   it("keeps fixed pairs after a partial-session rebuild; denies cross-session discard and score-based void restoration",async()=>{
     const db=getDb();
     for(let i=0;i<16;i+=2)await setPartnerAction(fixedId,personIds[i],personIds[i+1]);

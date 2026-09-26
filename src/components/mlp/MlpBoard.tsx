@@ -3,7 +3,7 @@ import ConfirmAction from "./ConfirmAction";
 import { useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import type { MlpData } from "@/lib/mlp/queries";
-import { outcome, standings, type Encounter } from "@/lib/mlp/rules";
+import { encounterCount, outcome, roundRobinReady, standings, type Encounter } from "@/lib/mlp/rules";
 import { addMlpPlayoffAction, removeMlpPlayoffsAction, setMlpTiebreakAction } from "@/lib/mlp/actions";
 
 export default function MlpBoard({data,sessionId,organizer=false,live=false}:{data:MlpData;sessionId:string;organizer?:boolean;live?:boolean}) {
@@ -12,7 +12,7 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
   const name=(id:string)=>data.teams.find(team=>team.id===id)?.name ?? "?";
   const semis=data.ties.filter(tie=>tie.stage==="semifinal"), final=data.ties.find(tie=>tie.stage==="final");
   const robin=data.ties.filter(tie=>tie.stage==="robin");
-  const ready=!final && (semis.length===2 ? semis.every(s=>outcome(s).winner) : robin.length===15 && robin.every(r=>outcome(r).winner));
+  const ready=!final && (semis.length===2 ? semis.every(s=>outcome(s).winner) : roundRobinReady(data.teams,robin));
   const removable=(final?[final]:semis);
   const card=(tie:Encounter)=>{
     const result=outcome(tie);
@@ -43,15 +43,15 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
     <section className="card overflow-x-auto">
       <h2 className="font-semibold">{t("mlp.standings")}</h2><p className="hint">{t("mlp.rankRule")}</p>
       <table className="mt-3 w-full text-sm"><thead><tr className="text-left text-[var(--muted)]">
-        <th className="py-2">#</th><th>{t("mlp.teamName")}</th><th>{t("mlp.wl")}</th><th>{t("mlp.games")}</th><th>+/−</th>
+        <th className="py-2">#</th><th>{t("mlp.teamName")}</th><th className="px-2 whitespace-nowrap">{t("mlp.wl")}</th><th className="px-2">{t("mlp.games")}</th><th className="pl-2 whitespace-nowrap">+/−</th>
       </tr></thead><tbody>{standings(data.teams,data.ties).map((r,i)=><tr key={r.team.id} className="border-t border-[var(--border)] align-top">
         <td className="py-3 pr-2">{i+1}</td><td className="py-3 pr-2"><b>{r.team.name}</b>
           <p className="hint">{data.names[r.team.m1]} + {data.names[r.team.w1]}</p>
           <p className="hint">{data.names[r.team.m2]} + {data.names[r.team.w2]}</p>
-        </td><td className="py-3 whitespace-nowrap">{r.wins}–{r.losses}</td><td className="py-3 whitespace-nowrap">{r.gamesWon}–{r.gamesLost}</td><td className="py-3">{r.pointsFor-r.pointsAgainst}</td>
+        </td><td className="px-2 py-3 whitespace-nowrap">{r.wins}–{r.losses}</td><td className="px-2 py-3 whitespace-nowrap">{r.gamesWon}–{r.gamesLost}</td><td className="py-3 pl-2">{r.pointsFor-r.pointsAgainst}</td>
       </tr>)}</tbody></table>
     </section>
-    {organizer&&live&&!final?<div className="card"><p className="hint">{t("mlp.playoffHint")}</p>
+    {organizer&&live&&!final?<div className="card"><p className="hint">{t("mlp.playoffHint",{count:encounterCount(data.teams.length)})}</p>
       <ConfirmAction label={t(semis.length?"mlp.addFinal":"mlp.addSemis")} confirmation={t("mlp.playoffConfirm")}
         disabled={pending||!ready} onConfirm={()=>run(()=>addMlpPlayoffAction(sessionId))} />
     </div>:null}

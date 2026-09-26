@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import { sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
 import { getT } from "@/lib/i18n/server";
+import { validMlpConfig } from "@/lib/mlp/rules";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
@@ -103,7 +104,7 @@ export async function updateSessionAction(
 
   const format = str(formData, "format") as Format;
   if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
-  if (format === "mlp" && (courtCount !== 4 || maxPlayers !== 24)) return { error: t("mlp.error.setup") };
+  if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
 
   await db
     .update(sessions)

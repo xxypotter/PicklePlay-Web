@@ -1,13 +1,20 @@
 /** Mini MLP house rules. No database or UI dependencies. */
-export const MLP_TEAMS = 6;
-export const MLP_PLAYERS = 24;
+export const MLP_TEAM_COUNTS = [4, 5, 6] as const;
+export type TeamCount = (typeof MLP_TEAM_COUNTS)[number];
 export const MLP_COURTS = 4;
+export const validTeamCount = (count: number): count is TeamCount =>
+  MLP_TEAM_COUNTS.some(n => n === count);
+export const validMlpConfig = (courts: number, players: number) =>
+  courts === MLP_COURTS && validTeamCount(players / 4);
+export const encounterCount = (teams: number) => teams * (teams - 1) / 2;
+// Persisted game/slot names remain compatible with the original v1.7 schema.
+// They identify lineup positions, never a required player gender.
 export const GAME_KINDS = ["women", "men", "mixed1", "mixed2"] as const;
 export type GameKind = (typeof GAME_KINDS)[number];
 export type Stage = "robin" | "semifinal" | "final";
 export interface Team {
   id: string; slot: number; name: string;
-  /** Setup fixes mixed pairs as m1+w1 and m2+w2 for the entire session. */
+  /** Fixed pairs: m1+w1 and m2+w2. UI Player 1=w, Player 2=m; any gender. */
   m1: string; m2: string; w1: string; w2: string;
 }
 export type TeamInput = Omit<Team, "id" | "slot">;
@@ -75,10 +82,39 @@ export function standings(teams: Team[], ties: Encounter[]) {
  * Each entry uses courts 1–2, then 3–4. Two waves per block; no team double-books.
  * Explicit verified design avoids a heuristic missing or repeating an edge.
  */
-export const ROBIN_BLOCKS: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
+const SIX_TEAM_BLOCKS: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
   [[0,5],[1,4]], [[2,3],[0,4]], [[5,3],[1,2]], [[0,3],[4,2]],
   [[5,1],[0,2]], [[3,1],[4,5]], [[0,1],[2,5]], [[3,4]],
 ];
+
+/** Four/five-team complete round robins; five teams have one bye per block.
+ * Keep the original six-team sequence for backward compatibility.
+ */
+export function robinBlocks(count: number): ReadonlyArray<ReadonlyArray<readonly [number, number]>> {
+  if (count === 4) return [
+    [[0,3],[1,2]], [[0,2],[3,1]], [[0,1],[2,3]],
+  ];
+  if (count === 5) return [
+    [[1,4],[2,3]], [[0,4],[1,2]], [[0,3],[4,2]], [[0,2],[3,1]], [[0,1],[3,4]],
+  ];
+  if (count === 6) return SIX_TEAM_BLOCKS;
+  throw new RangeError("Mini MLP supports 4, 5 or 6 teams");
+}
+
+/** Every distinct pair must have a resolved round-robin encounter. */
+export function roundRobinReady(teams: Team[], ties: Encounter[]): boolean {
+  if (!validTeamCount(teams.length)) return false;
+  const ids = new Set(teams.map(t => t.id));
+  if (ids.size !== teams.length) return false;
+  const robin = ties.filter(t => t.stage === "robin");
+  if (robin.length !== encounterCount(teams.length)) return false;
+  const pairs = new Set<string>();
+  for (const tie of robin) {
+    if (!ids.has(tie.teamAId) || !ids.has(tie.teamBId) || tie.teamAId === tie.teamBId || !outcome(tie).winner) return false;
+    pairs.add([tie.teamAId, tie.teamBId].sort().join("|"));
+  }
+  return pairs.size === robin.length;
+}
 
 export function lineups(a: Team, b: Team) {
   return [
@@ -89,19 +125,19 @@ export function lineups(a: Team, b: Team) {
   ];
 }
 
-export function validateTeams(input: unknown, roster: ReadonlyMap<string, string>): input is TeamInput[] {
-  if (!Array.isArray(input) || input.length !== 6) return false;
+export function validateTeams(input: unknown, roster: ReadonlySet<string>, expectedCount: number): input is TeamInput[] {
+  if (!validTeamCount(expectedCount) || !Array.isArray(input) || input.length !== expectedCount || roster.size !== expectedCount * 4) return false;
   const used = new Set<string>(), names = new Set<string>();
   for (const t of input) {
     if (!t || typeof t.name !== "string" || !t.name.trim() || t.name.trim().length > 40) return false;
     const name = t.name.trim().toLocaleLowerCase();
     if (names.has(name)) return false;
     names.add(name);
-    for (const [key, gender] of [["m1","male"],["m2","male"],["w1","female"],["w2","female"]] as const) {
+    for (const key of ["m1","m2","w1","w2"] as const) {
       const id = t[key];
-      if (typeof id !== "string" || used.has(id) || roster.get(id) !== gender) return false;
+      if (typeof id !== "string" || used.has(id) || !roster.has(id)) return false;
       used.add(id);
     }
   }
-  return used.size === 24;
+  return used.size === expectedCount * 4;
 }

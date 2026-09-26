@@ -17,30 +17,36 @@ The iOS app has independent users, database and rating history.
 
 ## Mini MLP acceptance criteria
 
-1. Exactly 24 players, 6 named squads of 2 men and 2 women, 4 named courts.
-2. Team setup chooses two fixed mixed pairs. Store m1+w1 and m2+w2; never offer
-   a change during play. The user's later answer superseded an earlier proposal
-   to allow per-encounter changes. Server enforcement matters as much as the UI.
-3. Generate all 15 distinct squad encounters. Each is women, men, mixed1,
-   mixed2: 60 ordinary doubles games. Every player gets 10 round-robin games.
-4. Each encounter uses two courts: women/men in wave one, mixed1/mixed2 in wave
-   two. Two disjoint encounters can share four courts. Eight encounter blocks
-   occupy 16 waves; never put a player on two courts in the same wave.
-5. After all four valid scores: more games won wins; 2–2 uses total points;
+1. Choose 4, 5 or 6 squads of four players on four named courts. Store the
+   selected count via capacity (16, 20, 24). Creation and pre-start editing
+   offer the count; reject other capacities/court counts server-side.
+2. Permit ANY gender combination: all men, all women, 3+1, 1+3, 2+2 and unknown
+   gender. No gender filtering in setup and no gender validation on the server.
+3. Each squad chooses two fixed pairs, each with Player 1 and Player 2. Opening
+   games pair the two Player 1s and the two Player 2s; second-wave games use the
+   fixed pairs. All four team members play twice per encounter, on two courts.
+4. Preserve storage compatibility: m1+w1 and m2+w2 are fixed pairs; UI Player 1
+   maps to w and Player 2 maps to m. Game identifiers stay women/men/mixed1/mixed2,
+   displayed neutrally as Doubles 1, Doubles 2, Fixed pair 1, Fixed pair 2.
+   Keep existing matches and teams intact; this update needs no migration.
+5. Full round robin: 4 teams → 6 encounters/24 games/6 waves; 5 → 10/40/10;
+   6 → 15/60/16. Every player gets 6, 8 or 10 RR games respectively. Five teams
+   get one bye each. See PORT §16 and robinBlocks() for verified schedules.
+6. After all four valid scores: more games won wins; 2–2 uses total points;
    equal points requires an explicit organizer-recorded winner. No DreamBreaker.
-6. Standings use round robin only: squad wins, game difference, point difference,
-   points scored, setup slot. Display this ordering to users. Top four seed
-   semifinals 1v4 and 2v3. Winners play a four-game final; no bronze stage.
-7. Create the next stage only when the preceding one is fully resolved. Final
-   tournament: 18 encounters / 72 games / 20 court waves. Finalists play 14 games.
-8. Existing match records and individual rating changes still apply per game.
-   Never rate the aggregate team result again. Casual mode remains unrated.
-9. Protect bracket dependencies: block changing a source result used by a later
-   stage. Offer removal of the last completely unplayed playoff stage, then
-   allow correction and regeneration. Scored/voided stages cannot be discarded.
-10. Display squads with their two mixed pairs, aggregate results, semifinal-to-
-    final bracket and championship winner. Individual score entry retains the
-    existing game cards, labeled women/men/mixed1/mixed2.
+7. Standings use round robin only: squad wins, game difference, point difference,
+   points scored, setup slot. Top four seed 1v4 and 2v3. With four squads all
+   qualify. Winners play a four-game final; no bronze. Total games: 36/52/72.
+8. Create playoffs only after EVERY distinct RR opponent pairing is resolved,
+   then the final only after both semifinals resolve. Membership and all lineups
+   lock at generation; no edits during play, even before scores are entered.
+9. Personal records/ratings apply per game; never rate the aggregate result a
+   second time. Casual mode stays unrated. No rating tuning in this update.
+10. Protect bracket dependencies: remove only the last completely unplayed
+    playoff stage before an upstream correction; never discard scored stages.
+11. Test real workflows for all three counts, all gender compositions, preserved
+    partner assignments, byes, cap/duplicate/outsider validation, top-four seeding,
+    tie resolution and old six-team schedule compatibility.
 
 ## Six fixes to carry over
 
