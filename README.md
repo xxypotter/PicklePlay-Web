@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PicklePlay
 
-## Getting Started
+Mobile pickleball session organizer, personal ratings and match records.
+Production: https://pickle-play-web.vercel.app/
 
-First, run the development server:
+Read [PROJECT.md](PROJECT.md) for architecture and release instructions,
+[WORKLOG.md](WORKLOG.md) for current status, and [PORT.md](PORT.md) for the
+independent iOS handoff. Codex and Claude Code share [AGENTS.md](AGENTS.md).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Use Node.js and `npm.cmd ci` on Windows, then `npm.cmd run dev`. Configure
+`.env.local` from `.env.example`; local work uses the `pickleplay_dev` database.
+Never point development login or synthetic tests at production.
+
+Checks: `npm.cmd test`, `npm.cmd run typecheck`, `npm.cmd run lint`,
+`npm.cmd run build`. Integration checks are opt-in:
+
+```powershell
+$env:RUN_DEV_INTEGRATION = '1'
+npm.cmd test -- src/lib/mlp/workflow.integration.test.ts
+Remove-Item Env:RUN_DEV_INTEGRATION
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Generate migrations with `npm.cmd run db:generate`; apply to development first
+with `npm.cmd run db:migrate`. Back up production and verify tests before
+`npm.cmd run db:migrate:prod` and a release push. Never commit credentials,
+database exports or personal input screenshots.

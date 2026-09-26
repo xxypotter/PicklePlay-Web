@@ -77,6 +77,7 @@ export async function getAllRounds(
         id: matches.id,
         roundId: matches.roundId,
         courtNo: matches.courtNo,
+        mlpGame: matches.mlpGame,
         a1: matches.a1,
         a2: matches.a2,
         b1: matches.b1,
@@ -130,7 +131,7 @@ export async function getAllRounds(
       .filter((m) => m.roundId === round.id)
       .map((r, position) => ({
         id: r.id,
-        stageLabel: stageLabel(round.stage, position),
+        stageLabel: r.mlpGame ? t(`mlp.game.${r.mlpGame as "women"|"men"|"mixed1"|"mixed2"}`) : stageLabel(round.stage, position),
         courtNo: r.courtNo,
         courtLabel: courtLabel(t, courtNames, r.courtNo),
         teamA: [person(r.a1), person(r.a2)],

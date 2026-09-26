@@ -14,13 +14,13 @@
  * of them in a different trust domain is a bad trade. Ratings and match history
  * are irreplaceable, PINs are one admin reset away.
  */
-import { asc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { isAtLeast } from "@/lib/auth/policy";
 import { getDb } from "@/lib/db";
-import { auditLog, matches, players, ratingSeeds, sessions, signups } from "@/lib/db/schema";
+import { makeBackup } from "@/lib/db/backup";
+import { auditLog } from "@/lib/db/schema";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
 
 export const dynamic = "force-dynamic";
@@ -57,44 +57,9 @@ export async function GET(request: Request) {
 
   // Backstop for the lazy sweep on page loads: if nobody opens the app for a
   // few days, stale sessions still get closed.
-  const autoClosed = await closeStaleSessions();
+  const autoClosed = new URL(request.url).searchParams.has("check") ? 0 : await closeStaleSessions();
 
-  const [playerRows, seedRows, matchRows, sessionRows, signupRows] = await Promise.all([
-    db
-      .select({
-        id: players.id,
-        username: players.username,
-        displayName: players.displayName,
-        role: players.role,
-        active: players.active,
-        createdAt: players.createdAt,
-      })
-      .from(players)
-      .orderBy(asc(players.createdAt)),
-    db.select().from(ratingSeeds).orderBy(asc(ratingSeeds.effectiveAt)),
-    db.select().from(matches).orderBy(asc(matches.playedAt)),
-    db.select().from(sessions).orderBy(asc(sessions.startsAt)),
-    db.select().from(signups).orderBy(asc(signups.createdAt)),
-  ]);
-
-  const payload = {
-    schema: 1,
-    autoClosedSessions: autoClosed,
-    takenAt: new Date().toISOString(),
-    note: "PIN hashes intentionally excluded; restore requires admins to reset PINs.",
-    counts: {
-      players: playerRows.length,
-      ratingSeeds: seedRows.length,
-      matches: matchRows.length,
-      sessions: sessionRows.length,
-      signups: signupRows.length,
-    },
-    players: playerRows,
-    ratingSeeds: seedRows,
-    matches: matchRows,
-    sessions: sessionRows,
-    signups: signupRows,
-  };
+  const payload = { ...(await makeBackup()), autoClosedSessions: autoClosed };
 
   // Serialize before the configuration check, so a value that can't be encoded
   // fails loudly on every run rather than only once credentials are added.

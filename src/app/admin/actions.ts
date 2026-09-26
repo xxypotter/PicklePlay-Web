@@ -9,7 +9,7 @@ import { canAdjustRating } from "@/lib/auth/policy";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { auditLog, matches, players, ratingSeeds } from "@/lib/db/schema";
+import { auditLog, matches, mlpTeams, players, ratingSeeds } from "@/lib/db/schema";
 import { generateInviteCode, setInviteCode } from "@/lib/invite";
 import { RATING } from "@/lib/rating/constants";
 import { recomputeAll, type RecomputeSummary } from "@/lib/rating/service";
@@ -296,6 +296,12 @@ export async function deletePlayerAction(
   if (played > 0) {
     return { error: t("err.deletePlayed", { name: target.username, count: played }) };
   }
+
+  const assigned = await db.select({ id: mlpTeams.id }).from(mlpTeams).where(or(
+    eq(mlpTeams.m1, targetId), eq(mlpTeams.m2, targetId),
+    eq(mlpTeams.w1, targetId), eq(mlpTeams.w2, targetId),
+  )).limit(1);
+  if (assigned.length) return { error: t("err.deleteMlpTeam") };
 
   // Signups, seeds, stats, rating events and login tokens all cascade.
   await db.delete(players).where(eq(players.id, targetId));

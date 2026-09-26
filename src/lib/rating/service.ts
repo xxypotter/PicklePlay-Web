@@ -5,12 +5,12 @@
  * rewrites the derived caches. Anything that changes history (a score edit, a
  * void, a re-seed, a new registration) should call recomputeAll afterward.
  */
-import { and, asc, eq, isNull, or } from "drizzle-orm";
-import { getDb } from "@/lib/db";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
+import { inTransaction, type Transaction } from "@/lib/db/transaction";
 import { matches, playerStats, ratingEvents, ratingSeeds, sessions } from "@/lib/db/schema";
 import { recompute, type TimelineEvent } from "./engine";
 
-/** neon-http sends one HTTP request per statement, so keep inserts chunked. */
+/** Keep individual insert statements within driver parameter/payload limits. */
 const CHUNK = 500;
 
 function chunked<T>(rows: T[]): T[][] {
@@ -26,7 +26,16 @@ export interface RecomputeSummary {
 }
 
 export async function recomputeAll(): Promise<RecomputeSummary> {
-  const db = getDb();
+  return inTransaction(async (db) => {
+    // Acquire BEFORE reading history, so a waiting replay cannot publish an
+    // older snapshot after a newer replay. READ COMMITTED sees fresh rows once
+    // this lock is acquired. Both caches become visible together at commit.
+    await db.execute(sql`select pg_advisory_xact_lock(72417001)`);
+    return recomputeInto(db);
+  });
+}
+
+async function recomputeInto(db: Transaction): Promise<RecomputeSummary> {
 
   const seedRows = await db.select().from(ratingSeeds).orderBy(asc(ratingSeeds.effectiveAt));
 
@@ -96,9 +105,8 @@ export async function recomputeAll(): Promise<RecomputeSummary> {
 
   const result = recompute(events);
 
-  // Both of these are caches (§7). They are rebuilt wholesale rather than
-  // patched, so a partial failure here is self-healing: the next recompute
-  // produces the correct state regardless of what this one left behind.
+  // In one transaction: readers retain the previous complete caches until
+  // commit. A failure rolls back both instead of exposing an empty leaderboard.
   await db.delete(ratingEvents);
   for (const batch of chunked(result.changes)) {
     await db.insert(ratingEvents).values(

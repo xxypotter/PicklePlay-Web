@@ -37,7 +37,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       status: sessions.status,
     })
     .from(sessions)
-    .where(eq(sessions.id, id))
+    .where(and(eq(sessions.id, id),eq(sessions.isPrivate,false)))
     .limit(1);
 
   const locale = await getLocale(null);

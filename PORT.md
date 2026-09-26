@@ -18,7 +18,7 @@ said so explicitly (§3.9 is the one to read twice).
 with an invite code; the native app will use email or phone), payment, and
 anything about the App Store. Those are noted in §12 as gaps, not specified.
 
-**Reflects web app v1.4 (2026-09-03).** §15 lists behaviour that has been
+**Reflects web app v1.7 (2026-09-26).** See §16 for the v1.5–v1.7 handoff. §15 lists behaviour that has been
 audited and deliberately left alone — read it before "fixing" anything in §3.
 
 ---
@@ -129,7 +129,7 @@ expectedShare(teamRating, oppRating, d) = 1 / (1 + 10^((oppRating - teamRating) 
 Team rating is the **plain average** of its two players.
 
 ```
-D_POINTS = 1.33      // the expected point share
+D_POINTS = 2.05      // the expected point share
 D_WIN    = 1.0       // retained but unused while ALPHA = 1
 ```
 
@@ -377,8 +377,8 @@ player's history.
 
 ## 4. Match formats and the generators
 
-Five formats offered: **regular**, **balanced**, **gender**, **fixed**,
-**custom** — in that order in the picker.
+Six formats offered: **regular**, **balanced**, **gender**, **fixed**,
+**custom**, **Mini MLP** — in that order in the picker. Mini MLP uses the dedicated team model in §16.
 (`king`, `social`, `manual` exist in the enum for old rows; don't offer them.)
 
 Common shape: a round holds one match per court in use;
@@ -439,8 +439,9 @@ gender    { balance:  20, partner: 50, opponent: 3, spread: 0, gender: 1000 }
 fixed     { balance: 100, partner: -8, opponent: 2, spread: 4, gender:    0 }
 ```
 
-The `gender` term adds its weight once per court that puts two men against two
-women (§4.4). Every other format sets it to zero and never reads gender.
+In v1.7 a gender violation gives infinite cost. The weight is retained for
+compatibility but is no longer a finite trade-off. Other ordinary formats do
+not read gender. Mini MLP requires explicit male/female team membership.
 
 **The balance weight has to be large.** At 10 a repeated partnership cost 6
 while a rating gap of 0.1 cost 1, so the search gave away half a rating point to
@@ -454,8 +455,8 @@ and a 4.5 — balanced on paper, lopsided to play. `spread` tempers it. If that
 proves unpopular, the better answer is tiered courts (strongest four together,
 next four together), which gets both.
 
-A negative `partner` weight is how fixed-partner play is expressed through the
-same machinery when no explicit pairs are set.
+The old negative fixed-partner weight is a legacy constant. v1.7 uses only
+explicit mutual pairs in fixed draws, including added and rebuilt rounds.
 
 ### 4.3 Fixed partners
 
@@ -464,15 +465,16 @@ Once they exist the problem changes shape: partners stop being something to
 solve for and what remains is a round robin between *teams*.
 
 - Store the partner on each signup row; both rows point at each other.
-- Editable only while `status = 'open'`.
+- Editable while open or live, before a medal bracket exists. Writes are atomic and symmetric; existing matches retain their stored players.
 - Anyone left unpaired **does not play**. Pairing is the point of the format;
   inventing a partner is the worse surprise. Show the unpaired count.
-- Scheduling: each round seats `min(courts, floor(pairs/2))` matches. Pick the
-  pair with fewest games, then the opponent it has met least often (ties broken
-  by fewest games). Unlike the regular planner this never gives up — a long
-  night simply replays opponents.
-- Result for 4 pairs over 6 rounds: a complete double round robin, every pair
-  meeting every other exactly twice, six games each.
+- Initial schedule: circle-method round robin between pairs, packed into courts
+  without booking a team twice in a round. Eight teams on four courts need seven
+  rounds for all 28 distinct opponents; longer schedules repeat complete cycles.
+- Added rounds and partial rebuilds: select complete pairs by games played,
+  then exhaustively match seated pairs to minimize squared opponent repeats.
+  Unpaired/absent members never get an invented partner. New pair assignments
+  affect newly generated matches only, never change existing stored matches.
 
 ### 4.4 Gender balanced — never two men against two women
 
@@ -496,32 +498,14 @@ A player who left gender unspecified makes their team neutral and can never
 trigger a violation. That is deliberate: "unspecified" is also how someone opts
 out of the gendered rankings, so it is a real choice and must not be guessed at.
 
-**The two priorities look like they should fight, and don't** — because of where
-the rule is enforced. By the time a round's teams are decided nothing is lost
-yet: a round holding both an all-male and an all-female pair is fine so long as
-they are not put across the net from each other. So the constraint belongs in
-**step 3 of §4.1 — the grouping of pairs into matches** — and never in step 2,
-which decides partnerships. Partner coverage is therefore *identical* to
-`regular`: twelve players over eight rounds is still 48 distinct partnerships
-with no repeats.
-
-Implementation is one optional argument to the §4.1 planner: a gender per seat.
-
-- In the grouping step, add a large constant to a grouping's cost when it
-  violates.
-- In the restart ranking, add `violations * 1e6` to the opponent-imbalance
-  score, so a clean draw beats a more evenly-opposed dirty one and balance only
-  separates draws that break the rule equally often.
-- The per-round generator (§4.2) needs the same rule as a weight, because "add
-  another round" mid-session does not go through the planner and the promise has
-  to hold there too.
-
-**Zero is not always reachable, and it must not pretend otherwise.** Ten men and
-two women who each partner everyone once must eventually pair the two women, and
-only two men can then face them. Return the true minimum and report the count;
-do not quietly break the promise the format's name makes. Measured over eight
-roster shapes from 4M/4F to 15M/5F: zero violations in every one, partner
-coverage unchanged, 30–230ms.
+Try the whole-session partner-unique planner first. If its plan has any
+MM-versus-FF games, discard that plan and generate rounds with a hard gender
+constraint. A valid initial draw is always possible by exchanging one player
+on each violating court; hill climbing then rejects any invalid candidate.
+Rest fairness is unchanged. With 10 men and 2 women, complete partner coverage
+would eventually pair the two women against men; v1.7 sacrifices that partnership
+instead. Never display or persist the planner's best-but-invalid intermediate
+result as an acceptable draw.
 
 **Balance is third, and it costs the first two nothing.** The first real
 gender-balanced night produced seven blowouts in twenty — worse than any other
@@ -1055,3 +1039,106 @@ Two further observations, no action wanted:
 - **Reliability reads lower across an epoch boundary** for the same player, when
   old matches replay under old constants. Cosmetic, and the unavoidable price of
   never moving a result someone has already seen.
+
+
+## 16. Updates through v1.7 (2026-09-26)
+
+Use PORT-v1.7.md as the native implementation checklist. This section supersedes
+older descriptions of initial-only pairing, soft gender penalties or D_POINTS.
+
+### v1.5: custom rounds and fixed-team results
+
+Ordinary live sessions offer **Add another round (random)** and **Add another
+round (custom)**, even before existing rounds finish. A custom court has exactly
+four distinct attending players; nobody may appear twice in the same round.
+The fixed-partner medal workflow remains separate: auto 1v4 / 2v3 semifinals,
+winners for gold and losers for bronze; custom bracket selection at both stages.
+Custom medal teams must be actual fixed pairs. Fixed standings show both partners
+on each team, both receive its medal, and the standings page includes the bracket.
+Do not relabel a surviving bronze game as gold when another game is voided.
+The initial fixed draw uses complete team round-robin cycles; 8 teams / 4 courts /
+7 rounds means 28 unique team matchups, with no opponent repeats.
+
+### v1.6: record insights, calibration and repeat sessions
+
+The record page adds How you play: stronger/even/weaker opposition, recent form,
+format splits, close games. Use pre-game average ratings but the current
+expectation curve for these *display-only* comparisons. EVEN_BAND=0.15,
+MIN_GROUP=5, FORM_MIN=12, FORM_RECENT=10, CLOSE_MARGIN=2, MIN_CLOSE=4,
+ABOUT=0.03. Casual games count in ordinary totals but not rating expectations.
+Implementation: src/lib/profile/insights.ts and its tests.
+
+Current expected point-share spread D_POINTS=2.05 (previously 1.33). The web
+app adopted it at 2026-09-21T12:00Z. K, caps, reliability rules were unchanged.
+Do not rewrite past native results: use the native app's own adoption boundary.
+New registration requires an explicit starting-level choice.
+
+Copy a finished session prepopulates title, location, courts, capacity, format,
+notes and rated setting; move date to the next occurrence of that weekday/time.
+Do not copy players or matches. Only permitted actors copy private visibility.
+Nothing is created until the organizer reviews the form and submits.
+
+### v1.7: Mini MLP
+
+Six squads, each 2 men + 2 women, exactly 4 courts and 24 players. Persist six
+named squad rows plus separate encounter rows. Each squad defines its two fixed
+mixed pairs before generation: m1+w1 and m2+w2. The app creates opposing matchups.
+Once the draw exists, team membership, attendance and mixed pairings lock for
+the entire session, including playoffs. No per-encounter lineup editor.
+
+Each encounter contains four ordinary doubles games: women, men, mixed1,
+mixed2. Women/men share a wave on two courts, followed by both mixed games on
+those same courts. The following zero-indexed team blocks cover all 15 opponents
+exactly once, at most two disjoint encounters per four-court block:
+
+```
+[(0,5),(1,4)], [(2,3),(0,4)], [(5,3),(1,2)], [(0,3),(4,2)],
+[(5,1),(0,2)], [(3,1),(4,5)], [(0,1),(2,5)], [(3,4)]
+```
+
+Each block takes two waves. That is 60 round-robin games / 16 waves / 10 games
+per player. After all 15 encounters resolve, seed 1v4 and 2v3; then their
+winners contest one final. Each playoff encounter also has four games. No
+DreamBreaker or bronze match. Total: 72 games / 20 waves; no promise of a
+particular duration because individual game scoring is organizer-dependent.
+
+Encounter winner: most games won; at 2–2, greater sum of points; equal sums
+require the organizer to record a winner. All four games must have valid,
+non-tied integer scores (0–99). A void leaves an encounter unresolved until
+restored. Round-robin standings order by team wins, game difference, point
+difference, points scored, then setup slot. This final tie rule is displayed.
+Playoffs never change the round-robin seeding table. Team cards display both
+mixed pairs; aggregate cards and the bracket show team results.
+
+Keep each underlying game in the player's normal record and rating history;
+there is no second rating event for an encounter win. Reuse score permissions:
+live participants/admins can score; closed sessions require organizer/superadmin.
+Clear an organizer tie decision after any score change. Once a downstream
+stage exists, protect its source results. Removing the last completely unplayed
+stage allows correction and regeneration; stages with scores/voids stay intact.
+
+### v1.7: integrity and recovery
+
+Fixed pairs are now structural in incremental/rebuilt draws; edit live pairs
+atomically and symmetrically before medal play. Existing stored matches retain
+original players. Gender generation rejects MM-versus-FF outright; fallback
+sacrifices partner coverage when needed. No past sessions are regenerated.
+
+Discard only the last unplayed round in the caller's authorized session; a void
+also protects it. Ordinary score entry never restores a void. Private sessions
+publish generic preview metadata and images, even to authenticated link crawlers.
+
+Rating caches publish together in one transaction with a global advisory lock
+acquired before reading history; concurrent replays queue. A failed rebuild
+leaves both previous caches available. No v1.7 rating retuning.
+
+Backup schema 2 includes sanitized full player profiles, rating seeds, sessions,
+signups, rounds/stages, MLP squads/encounters and matches in one consistent
+snapshot. It omits PIN hashes, auth tokens, settings/invite secrets, login attempts
+and audit details. Restore players with fresh PINs, then seeds/sessions/signups,
+rounds/teams/encounters/matches in dependency order; recompute derived caches.
+Reissue invite/auth settings separately. Existing web auth remains unchanged.
+
+The web runtime is now Next.js 16.3.6 to include official security fixes; the
+native app does not need to copy this dependency. Shared agent instructions are
+in AGENTS.md, PROJECT.md and WORKLOG.md. They are part of the handoff workflow.

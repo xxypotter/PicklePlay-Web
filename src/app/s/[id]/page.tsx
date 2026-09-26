@@ -25,6 +25,8 @@ import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { shareDescription } from "@/lib/sessions/share";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
+import MlpBoard from "@/components/mlp/MlpBoard";
+import { getMlpData } from "@/lib/mlp/queries";
 import Schedule from "./Schedule";
 import ShareLink from "./ShareLink";
 import MedalBracket from "./MedalBracket";
@@ -56,6 +58,7 @@ export async function generateMetadata({
   const found = await db
     .select({
       title: sessions.title,
+      isPrivate: sessions.isPrivate,
       startsAt: sessions.startsAt,
       location: sessions.location,
       courtNames: sessions.courtNames,
@@ -71,7 +74,7 @@ export async function generateMetadata({
   const t = await getT(me?.locale);
 
   const session = found[0];
-  if (!session) return { title: `${t("session.title")} · ${t("app.name")}` };
+  if (!session || session.isPrivate) return { title: `${t("session.title")} · ${t("app.name")}` };
 
   const [[signedUp], [played]] = await Promise.all([
     db
@@ -211,6 +214,7 @@ export default async function SessionPage({
    * bracket sits above, because "who won the night" is the first thing anybody
    * opens this tab for and the table alone does not answer it.
    */
+  const mlp = session.format === "mlp" ? await getMlpData(id) : null;
   const isFixed = session.format === "fixed";
   const teamRows = isFixed
     ? teamRowsFrom(allRounds, new Map(standings.map((r) => [r.playerId, r.ratingDelta])))
@@ -258,7 +262,7 @@ export default async function SessionPage({
             {bracket ? (
               <MedalBracket bracket={bracket} meId={me?.id} locale={me?.locale} />
             ) : null}
-            {isFixed ? (
+            {mlp ? <MlpBoard data={mlp} sessionId={id} /> : isFixed ? (
               <TeamStandings rows={teamRows} meId={me?.id} locale={me?.locale} />
             ) : (
               <Standings rows={standings} meId={me?.id} backHere={backHere} locale={me?.locale} />
@@ -316,7 +320,7 @@ export default async function SessionPage({
                   <p className="card text-center text-sm text-[var(--muted)]">
                     {t("session.finished")}
                   </p>
-                ) : (
+                ) : mlp && allRounds.length>0 ? <p className="card hint">{t("mlp.locked")}</p> : (
                   <RsvpButtons
                     sessionId={id}
                     state={myState}

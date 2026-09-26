@@ -9,11 +9,13 @@ import { getDb } from "@/lib/db";
 import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
 import { createAllRounds, createNextRound, getAttending } from "@/lib/matchmaking/service";
 import { requireLogin } from "@/lib/auth/permissions";
-import { canVoidMatch, PermissionError } from "@/lib/auth/policy";
+import { canScoreMatch, canVoidMatch, PermissionError } from "@/lib/auth/policy";
 import { finals, semiFinals, teamStandings, type PlayedMatch } from "./medal";
 import { checkManualRound } from "./manual-round";
 import { requireOrganizer, requireScorer } from "./guards";
 import { getT } from "@/lib/i18n/server";
+import { inTransaction, lockSession } from "@/lib/db/transaction";
+import { guardMlpResultChange } from "@/lib/mlp/guards";
 import { recomputeAll } from "@/lib/rating/service";
 
 /**
@@ -75,11 +77,12 @@ export async function reopenSessionAction(sessionId: string): Promise<void> {
 async function requireLive(sessionId: string): Promise<void> {
   const t = await getT();
   const found = await getDb()
-    .select({ status: sessions.status })
+    .select({ status: sessions.status, format: sessions.format })
     .from(sessions)
     .where(eq(sessions.id, sessionId))
     .limit(1);
 
+  if (found[0]?.format === "mlp") throw new Error(t("mlp.error.managed"));
   if (found[0]?.status !== "live") {
     throw new Error(t("err.startFirst"));
   }
@@ -217,20 +220,17 @@ export async function deleteSessionAction(sessionId: string): Promise<void> {
 export async function discardRoundAction(sessionId: string, roundId: string): Promise<void> {
   const t = await getT();
   await requireOrganizer(sessionId);
-  const db = getDb();
-
-  const played = await db
-    .select({ id: matches.id })
-    .from(matches)
-    .where(and(eq(matches.roundId, roundId), eq(matches.status, "completed")))
-    .limit(1);
-
-  if (played.length > 0) {
-    throw new Error(t("err.roundScored"));
-  }
-
-  await db.delete(matches).where(eq(matches.roundId, roundId));
-  await db.delete(rounds).where(eq(rounds.id, roundId));
+  await inTransaction(async db=>{
+    await lockSession(db,sessionId);
+    const [session]=await db.select().from(sessions).where(eq(sessions.id,sessionId));
+    if(session?.format==="mlp") throw new Error(t("mlp.error.managed"));
+    const [last]=await db.select().from(rounds).where(eq(rounds.sessionId,sessionId)).orderBy(desc(rounds.index)).limit(1);
+    if(!last || last.id!==roundId) throw new Error(t("err.roundScored"));
+    const settled=await db.select({id:matches.id}).from(matches).where(and(eq(matches.roundId,roundId),ne(matches.status,"scheduled"))).limit(1);
+    if(settled.length) throw new Error(t("err.roundScored"));
+    await db.delete(matches).where(and(eq(matches.sessionId,sessionId),eq(matches.roundId,roundId)));
+    await db.delete(rounds).where(and(eq(rounds.sessionId,sessionId),eq(rounds.id,roundId)));
+  });
 
   revalidatePath(`/s/${sessionId}/play`);
 }
@@ -608,8 +608,6 @@ export async function saveScoreAction(
   formData: FormData,
 ): Promise<FormState> {
   const t = await getT();
-  const db = getDb();
-
   const matchId = String(formData.get("matchId") ?? "");
   const scoreA = Number(String(formData.get("scoreA") ?? ""));
   const scoreB = Number(String(formData.get("scoreB") ?? ""));
@@ -631,29 +629,24 @@ export async function saveScoreAction(
   if (scoreA === scoreB) return { error: t("schedule.error.tie") };
   if (scoreA > 99 || scoreB > 99) return { error: t("schedule.error.range") };
 
-  /*
-   * `editedAt` marks a correction, so it is only set when there was already a
-   * score to correct. It used to be stamped on every save including the first,
-   * which made all 323 matches look "corrected" and left no way to tell how
-   * often a wrong score actually gets fixed.
-   */
-  const previous = await db
-    .select({ status: matches.status })
-    .from(matches)
-    .where(eq(matches.id, matchId))
-    .limit(1);
-  const correcting = previous[0]?.status === "completed";
-
-  await db
-    .update(matches)
-    .set({
-      scoreA,
-      scoreB,
-      status: "completed",
-      enteredBy: me.id,
-      ...(correcting ? { editedAt: new Date() } : {}),
-    })
-    .where(eq(matches.id, matchId));
+  try {
+    await inTransaction(async tx=>{
+      await lockSession(tx,sessionId ?? matchId);
+      const [previous]=await tx.select().from(matches).where(eq(matches.id,matchId));
+      if(!previous) throw new Error(t("err.matchGone"));
+      const [scope]=sessionId ? await tx.select().from(sessions).where(eq(sessions.id,sessionId)) : [];
+      if(!canScoreMatch(me,scope ?? {createdBy:null,status:"open"},[previous.a1,previous.a2,previous.b1,previous.b2].includes(me.id))) {
+        throw new Error(t("schedule.error.closed"));
+      }
+      // Score entry cannot undo a void, even for an organizer. Use Restore.
+      if(previous.status==="void") throw new Error(t("err.scoreVoided"));
+      const changed=previous.status!=="completed" || previous.scoreA!==scoreA || previous.scoreB!==scoreB;
+      if(!changed) return;
+      await guardMlpResultChange(tx,previous);
+      await tx.update(matches).set({scoreA,scoreB,status:"completed",enteredBy:me.id,
+        ...(previous.status==="completed"?{editedAt:new Date()}:{})}).where(eq(matches.id,matchId));
+    });
+  } catch(error) { return {error:error instanceof Error?error.message:t("err.notAuthorized")}; }
 
   await recomputeIfRated(sessionId);
 
@@ -687,16 +680,15 @@ async function setMatchVoided(matchId: string, voided: boolean): Promise<void> {
     .limit(1);
   if (!found[0]) throw new Error(t("err.matchGone"));
 
-  await db
-    .update(matches)
-    .set({ status: voided ? "void" : "completed", editedAt: new Date() })
-    .where(eq(matches.id, matchId));
-
-  await db.insert(auditLog).values({
-    actorId: me.id,
-    action: voided ? "match.void" : "match.restore",
-    targetType: "match",
-    targetId: matchId,
+  await inTransaction(async tx=>{
+    await lockSession(tx,found[0].sessionId ?? matchId);
+    const [previous]=await tx.select().from(matches).where(eq(matches.id,matchId));
+    if(!previous) throw new Error(t("err.matchGone"));
+    if(previous.status===(voided?"void":"completed")) return;
+    if(previous.scoreA===null || previous.scoreB===null) throw new Error(t("err.roundScored"));
+    await guardMlpResultChange(tx,previous);
+    await tx.update(matches).set({status:voided?"void":"completed",editedAt:new Date()}).where(eq(matches.id,matchId));
+    await tx.insert(auditLog).values({actorId:me.id,action:voided?"match.void":"match.restore",targetType:"match",targetId:matchId});
   });
 
   const sessionId = found[0].sessionId;

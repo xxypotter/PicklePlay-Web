@@ -196,7 +196,7 @@ export function roundCost(
 
     if (weights.gender !== 0 && genderOf) {
       const g = (id: string) => genderOf.get(id) ?? "unspecified";
-      if (matchViolates(g(a1), g(a2), g(b1), g(b2))) cost += weights.gender;
+      if (matchViolates(g(a1), g(a2), g(b1), g(b2))) return Infinity;
     }
   }
 
@@ -271,6 +271,11 @@ export function generateRound(
       tiered && attempt === 0
         ? [...seated].sort((a, b) => b.rating - a.rating)
         : shuffle(seated, random);
+    // Any MM-v-FF court can be made mixed without changing who plays/rests.
+    if (format === "gender") for (let i=0;i<order.length;i+=4) {
+      const g=(j:number)=>order[i+j].gender ?? "unspecified";
+      if (matchViolates(g(0),g(1),g(2),g(3))) [order[i+1],order[i+2]]=[order[i+2],order[i+1]];
+    }
     let cost = score(order);
 
     // Descend until no single swap improves things.

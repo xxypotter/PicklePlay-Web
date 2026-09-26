@@ -9,7 +9,7 @@ import { useT } from "@/lib/i18n/client";
 import type { CopySource } from "@/lib/sessions/copy";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
-const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "custom"] as const;
+const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;
@@ -165,6 +165,7 @@ export default function SessionForm({
           inputMode="numeric"
           autoComplete="off"
           value={maxPlayersText}
+          readOnly={format === "mlp"}
           onChange={(e) => setMaxPlayersText(e.target.value.replace(/\D/g, "").slice(0, 2))}
           required
         />
@@ -195,7 +196,7 @@ export default function SessionForm({
               <button
                 key={key}
                 type="button"
-                onClick={() => setFormat(key)}
+                onClick={() => { setFormat(key); if (key === "mlp") { setCourts("1, 2, 3, 4"); setMaxPlayersText("24"); } }}
                 aria-pressed={on}
                 className={`rounded-xl border p-3 text-left transition ${
                   on

@@ -112,6 +112,25 @@ describe("teamRowsFrom", () => {
 });
 
 describe("bracketFrom", () => {
+  it("keeps bronze third/fourth when the gold match is voided", () => {
+    const rounds = [
+      ...robin,
+      round(4, "semifinal", [
+        match(["a1", "a2"], ["d1", "d2"], 11, 3),
+        match(["b1", "b2"], ["c1", "c2"], 11, 9),
+      ]),
+      round(5, "final", [
+        match(["a1", "a2"], ["b1", "b2"], 11, 7, true),
+        match(["d1", "d2"], ["c1", "c2"], 11, 6),
+      ]),
+    ];
+    expect(bracketFrom(rounds)!.finals.map((m) => m.label)).toEqual(["bronze"]);
+    const rows = teamRowsFrom(rounds, NO_DELTAS);
+    expect(rows.find((r) => r.team === "d1|d2")!.placement).toBe(3);
+    expect(rows.find((r) => r.team === "c1|c2")!.placement).toBe(4);
+    expect(rows.every((r) => r.placement !== 1 && r.placement !== 2)).toBe(true);
+  });
+
   it("is null for a night with no medal round", () => {
     expect(bracketFrom(robin)).toBeNull();
   });

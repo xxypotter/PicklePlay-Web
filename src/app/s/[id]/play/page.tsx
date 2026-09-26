@@ -13,6 +13,9 @@ import { getT } from "@/lib/i18n/server";
 import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import { teamStandings, type PlayedMatch } from "@/lib/sessions/medal";
 import { bracketFrom, teamRowsFrom } from "@/lib/sessions/team-view";
+import MlpSetup from "@/components/mlp/MlpSetup";
+import MlpBoard from "@/components/mlp/MlpBoard";
+import { getMlpData } from "@/lib/mlp/queries";
 import ManualRound, { type ManualPlayer } from "./ManualRound";
 import MedalRoundCustom, { type MedalTeam } from "./MedalRoundCustom";
 import MedalBracket from "../MedalBracket";
@@ -77,6 +80,7 @@ export default async function PlayPage({
     getAttending(id),
   ]);
 
+  const mlp = session.format === "mlp" ? await getMlpData(id) : null;
   const roster = sortByUsername(rosterRows);
 
   const signedUpIds = new Set(roster.map((r) => r.playerId));
@@ -120,7 +124,7 @@ export default async function PlayPage({
       ? !!semis && semis.matches.every((m) => m.completed)
       : allRounds.length > 0 && unscored === 0;
 
-  // Pairs among the people actually here — the bracket needs four of them.
+  // Pairs among the people actually here â€” the bracket needs four of them.
   const teamCount = Math.floor(
     roster.filter((r) => r.attended && r.partnerId).length / 2,
   );
@@ -142,7 +146,7 @@ export default async function PlayPage({
     : [];
   const avatarOf = new Map(avatarRows.map((r) => [r.id, r.avatar]));
 
-  // Games already assigned tonight, voided ones excluded — they were taken out.
+  // Games already assigned tonight, voided ones excluded â€” they were taken out.
   const gamesOf = new Map<string, number>();
   for (const round of allRounds) {
     for (const m of round.matches) {
@@ -240,7 +244,7 @@ export default async function PlayPage({
         }
       />
       <main className="screen pt-4">
-      <section className="card">
+      {!(mlp && allRounds.length > 0) ? <section className="card">
         <h2 className="text-sm font-medium text-[var(--muted)]">
           {t("play.whosHere", { here: attendingCount, total: roster.length })}
         </h2>
@@ -260,14 +264,17 @@ export default async function PlayPage({
         </div>
 
         <AddPlayers sessionId={id} candidates={notSignedUp} />
-      </section>
+      </section> : null}
+
+      {mlp ? <MlpSetup sessionId={id} teams={mlp.teams} roster={sortByUsername(attending)} locked={allRounds.length>0 || session.status==="closed"} live={session.status==="live"} /> : null}
+
 
       {session.format === "fixed" ? (
         /*
           Editable while the night is live, not only before it starts. Two
           latecomers who want to play as a pair have to be paired *after* the
           session began, and changing a pairing only affects rounds built from
-          here on — matches already played store their four players outright.
+          here on â€” matches already played store their four players outright.
         */
         <PartnerPicker
           sessionId={id}
@@ -281,7 +288,7 @@ export default async function PlayPage({
         {/*
           Three phases, not two. Testing "is it open?" put closed sessions down
           the same branch as live ones, so a finished night still offered to
-          build matches — and the server, correctly, refused with "Start the
+          build matches â€” and the server, correctly, refused with "Start the
           session before creating matches", which is a baffling thing to be told
           about a session that already happened.
 
@@ -300,6 +307,7 @@ export default async function PlayPage({
           </>
         ) : session.status === "live" ? (
           <>
+            {!mlp ? <>
             <GenerateRoundButton
               sessionId={id}
               attendingCount={attendingCount}
@@ -309,7 +317,7 @@ export default async function PlayPage({
             />
 
             {/*
-              Only once a schedule exists — before that "Create all matches"
+              Only once a schedule exists â€” before that "Create all matches"
               above already is the rebuild, and offering both would be two
               buttons for one job.
             */}
@@ -325,7 +333,7 @@ export default async function PlayPage({
 
             {/*
               Available whenever the session is live, including before the
-              scheduled rounds are finished — the whole point is that the
+              scheduled rounds are finished â€” the whole point is that the
               organizer may want a particular matchup at any moment.
             */}
             <ManualRound
@@ -359,6 +367,7 @@ export default async function PlayPage({
               </>
             ) : null}
 
+            </> : null}
             {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
           </>
         ) : (
@@ -377,6 +386,8 @@ export default async function PlayPage({
             : ""}
         </p>
       </section>
+
+      {mlp ? <MlpBoard data={mlp} sessionId={id} organizer live={session.status==="live"} /> : null}
 
       {allRounds.length === 0 ? (
         <p className="mt-6 text-center text-sm text-[var(--muted)]">
@@ -402,7 +413,7 @@ export default async function PlayPage({
                       ? t("play.roundHeading", { index: round.index })
                       : t(`schedule.stage.${round.stage}`)}
                   </h2>
-                  {unplayed && round.index === allRounds.length ? (
+                  {!mlp && unplayed && round.index === allRounds.length ? (
                     <DiscardRoundButton sessionId={id} roundId={round.id} />
                   ) : null}
                 </div>
@@ -430,7 +441,7 @@ export default async function PlayPage({
         <MedalBracket bracket={bracket} meId={me.id} locale={me.locale} />
       ) : null}
 
-      {isFixed ? (
+      {mlp ? null : isFixed ? (
         <TeamStandings rows={teamRows} meId={me.id} locale={me.locale} />
       ) : (
         <Standings rows={standings} meId={me.id} backHere={here} locale={me.locale} />

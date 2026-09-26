@@ -31,8 +31,8 @@ import {
  * tier of session-runner earned nothing and just made permission checks lie.
  */
 /**
- * Play is always mixed — gender exists only so the rankings can be split into
- * a men's and a women's table, which is how this group reads results.
+ * Gender supports rankings, the gender-balanced draw restriction, and Mini
+ * MLP's two-men/two-women roster. Unspecified is allowed outside Mini MLP.
  */
 export const genderEnum = pgEnum("gender", ["male", "female", "unspecified"]);
 
@@ -55,7 +55,7 @@ export const seedSourceEnum = pgEnum("seed_source", ["dupr", "picker", "admin"])
 /**
  * "king", "social" and "manual" are retired but kept in the type: removing an
  * enum value means recreating the type, and old sessions still reference them.
- * Only the four the form offers are reachable for new sessions.
+ * Only formats offered by the session form are reachable for new sessions.
  */
 export const formatEnum = pgEnum("session_format", [
   "balanced",
@@ -66,6 +66,7 @@ export const formatEnum = pgEnum("session_format", [
   "regular",
   "custom",
   "gender",
+  "mlp",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -261,6 +262,31 @@ export const rounds = pgTable(
   (t) => [uniqueIndex("rounds_session_index_idx").on(t.sessionId, t.index)],
 );
 
+/** Mini MLP: six named teams, each with four fixed members. */
+export const mlpTeams = pgTable("mlp_teams", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+  slot: integer("slot").notNull(),
+  name: text("name").notNull(),
+  m1: uuid("m1").notNull().references(() => players.id),
+  m2: uuid("m2").notNull().references(() => players.id),
+  w1: uuid("w1").notNull().references(() => players.id),
+  w2: uuid("w2").notNull().references(() => players.id),
+}, (t) => [uniqueIndex("mlp_teams_session_slot_idx").on(t.sessionId, t.slot)]);
+
+/** Four individual games decide one team encounter. No aggregate rating event. */
+export const mlpTies = pgTable("mlp_ties", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+  stage: roundStageEnum("stage").notNull().default("robin"),
+  index: integer("index").notNull(),
+  block: integer("block").notNull(),
+  teamAId: uuid("team_a_id").notNull().references(() => mlpTeams.id),
+  teamBId: uuid("team_b_id").notNull().references(() => mlpTeams.id),
+  // Read only for 2–2 with equal total points; cleared on any score change.
+  tiebreakWinner: uuid("tiebreak_winner").references(() => mlpTeams.id),
+}, (t) => [uniqueIndex("mlp_ties_session_index_idx").on(t.sessionId, t.index)]);
+
 /**
  * A doubles match. Source of truth for every rating in the system.
  *
@@ -274,6 +300,9 @@ export const matches = pgTable(
     sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "cascade" }),
     roundId: uuid("round_id").references(() => rounds.id, { onDelete: "set null" }),
     courtNo: integer("court_no"),
+    mlpTieId: uuid("mlp_tie_id").references(() => mlpTies.id, { onDelete: "cascade" }),
+    /** women | men | mixed1 | mixed2; null for every older format. */
+    mlpGame: text("mlp_game"),
 
     a1: uuid("a1").notNull().references(() => players.id),
     a2: uuid("a2").notNull().references(() => players.id),
@@ -291,6 +320,7 @@ export const matches = pgTable(
   (t) => [
     index("matches_played_at_idx").on(t.playedAt),
     index("matches_session_idx").on(t.sessionId),
+    uniqueIndex("matches_mlp_game_idx").on(t.mlpTieId, t.mlpGame),
   ],
 );
 

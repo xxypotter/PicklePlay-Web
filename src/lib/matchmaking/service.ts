@@ -19,6 +19,7 @@ import {
   type Round,
   type SessionHistory,
 } from "./generator";
+import { fixedRound } from "./fixed";
 import { countViolations } from "./gender";
 import { planFixedPartnerRounds, planPerfectSchedule } from "./schedule";
 
@@ -156,6 +157,7 @@ export async function createAllRounds(
 
   const session = found[0];
   if (!session) throw new Error(t("err.sessionGone"));
+  if (session.format === "mlp") throw new Error(t("mlp.error.setup"));
 
   const existing = await db
     .select({ index: rounds.index })
@@ -219,7 +221,7 @@ export async function createAllRounds(
         })
       : null;
 
-  if (!plan) {
+  if (!plan || (genders && countViolations(plan, genders) > 0)) {
     for (let i = 0; i < roundCount; i++) await createNextRound(sessionId);
     return { rounds: roundCount, perfect: false, genderViolations: 0 };
   }
@@ -304,6 +306,7 @@ export async function createNextRound(sessionId: string): Promise<{
 
   const session = found[0];
   if (!session) throw new Error(t("err.sessionGone"));
+  if (session.format === "mlp") throw new Error(t("mlp.error.setup"));
 
   const attending = await getAttending(sessionId);
   if (attending.length < 4) {
@@ -311,7 +314,7 @@ export async function createNextRound(sessionId: string): Promise<{
   }
 
   const history = await buildSessionHistory(sessionId);
-  const round = generateRound(attending, session.courtCount, history, {
+  const round = session.format === "fixed" ? fixedRound(attending, session.courtCount, history) : generateRound(attending, session.courtCount, history, {
     format: toGeneratorFormat(session.format),
   });
 

@@ -67,14 +67,14 @@ export function bracketFrom(rounds: CurrentRound[]): Bracket | null {
   });
 
   const semis = semiRound.matches
-    .filter(playable)
     .slice(0, 2)
-    .map((m, i) => toMatch(m, i === 0 ? "semi1" : "semi2"));
+    .map((m, i) => ({ m, i })).filter(({ m }) => playable(m))
+    .map(({ m, i }) => toMatch(m, i === 0 ? "semi1" : "semi2"));
 
   const finals = (finalRound?.matches ?? [])
-    .filter(playable)
     .slice(0, 2)
-    .map((m, i) => toMatch(m, i === 0 ? "gold" : "bronze"));
+    .map((m, i) => ({ m, i })).filter(({ m }) => playable(m))
+    .map(({ m, i }) => toMatch(m, i === 0 ? "gold" : "bronze"));
 
   return { semis, finals };
 }

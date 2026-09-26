@@ -4,17 +4,20 @@ import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
-import { canCreatePrivateSession } from "@/lib/auth/policy";
+import { canSeeSession, canCreatePrivateSession } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { sessions, signups } from "@/lib/db/schema";
+import { rounds, sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
 import { getT } from "@/lib/i18n/server";
+
+import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
+import { requireMutableRoster } from "@/lib/mlp/guards";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const num = (fd: FormData, key: string) => Number(str(fd, key));
 
-const FORMATS = ["regular", "balanced", "gender", "fixed", "custom"] as const;
+const FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
 type Format = (typeof FORMATS)[number];
 
 /** Server-side caps; the form mirrors these but is not what enforces them. */
@@ -92,6 +95,7 @@ export async function createSessionAction(
 
   const format = str(formData, "format") as Format;
   if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
+  if (format === "mlp" && (courtCount !== 4 || maxPlayers !== 24)) return { error: t("mlp.error.setup") };
 
   const db = getDb();
 
@@ -153,251 +157,117 @@ export async function createSessionAction(
  * RSVP in or out.
  *
  * The interesting case is two people claiming the last spot at the same
- * moment. Capacity is decided by counting confirmed signups *inside* a single
- * INSERT ... SELECT, so the database resolves the race rather than a
- * read-then-write in application code that both requests would win.
+ * moment. The session advisory lock serializes roster writes, then capacity is
+ * counted inside the transaction so concurrent requests cannot both claim it.
  */
 export async function rsvpAction(sessionId: string, going: boolean): Promise<void> {
-  const t = await getT();
-  const me = await requireLogin();
-  const db = getDb();
-
-  const found = await db
-    .select({ id: sessions.id, maxPlayers: sessions.maxPlayers, status: sessions.status })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
-
-  const session = found[0];
-  if (!session) throw new Error(t("err.sessionGone"));
-  if (session.status === "closed") throw new Error(t("err.sessionClosed"));
-
-  if (!going) {
-    await db
-      .delete(signups)
-      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, me.id)));
-    await promoteFromWaitlist(sessionId, session.maxPlayers);
-    revalidatePath(`/s/${sessionId}`);
-    revalidatePath("/");
-    return;
-  }
-
-  await db.execute(sql`
-    insert into ${signups} (session_id, player_id, state)
-    select ${sessionId}::uuid, ${me.id}::uuid,
-      case when ${occupiedPlaces(sessionId)} < ${session.maxPlayers}
-        then 'in'::signup_state else 'waitlist'::signup_state end
-    on conflict (session_id, player_id) do nothing
-  `);
-
-  await resequenceWaitlist(sessionId);
-  revalidatePath(`/s/${sessionId}`);
-  revalidatePath("/");
-}
-
-/** Fill freed spots from the front of the queue, oldest signup first. */
-async function promoteFromWaitlist(sessionId: string, maxPlayers: number): Promise<void> {
-  await getDb().execute(sql`
-    update ${signups} set state = 'in', waitlist_pos = null
-    where id in (
-      select id from ${signups}
-      where session_id = ${sessionId}::uuid and state = 'waitlist'
-      order by created_at asc
-      limit greatest(0, ${maxPlayers} - ${occupiedPlaces(sessionId)})
-    )
-  `);
-  await resequenceWaitlist(sessionId);
-}
-
-/** Keep displayed queue positions contiguous: 1, 2, 3 with no gaps. */
-async function resequenceWaitlist(sessionId: string): Promise<void> {
-  await getDb().execute(sql`
-    update ${signups} s set waitlist_pos = ranked.pos
-    from (
-      select id, row_number() over (order by created_at asc) as pos
-      from ${signups}
-      where session_id = ${sessionId}::uuid and state = 'waitlist'
-    ) ranked
-    where s.id = ranked.id and s.waitlist_pos is distinct from ranked.pos
-  `);
-}
-
-/**
- * Add someone to a session on their behalf.
- *
- * Two real cases: a player turns up who never RSVP'd, and an organizer wants to
- * build a roster without twelve people each logging in.
- *
- * **The organizer's add is never waitlisted.** It used to share the capacity
- * rule with self-RSVP, on the reasoning that an admin shouldn't silently
- * overfill the courts — but the effect was the opposite of silent-proof: an
- * eleventh player arriving at a session capped at ten was filed on the waitlist,
- * never appeared in the draw, and the button gave no hint that was what had
- * happened. The same trap as counting signups instead of attendees, one layer
- * up.
- *
- * A person standing on the court is a fact; the cap is a plan. So the cap moves
- * to fit, exactly as `attended` already governs who holds a place. Self-RSVP is
- * untouched and still respects the limit — the difference is that this path
- * only runs when the organizer has deliberately picked someone by name.
- *
- * Adding a player does not rebuild the matchups; that stays a separate,
- * explicit act (`rebuildMatchupsAction`) because it throws away a schedule
- * people may already be standing on court for.
- */
-export async function addPlayerAction(sessionId: string, playerId: string): Promise<void> {
-  const t = await getT();
-  await requireOrganizer(sessionId);
-  const db = getDb();
-
-  const found = await db
-    .select({ maxPlayers: sessions.maxPlayers })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
-
-  if (!found[0]) throw new Error(t("err.sessionGone"));
-
-  // `do update` rather than `do nothing`: the organizer may be reaching for
-  // someone already on the waitlist or marked out, and "add" should mean the
-  // same thing whichever row already exists.
-  await db.execute(sql`
-    insert into ${signups} (session_id, player_id, state, waitlist_pos, added_by_organizer)
-    values (${sessionId}::uuid, ${playerId}::uuid, 'in'::signup_state, null, true)
-    on conflict (session_id, player_id)
-      do update set state = 'in'::signup_state, waitlist_pos = null
-  `);
-
-  // Let the sheet follow the court. Never lowers the cap.
-  await db.execute(sql`
-    update ${sessions}
-    set max_players = greatest(max_players, ${occupiedPlaces(sessionId)})
-    where id = ${sessionId}::uuid
-  `);
-
-  await resequenceWaitlist(sessionId);
-  revalidatePath(`/s/${sessionId}/play`);
-  revalidatePath(`/s/${sessionId}`);
-}
-
-export async function removePlayerAction(sessionId: string, playerId: string): Promise<void> {
-  await requireOrganizer(sessionId);
-  const db = getDb();
-
-  const found = await db
-    .select({ maxPlayers: sessions.maxPlayers })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
-
-  await db
-    .delete(signups)
-    .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, playerId)));
-
-  if (found[0]) await promoteFromWaitlist(sessionId, found[0].maxPlayers);
-
-  revalidatePath(`/s/${sessionId}/play`);
-  revalidatePath(`/s/${sessionId}`);
-}
-
-/**
- * Mark someone present or absent on the night.
- *
- * Marking a no-show frees their place, so anyone waiting is pulled in straight
- * away rather than the organizer having to notice and do it by hand.
- *
- * Marking someone back in is deliberately not capped. If ten people are
- * standing on the court, refusing the tenth because the sign-up sheet said
- * nine helps nobody — the round builder already handles more players than
- * seats by rotating who sits out.
- */
-export async function setAttendanceAction(
-  sessionId: string,
-  playerId: string,
-  attended: boolean,
-): Promise<void> {
-  await requireOrganizer(sessionId);
-  await getDb()
-    .update(signups)
-    .set({ attended })
-    .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, playerId)));
-
-  if (!attended) {
-    const found = await getDb()
-      .select({ maxPlayers: sessions.maxPlayers })
-      .from(sessions)
-      .where(eq(sessions.id, sessionId))
-      .limit(1);
-    if (found[0]) await promoteFromWaitlist(sessionId, found[0].maxPlayers);
-  }
-
-  revalidatePath(`/s/${sessionId}/play`);
-  revalidatePath(`/s/${sessionId}`);
-}
-
-
-/**
- * Pair two players for a fixed-partner session, or split a pair.
- *
- * Written as one action because a partnership is symmetric: storing it on one
- * row and not the other is the bug this shape prevents. Passing null for
- * `partnerId` unpairs whoever `playerId` was with, from both sides.
- *
- * Only before the session starts. Once rounds exist the pairs are baked into
- * the schedule, and changing them would leave the matches disagreeing with the
- * roster.
- */
-export async function setPartnerAction(
-  sessionId: string,
-  playerId: string,
-  partnerId: string | null,
-): Promise<void> {
-  const t = await getT();
-  await requireOrganizer(sessionId);
-  const db = getDb();
-
-  const found = await db
-    .select({ status: sessions.status })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
-  if (!found[0]) throw new Error(t("err.sessionGone"));
-  if (found[0].status !== "open") throw new Error(t("err.pairsLocked"));
-
-  // Break whatever either of them was in before, so nobody is left pointing at
-  // a partner who has moved on.
-  const detach = async (id: string) => {
-    const current = await db
-      .select({ partnerId: signups.partnerId })
-      .from(signups)
-      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, id)))
-      .limit(1);
-    const old = current[0]?.partnerId;
-    if (old) {
-      await db
-        .update(signups)
-        .set({ partnerId: null })
-        .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, old)));
+  const me=await requireLogin();
+  await inTransaction(async db=>{
+    await lockSession(db,sessionId);
+    const session=await requireMutableRoster(db,sessionId);
+    const mine=await db.select().from(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,me.id)));
+    if(!canSeeSession(me,session,mine.length>0)) throw new Error((await getT())("err.sessionGone"));
+    if(!going) {
+      await detach(db,sessionId,me.id);
+      await db.delete(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,me.id)));
+      await promote(db,sessionId,session.maxPlayers);
+    } else {
+      await db.execute(sql`insert into ${signups} (session_id,player_id,state)
+        select ${sessionId}::uuid,${me.id}::uuid,
+        case when ${occupiedPlaces(sessionId)} < ${session.maxPlayers} then 'in'::signup_state else 'waitlist'::signup_state end
+        on conflict (session_id,player_id) do nothing`);
     }
-    await db
-      .update(signups)
-      .set({ partnerId: null })
-      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, id)));
-  };
+    await resequence(db,sessionId);
+  });
+  refreshRoster(sessionId);
+}
 
-  await detach(playerId);
-  if (partnerId && partnerId !== playerId) {
-    await detach(partnerId);
-    await db
-      .update(signups)
-      .set({ partnerId })
-      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, playerId)));
-    await db
-      .update(signups)
-      .set({ partnerId: playerId })
-      .where(and(eq(signups.sessionId, sessionId), eq(signups.playerId, partnerId)));
-  }
+async function promote(db:Transaction,id:string,cap:number) {
+  await db.execute(sql`update ${signups} set state='in',waitlist_pos=null where id in
+    (select id from ${signups} where session_id=${id}::uuid and state='waitlist' order by created_at,id
+    limit greatest(0,${cap}-${occupiedPlaces(id)}))`);
+}
+async function resequence(db:Transaction,id:string) {
+  await db.execute(sql`update ${signups} s set waitlist_pos=ranked.pos from
+    (select id,row_number() over(order by created_at,id) as pos from ${signups}
+    where session_id=${id}::uuid and state='waitlist') ranked where s.id=ranked.id`);
+}
+function refreshRoster(id:string) {
+  revalidatePath(`/s/${id}`); revalidatePath(`/s/${id}/play`); revalidatePath("/");
+}
+async function detach(db:Transaction,id:string,playerId:string) {
+  await db.execute(sql`update ${signups} set partner_id=null where session_id=${id}::uuid
+    and (player_id=${playerId}::uuid or partner_id=${playerId}::uuid)`);
+}
 
-  revalidatePath(`/s/${sessionId}/play`);
-  revalidatePath(`/s/${sessionId}`);
+export async function addPlayerAction(sessionId:string,playerId:string):Promise<void> {
+  await requireOrganizer(sessionId);
+  await inTransaction(async db=>{
+    await lockSession(db,sessionId);
+    const session=await requireMutableRoster(db,sessionId);
+    if(session.format==="mlp") {
+      const [{n}]=await db.select({n:sql<number>`count(*)::int`}).from(signups).where(and(
+        eq(signups.sessionId,sessionId),eq(signups.state,"in"),eq(signups.attended,true)));
+      const [existing]=await db.select().from(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
+      if(n>=24 && !(existing?.state==="in" && existing.attended)) throw new Error((await getT())("mlp.error.teams"));
+    }
+    await db.execute(sql`insert into ${signups} (session_id,player_id,state,waitlist_pos,added_by_organizer,attended)
+      values (${sessionId}::uuid,${playerId}::uuid,'in',null,true,true)
+      on conflict (session_id,player_id) do update set state='in',waitlist_pos=null,attended=true,added_by_organizer=true`);
+    await db.execute(sql`update ${sessions} set max_players=greatest(max_players,${occupiedPlaces(sessionId)}) where id=${sessionId}::uuid`);
+    await resequence(db,sessionId);
+  });
+  refreshRoster(sessionId);
+}
+export async function removePlayerAction(sessionId:string,playerId:string):Promise<void> {
+  await requireOrganizer(sessionId);
+  await inTransaction(async db=>{
+    await lockSession(db,sessionId);
+    const session=await requireMutableRoster(db,sessionId);
+    await detach(db,sessionId,playerId);
+    await db.delete(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
+    await promote(db,sessionId,session.maxPlayers); await resequence(db,sessionId);
+  });
+  refreshRoster(sessionId);
+}
+export async function setAttendanceAction(sessionId:string,playerId:string,attended:boolean):Promise<void> {
+  await requireOrganizer(sessionId);
+  if(typeof attended!=="boolean") throw new Error("Invalid attendance");
+  await inTransaction(async db=>{
+    await lockSession(db,sessionId);
+    const session=await requireMutableRoster(db,sessionId);
+    if(attended && session.format==="mlp") {
+      const [{n}]=await db.select({n:sql<number>`count(*)::int`}).from(signups).where(and(
+        eq(signups.sessionId,sessionId),eq(signups.state,"in"),eq(signups.attended,true)));
+      const [existing]=await db.select().from(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
+      if(n>=24 && !existing?.attended) throw new Error((await getT())("mlp.error.teams"));
+    }
+    await db.update(signups).set({attended}).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
+    if(!attended) { await promote(db,sessionId,session.maxPlayers); await resequence(db,sessionId); }
+  });
+  refreshRoster(sessionId);
+}
+
+/** Live edits affect newly generated games; already drawn games keep their players. */
+export async function setPartnerAction(sessionId:string,playerId:string,partnerId:string|null):Promise<void> {
+  await requireOrganizer(sessionId);
+  const t=await getT();
+  await inTransaction(async db=>{
+    await lockSession(db,sessionId);
+    const session=await requireMutableRoster(db,sessionId);
+    if(session.format!=="fixed") throw new Error(t("err.pairsLocked"));
+    const bracket=await db.select().from(rounds).where(and(eq(rounds.sessionId,sessionId),sql`${rounds.stage} <> 'robin'`)).limit(1);
+    if(bracket.length) throw new Error(t("err.rebuildAfterMedal"));
+    const roster=await db.select().from(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.state,"in"),eq(signups.attended,true)));
+    if(!roster.some(p=>p.playerId===playerId) || (partnerId && (partnerId===playerId || !roster.some(p=>p.playerId===partnerId)))) {
+      throw new Error(t("err.medalNotAPair"));
+    }
+    await detach(db,sessionId,playerId);
+    if(partnerId) {
+      await detach(db,sessionId,partnerId);
+      await db.update(signups).set({partnerId}).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,playerId)));
+      await db.update(signups).set({partnerId:playerId}).where(and(eq(signups.sessionId,sessionId),eq(signups.playerId,partnerId)));
+    }
+  });
+  refreshRoster(sessionId);
 }

@@ -11,7 +11,7 @@
  */
 
 /** The formats the create form offers. Anything else is an old enum value. */
-export const OFFERED_FORMATS = ["regular", "balanced", "gender", "fixed", "custom"] as const;
+export const OFFERED_FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
 
 export const MAX_COURTS = 4;
 export const PLAYERS_PER_COURT = 6;

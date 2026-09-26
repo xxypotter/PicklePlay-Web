@@ -42,3 +42,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 from wechat program/
+
+# Private task inputs and local recovery snapshots
+/pressure test/
+/dupr forecast/
+/mini MLP input/
+/local-backups/
+/.scratch/
