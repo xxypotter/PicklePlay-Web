@@ -1,12 +1,13 @@
 # Shared work log
 
-## Active release: v1.7 — Codex, 2026-09-26
+## Completed: v1.7 — Codex, 2026-09-26
 
 Baseline: main 0a9a320 (v1.6), 316 tests / 19 files, typecheck/lint/build pass.
-Working branch: codex/v1.7-mini-mlp. Rollback tag: backup/v1.6-before-v1.7.
+Implementation branch: codex/v1.7-mini-mlp, fast-forwarded to main.
+Active checkout: main. Rollback tag: backup/v1.6-before-v1.7.
 User authorized implementation, all six review fixes, GitHub push and release.
-Production migration 0014 is applied; deployment verification is pending.
-Do not launch concurrent edits in this checkout until release verification finishes.
+Production migration 0014 is applied and deployment is verified. No active code
+work remains. Next agent: start a separate branch for the next task.
 
 ### Mini MLP decisions
 
@@ -73,7 +74,12 @@ Release safety:
   production. Additive tables/columns/enum only; old code remains compatible.
 - SHA-256 comparison after migration: match history, seeds, rating_events and
   player_stats all unchanged. No production test sessions or score edits.
-- GitHub push and Vercel deployment verification pending at this commit.
+- Release commit b9953ce pushed to origin/main, plus the rollback tag.
+- Vercel deployment A5cFFxoaiKNHbxAxDQiU2hgTpMFA reports success via GitHub
+  commit status. Public /notes returns HTTP 200 and v1.7 Mini MLP content;
+  homepage returns 200; /api/dev-login remains 404 in production.
+- This final documentation-only commit records verification; product code is
+  identical to tested/deployed b9953ce. No additional migration is needed.
 
 Known intentional limits:
 - Mini MLP roster/mixed partners lock when the full schedule is generated.
