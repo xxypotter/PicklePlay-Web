@@ -1,8 +1,9 @@
 # Shared work log
 
-## Active: flexible Mini MLP within v1.7 — Codex, 2026-09-26
+## Completed: flexible Mini MLP within v1.7 — Codex, 2026-09-26
 
-Baseline e5c8984, branch codex/v1.7-flexible-mlp. User requested 4/5/6 teams
+Baseline e5c8984, implementation branch codex/v1.7-flexible-mlp, merged to main.
+Active checkout: main; no active work remains. User requested 4/5/6 teams
 and clarified that every gender combination is valid, including all men or all
 women. This supersedes the original six-team/gender constraints below.
 
@@ -28,12 +29,22 @@ women. This supersedes the original six-team/gender constraints below.
   Added spacing between mobile standings columns. Development preview at
   ignored .scratch/v1.7-flexible-standings.png.
 - Typecheck, lint and final production build pass, including the mobile spacing
-  adjustment. Synthetic development fixtures cleaned up. Commit/push and
-  production deployment verification are pending.
+  adjustment. Synthetic development fixtures cleaned up; dev server stopped.
+  Release commit 95e6556 is on origin/main. Vercel deployment
+  2DCxjodWpqv93DTrPMvEQ67VP2RL reports success. Production /notes and / return
+  HTTP 200; /notes contains the new flexible-team/all-gender text; dev-login
+  stays 404. Version remains 1.7 in every language.
 - Sanitized production backup saved to ignored local-backups/
   v1.7-flexible-before-2026-09-26T23-05-03-431Z.json: 116 players, 121 seeds,
   21 sessions, 198 signups, 180 rounds, 381 matches; no production MLP teams yet.
-  No production data edits or migrations. This agent owns the active release.
+  No production data edits or migrations by this task. Rollback tag
+  backup/v1.7-before-flexible-mlp points to e5c8984 and is pushed to GitHub.
+- Production was in active use: at the final read-only comparison two scheduled
+  matches had received their first scores (only status, score_a, score_b and
+  entered_by changed). Eight rating events were added accordingly; the seed
+  hash was unchanged. Do not restore the snapshot over these legitimate scores.
+- Final documentation commit records verification only. Next agent can begin a
+  new branch/task; read PROJECT/PORT-v1.7 for the revised slot/count rules.
 
 ## Original v1.7 release history (constraints superseded above)
 
