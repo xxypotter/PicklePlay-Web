@@ -3,7 +3,7 @@ import ConfirmAction from "./ConfirmAction";
 import { useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import type { MlpData } from "@/lib/mlp/queries";
-import { encounterCount, outcome, roundRobinReady, standings, type Encounter } from "@/lib/mlp/rules";
+import { encounterCount, GAME_KINDS, outcome, roundRobinReady, standings, teamLineups, type Encounter } from "@/lib/mlp/rules";
 import { addMlpPlayoffAction, removeMlpPlayoffsAction, setMlpTiebreakAction } from "@/lib/mlp/actions";
 
 export default function MlpBoard({data,sessionId,organizer=false,live=false}:{data:MlpData;sessionId:string;organizer?:boolean;live?:boolean}) {
@@ -46,8 +46,10 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
         <th className="py-2">#</th><th>{t("mlp.teamName")}</th><th className="px-2 whitespace-nowrap">{t("mlp.wl")}</th><th className="px-2">{t("mlp.games")}</th><th className="pl-2 whitespace-nowrap">+/−</th>
       </tr></thead><tbody>{standings(data.teams,data.ties).map((r,i)=><tr key={r.team.id} className="border-t border-[var(--border)] align-top">
         <td className="py-3 pr-2">{i+1}</td><td className="py-3 pr-2"><b>{r.team.name}</b>
-          <p className="hint">{data.names[r.team.m1]} + {data.names[r.team.w1]}</p>
-          <p className="hint">{data.names[r.team.m2]} + {data.names[r.team.w2]}</p>
+          <details className="mt-1"><summary className="cursor-pointer text-xs text-[var(--muted)]">{t("mlp.viewPairs")}</summary>
+            {GAME_KINDS.map(kind=><p key={kind} className="hint"><span className="font-medium">{t(`mlp.game.${kind}`)}:</span>{" "}
+              {teamLineups(r.team)[kind].map(id=>data.names[id]).join(" + ")}</p>)}
+          </details>
         </td><td className="px-2 py-3 whitespace-nowrap">{r.wins}–{r.losses}</td><td className="px-2 py-3 whitespace-nowrap">{r.gamesWon}–{r.gamesLost}</td><td className="py-3 pl-2">{r.pointsFor-r.pointsAgainst}</td>
       </tr>)}</tbody></table>
     </section>

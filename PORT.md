@@ -1086,17 +1086,35 @@ when creating or editing an unstarted session. Any gender combination is valid:
 all men, all women, 3+1, 1+3, 2+2, or profiles with unspecified gender. Gender
 must not filter the picker or reject a team on the server.
 
-Each squad defines two fixed pairs. Each pair has Player 1 and Player 2. Opening
-wave: the two Player 1s partner in Doubles 1; the two Player 2s partner in Doubles
-2. Second wave: Fixed pair 1 and Fixed pair 2 play their opposing counterparts.
-The app decides opposing matchups. Both opening and fixed-pair lineups stay
-unchanged through playoffs. Once the draw exists, roster and pair edits lock.
+Each squad explicitly defines FOUR lineups: women's doubles, men's doubles,
+mixed doubles 1 and mixed doubles 2. "Fixed" means the same pair for that game
+type throughout the session, including semifinals and final; it does not mean
+one partner per player across different game types. These are category labels,
+not gender restrictions: all-men/all-women/asymmetric teams remain valid.
 
-Compatibility: persisted `m1/m2/w1/w2` and game kinds `women/men/mixed1/mixed2`
-retain their original identifiers; they now denote slots, not gender. UI Player
-1 = w, Player 2 = m. Thus opening games remain w1+w2 and m1+m2, followed by
-m1+w1 and m2+w2. Existing stored matches/pairs are never rewritten. No schema
-migration is required for the flexible-team update within v1.7.
+Setup selects mixed pairs (which establish the four-member roster), then two
+opening pairs from that roster. Each wave must use each squad member exactly
+once: women+men are one partition of four; mixed1+mixed2 are another. Reject
+missing, duplicate, outsider or other-squad players. Each player plays twice
+per encounter. The app decides opposing squads and matches like categories.
+All four saved lineups lock when the draw is generated and persist to playoffs.
+
+Web compatibility: mixed pairs remain m1+w1 and m2+w2. Migration 0015 adds
+nullable women1/women2/men1/men2 references for the explicit opening pairs.
+New setups must save all four fields. Older null rows fall back to w1+w2 and
+m1+m2 for display and playoff generation, preserving their established draw.
+Do not infer opening pairs from mixed-pair selector positions or profile gender.
+
+One-time legacy correction: organizer/superadmin may explicitly review opening
+pairs only on an entirely untouched old draw, including a closed test session.
+Reject if any score, completed/void status, enteredBy, editedAt, rating event,
+playoff or tiebreak exists, or opening pairs have already been explicitly saved.
+Keep squad members, names and mixed pairs identical. Under the session lock,
+atomically update opening players in existing matches plus team lineup fields;
+preserve match IDs, rounds, courts, opponents, timestamps and session status.
+Record an audit event. Never automatically rewrite existing draws or reopen a
+session. Scored sessions keep their original lineups. Native implementations
+need their own compatibility/correction policy, not our production data.
 
 At most two disjoint encounters share four courts; each encounter uses two
 courts for two waves. Complete verified zero-indexed schedules:
@@ -1128,8 +1146,8 @@ require the organizer to record a winner. All four games must have valid,
 non-tied integer scores (0–99). A void leaves an encounter unresolved until
 restored. Round-robin standings order by team wins, game difference, point
 difference, points scored, then setup slot. This final tie rule is displayed.
-Playoffs never change the round-robin seeding table. Team cards display both
-fixed pairs; aggregate cards and the bracket show team results.
+Playoffs never change the round-robin seeding table. Team cards allow expanding
+all four saved lineups; aggregate cards and the bracket show team results.
 
 Keep each underlying game in the player's normal record and rating history;
 there is no second rating event for an encounter win. Reuse score permissions:

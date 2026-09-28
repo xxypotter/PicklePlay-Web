@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { canOrganizeSession } from "@/lib/auth/policy";
 import { requireOrganizer } from "@/lib/sessions/guards";
 import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
-import { auditLog, matches, mlpTeams, mlpTies, players, rounds, sessions, signups } from "@/lib/db/schema";
+import { auditLog, matches, mlpTeams, mlpTies, players, ratingEvents, rounds, sessions, signups } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
-import { lineups, outcome, robinBlocks, roundRobinReady, standings, validMlpConfig, validateTeams, type Encounter, type Stage, type Team } from "./rules";
+import { hasExplicitOpeningPairs, lineups, members, outcome, robinBlocks, roundRobinReady, standings, validMlpConfig, validateTeams, type Encounter, type Stage, type Team } from "./rules";
 
 function refresh(id: string) {
   revalidatePath(`/s/${id}`); revalidatePath(`/s/${id}/play`);
@@ -44,8 +44,53 @@ export async function saveMlpTeamsAction(sessionId: string, input: unknown): Pro
     await db.delete(mlpTeams).where(eq(mlpTeams.sessionId,sessionId));
     await db.insert(mlpTeams).values(input.map((team,i)=>({
       sessionId,slot:i+1,name:team.name.trim(),m1:team.m1,m2:team.m2,w1:team.w1,w2:team.w2,
+      women1:team.women1,women2:team.women2,men1:team.men1,men2:team.men2,
     })));
   },false);
+  refresh(sessionId);
+}
+
+/** One-time correction of an entirely unplayed legacy draw. Preserve its
+ * roster, mixed pairs, opponents, rounds, courts, timestamps and session state.
+ * The session lock also serializes score entry against this correction. */
+export async function correctMlpOpeningPairsAction(sessionId: string, input: unknown): Promise<void> {
+  const t=await getT();
+  await organize(sessionId,async (db,{actorId,teamCount})=>{
+    const teams=await db.select().from(mlpTeams).where(eq(mlpTeams.sessionId,sessionId)).orderBy(asc(mlpTeams.slot));
+    const gs=await db.select().from(matches).where(eq(matches.sessionId,sessionId));
+    const ties=await db.select().from(mlpTies).where(eq(mlpTies.sessionId,sessionId));
+    const events=gs.length ? await db.select({id:ratingEvents.id}).from(ratingEvents)
+      .where(inArray(ratingEvents.matchId,gs.map(g=>g.id))).limit(1) : [];
+    if(teams.some(hasExplicitOpeningPairs) || !gs.length || events.length ||
+      gs.some(g=>g.status!=="scheduled" || g.scoreA!==null || g.scoreB!==null || g.enteredBy!==null || g.editedAt!==null) ||
+      ties.some(tie=>tie.stage!=="robin" || tie.tiebreakWinner!==null)) throw new Error(t("mlp.error.correction"));
+    if(!validateTeams(input,new Set(teams.flatMap(members)),teamCount) ||
+      input.some((team,i)=>(["name","m1","m2","w1","w2"] as const).some(key=>team[key]!==teams[i]?.[key]))) {
+      throw new Error(t("mlp.error.correction"));
+    }
+    const updated=teams.map((team,i)=>({...team,women1:input[i].women1!,women2:input[i].women2!,men1:input[i].men1!,men2:input[i].men2!}));
+    const byId=new Map(updated.map(team=>[team.id,team]));
+    if(ties.length!==teamCount*(teamCount-1)/2 || gs.length!==ties.length*4) throw new Error(t("mlp.error.correction"));
+    for(const tie of ties) {
+      const a=byId.get(tie.teamAId),b=byId.get(tie.teamBId);
+      if(!a || !b) throw new Error(t("mlp.error.correction"));
+      for(const g of lineups(a,b)) {
+        const found=gs.filter(m=>m.mlpTieId===tie.id&&m.mlpGame===g.kind);
+        if(found.length!==1) throw new Error(t("mlp.error.correction"));
+        // Mixed lineups must already match; this action cannot change them.
+        if(g.kind.startsWith("mixed")) {
+          if([found[0].a1,found[0].a2,found[0].b1,found[0].b2].some((p,i)=>p!==g.players[i])) throw new Error(t("mlp.error.correction"));
+        } else {
+          await db.update(matches).set({a1:g.players[0],a2:g.players[1],b1:g.players[2],b2:g.players[3]})
+            .where(eq(matches.id,found[0].id));
+        }
+      }
+    }
+    for(const team of updated) await db.update(mlpTeams).set({women1:team.women1,women2:team.women2,men1:team.men1,men2:team.men2})
+      .where(eq(mlpTeams.id,team.id));
+    await db.insert(auditLog).values({actorId,action:"mlp.correct_opening_pairs",targetType:"session",targetId:sessionId,
+      detail:JSON.stringify({before:teams,after:updated})});
+  },null);
   refresh(sessionId);
 }
 

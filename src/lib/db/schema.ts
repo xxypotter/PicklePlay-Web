@@ -262,9 +262,8 @@ export const rounds = pgTable(
   (t) => [uniqueIndex("rounds_session_index_idx").on(t.sessionId, t.index)],
 );
 
-/** Mini MLP: 4–6 named teams, each with four fixed members.
- * Legacy m/w columns are lineup slots, not gender constraints: fixed pairs are
- * m1+w1 and m2+w2; opening doubles use w1+w2 and m1+m2. */
+/** Mini MLP: four named, fixed lineups per squad, with no gender constraints.
+ * Mixed pairs remain m1+w1 / m2+w2. Nullable opening fields preserve old draws. */
 export const mlpTeams = pgTable("mlp_teams", {
   id: uuid("id").primaryKey().defaultRandom(),
   sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
@@ -274,6 +273,10 @@ export const mlpTeams = pgTable("mlp_teams", {
   m2: uuid("m2").notNull().references(() => players.id),
   w1: uuid("w1").notNull().references(() => players.id),
   w2: uuid("w2").notNull().references(() => players.id),
+  women1: uuid("women1").references(() => players.id),
+  women2: uuid("women2").references(() => players.id),
+  men1: uuid("men1").references(() => players.id),
+  men2: uuid("men2").references(() => players.id),
 }, (t) => [uniqueIndex("mlp_teams_session_slot_idx").on(t.sessionId, t.slot)]);
 
 /** Four individual games decide one team encounter. No aggregate rating event. */

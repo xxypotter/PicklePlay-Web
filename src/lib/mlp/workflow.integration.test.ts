@@ -10,7 +10,7 @@ import type { Actor } from "@/lib/auth/policy";
 import { inTransaction } from "@/lib/db/transaction";
 import { recomputeAll } from "@/lib/rating/service";
 import { makeBackup } from "@/lib/db/backup";
-import { addMlpPlayoffAction, createMlpScheduleAction, removeMlpPlayoffsAction, saveMlpTeamsAction, setMlpTiebreakAction } from "./actions";
+import { addMlpPlayoffAction, correctMlpOpeningPairsAction, createMlpScheduleAction, removeMlpPlayoffsAction, saveMlpTeamsAction, setMlpTiebreakAction } from "./actions";
 import { createManualRoundAction, discardRoundAction, generateAllRoundsAction, rebuildMatchupsAction, restoreMatchAction, saveScoreAction, voidMatchAction } from "@/lib/sessions/play-actions";
 import { addPlayerAction, removePlayerAction, setAttendanceAction, setPartnerAction } from "@/lib/sessions/actions";
 import { lineups, outcome, standings, type Encounter, type TeamInput } from "./rules";
@@ -25,6 +25,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   const personIds:string[]=Array.from({length:25},()=>randomUUID());
   const id=randomUUID(), otherId=randomUUID(), fixedId=randomUUID();
   const flexibleIds=[randomUUID(),randomUUID()];
+  const legacyId=randomUUID();
   let verified=false;
   // Exercise every composition in actual stored player profiles, including unknown gender.
   const genders:("male"|"female"|"unspecified")[]=[
@@ -32,7 +33,26 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     "male","male","male","female", "male","female","female","female",
     "male","female","male","female", "unspecified","unspecified","unspecified","unspecified", "male",
   ];
-  const input:TeamInput[]=Array.from({length:6},(_,i)=>({name:`Test team ${i+1}`,m1:personIds[i*4],w1:personIds[i*4+1],m2:personIds[i*4+2],w2:personIds[i*4+3]}));
+  const input:TeamInput[]=Array.from({length:6},(_,i)=>({name:`Test team ${i+1}`,m1:personIds[i*4],w1:personIds[i*4+1],m2:personIds[i*4+2],w2:personIds[i*4+3],
+    women1:personIds[i*4],women2:personIds[i*4+3],men1:personIds[i*4+1],men2:personIds[i*4+2]}));
+  // Independently check persisted participants against organizer inputs, not
+  // against the generator being tested. Includes every RR/playoff game.
+  const assertSavedLineups=async(sessionId:string)=>{
+    const db=getDb();
+    const teams=await db.select().from(mlpTeams).where(eq(mlpTeams.sessionId,sessionId));
+    const ties=await db.select().from(mlpTies).where(eq(mlpTies.sessionId,sessionId));
+    const games=await db.select().from(matches).where(eq(matches.sessionId,sessionId));
+    const pair=(teamId:string,kind:string)=>{
+      const chosen=input.find(t=>t.name===teams.find(t=>t.id===teamId)!.name)!;
+      return kind==="women"?[chosen.women1,chosen.women2]:kind==="men"?[chosen.men1,chosen.men2]:
+        kind==="mixed1"?[chosen.m1,chosen.w1]:[chosen.m2,chosen.w2];
+    };
+    for(const g of games){
+      const tie=ties.find(t=>t.id===g.mlpTieId)!;
+      expect([g.a1,g.a2]).toEqual(pair(tie.teamAId,g.mlpGame!));
+      expect([g.b1,g.b2]).toEqual(pair(tie.teamBId,g.mlpGame!));
+    }
+  };
   beforeAll(async()=>{
     config({path:".env.local",quiet:true});
     if(new URL(process.env.DATABASE_URL!).pathname!=="/pickleplay_dev") throw new Error("Development DB required");
@@ -49,7 +69,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   },30000);
   afterAll(async()=>{
     if(!verified)return;
-    await getDb().delete(sessions).where(inArray(sessions.id,[id,otherId,fixedId,...flexibleIds]));
+    await getDb().delete(sessions).where(inArray(sessions.id,[id,otherId,fixedId,legacyId,...flexibleIds]));
     await getDb().delete(auditLog).where(inArray(auditLog.actorId,personIds));
     await getDb().delete(players).where(inArray(players.id,personIds));
   },30000);
@@ -103,6 +123,8 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     for(const m of await db.select().from(matches).where(eq(matches.mlpTieId,playoffs[0].id)))expect(await score(m.id,11,8)).toEqual({});
     games=await db.select().from(matches).where(eq(matches.sessionId,id));
     expect(games).toHaveLength(72);expect(games.every(g=>g.status==="completed")).toBe(true);
+    await assertSavedLineups(id);
+    await expect(correctMlpOpeningPairsAction(id,input)).rejects.toThrow();
   },300000);
   it.each([4,5])("runs a %i-team tournament with all-men, all-women and asymmetric teams, enforcing capacity and playoff seeding",async count=>{
     const db=getDb(),sessionId=flexibleIds[count-4],roster=personIds.slice(0,count*4);
@@ -150,7 +172,50 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     expect(outcome({...final,games:finalGames.map(g=>({kind:g.mlpGame,scoreA:11,scoreB:8,status:"completed"}))}).winner).toBe(final.teamAId);
     expect(await db.select().from(matches).where(eq(matches.sessionId,sessionId))).toHaveLength(count*(count-1)*2+12);
     await expect(addMlpPlayoffAction(sessionId)).rejects.toThrow();
+    await assertSavedLineups(sessionId);
   },180000);
+  it("corrects only an untouched legacy draw once, preserving mixed partners and all match identities",async()=>{
+    const db=getDb(), selected=input.slice(0,4);
+    const legacy=selected.map(t=>({...t,women1:t.w1,women2:t.w2,men1:t.m1,men2:t.m2}));
+    await db.insert(sessions).values({id:legacyId,title:"Legacy correction test",createdBy:actor.id,
+      format:"mlp",courtCount:4,courtNames:["1","2","3","4"],maxPlayers:16,status:"live",rated:false,startsAt:new Date()});
+    await db.insert(signups).values(personIds.slice(0,16).map(playerId=>({sessionId:legacyId,playerId,state:"in" as const})));
+    await saveMlpTeamsAction(legacyId,legacy);
+    await createMlpScheduleAction(legacyId);
+    await expect(correctMlpOpeningPairsAction(legacyId,selected)).rejects.toThrow();
+    // Simulate the pre-migration nullable row shape on a synthetic dev fixture.
+    await db.update(mlpTeams).set({women1:null,women2:null,men1:null,men2:null}).where(eq(mlpTeams.sessionId,legacyId));
+    await db.update(sessions).set({status:"closed"}).where(eq(sessions.id,legacyId));
+    const before=await db.select().from(matches).where(eq(matches.sessionId,legacyId));
+    actor={...actor,id:personIds[24]};
+    await expect(correctMlpOpeningPairsAction(legacyId,selected)).rejects.toThrow();
+    actor={...actor,id:personIds[0]};
+    await expect(correctMlpOpeningPairsAction(legacyId,selected.map((t,i)=>i?t:{...t,m1:t.w1,w1:t.m1}))).rejects.toThrow();
+    await expect(correctMlpOpeningPairsAction(legacyId,selected.map((t,i)=>i?t:{...t,women1:t.men1}))).rejects.toThrow();
+    for(const change of [{status:"completed" as const,scoreA:11,scoreB:8},{status:"void" as const},
+      {scoreA:11},{enteredBy:actor.id},{editedAt:new Date()}]) {
+      await db.update(matches).set(change).where(eq(matches.id,before[0].id));
+      await expect(correctMlpOpeningPairsAction(legacyId,selected)).rejects.toThrow();
+      await db.update(matches).set({status:"scheduled",scoreA:null,scoreB:null,enteredBy:null,editedAt:null}).where(eq(matches.id,before[0].id));
+    }
+    await db.insert(ratingEvents).values({matchId:before[0].id,playerId:before[0].a1,ratingBefore:3,ratingAfter:3,delta:0,k:0,surprise:0,reliabilityAtTime:0});
+    await expect(correctMlpOpeningPairsAction(legacyId,selected)).rejects.toThrow();
+    await db.delete(ratingEvents).where(eq(ratingEvents.matchId,before[0].id));
+    expect(await db.select().from(matches).where(eq(matches.sessionId,legacyId))).toEqual(expect.arrayContaining(before));
+    await correctMlpOpeningPairsAction(legacyId,selected);
+    await assertSavedLineups(legacyId);
+    const after=await db.select().from(matches).where(eq(matches.sessionId,legacyId));
+    expect(after).toHaveLength(before.length);
+    for(const old of before){
+      const current=after.find(g=>g.id===old.id)!;
+      if(old.mlpGame!.startsWith("mixed"))expect(current).toEqual(old);
+      else {const {a1,a2,b1,b2,...meta}=old;void a1;void a2;void b1;void b2;expect(current).toMatchObject(meta);}
+    }
+    expect((await db.select().from(sessions).where(eq(sessions.id,legacyId)))[0].status).toBe("closed");
+    await expect(correctMlpOpeningPairsAction(legacyId,selected)).rejects.toThrow();
+    await expect(saveMlpTeamsAction(legacyId,selected)).rejects.toThrow();
+    expect(await db.select().from(auditLog).where(and(eq(auditLog.targetId,legacyId),eq(auditLog.action,"mlp.correct_opening_pairs")))).toHaveLength(1);
+  },120000);
   it("keeps fixed pairs after a partial-session rebuild; denies cross-session discard and score-based void restoration",async()=>{
     const db=getDb();
     for(let i=0;i<16;i+=2)await setPartnerAction(fixedId,personIds[i],personIds[i+1]);

@@ -12,10 +12,14 @@ export const encounterCount = (teams: number) => teams * (teams - 1) / 2;
 export const GAME_KINDS = ["women", "men", "mixed1", "mixed2"] as const;
 export type GameKind = (typeof GAME_KINDS)[number];
 export type Stage = "robin" | "semifinal" | "final";
+export const OPENING_SLOTS = ["women1", "women2", "men1", "men2"] as const;
 export interface Team {
   id: string; slot: number; name: string;
-  /** Fixed pairs: m1+w1 and m2+w2. UI Player 1=w, Player 2=m; any gender. */
+  /** Fixed mixed pairs: m1+w1 and m2+w2; no gender restrictions. */
   m1: string; m2: string; w1: string; w2: string;
+  /** Explicit opening pairs. Null/absent only on draws created before this fix. */
+  women1?: string | null; women2?: string | null;
+  men1?: string | null; men2?: string | null;
 }
 export type TeamInput = Omit<Team, "id" | "slot">;
 export const members = (t: TeamInput) => [t.m1, t.m2, t.w1, t.w2];
@@ -116,13 +120,22 @@ export function roundRobinReady(teams: Team[], ties: Encounter[]): boolean {
   return pairs.size === robin.length;
 }
 
+export const hasExplicitOpeningPairs = (t: TeamInput) => OPENING_SLOTS.every(key => !!t[key]);
+
+/** Legacy fallback preserves saved draws and any later playoff generation.
+ * New setups must explicitly save all four categories before drawing games. */
+export function teamLineups(t: TeamInput): Record<GameKind, [string, string]> {
+  return {
+    women: [t.women1 ?? t.w1, t.women2 ?? t.w2],
+    men: [t.men1 ?? t.m1, t.men2 ?? t.m2],
+    mixed1: [t.m1, t.w1],
+    mixed2: [t.m2, t.w2],
+  };
+}
+
 export function lineups(a: Team, b: Team) {
-  return [
-    { kind: "women" as const, players: [a.w1,a.w2,b.w1,b.w2] },
-    { kind: "men" as const, players: [a.m1,a.m2,b.m1,b.m2] },
-    { kind: "mixed1" as const, players: [a.m1,a.w1,b.m1,b.w1] },
-    { kind: "mixed2" as const, players: [a.m2,a.w2,b.m2,b.w2] },
-  ];
+  const aa=teamLineups(a), bb=teamLineups(b);
+  return GAME_KINDS.map(kind=>({kind,players:[...aa[kind],...bb[kind]]}));
 }
 
 export function validateTeams(input: unknown, roster: ReadonlySet<string>, expectedCount: number): input is TeamInput[] {
@@ -138,6 +151,11 @@ export function validateTeams(input: unknown, roster: ReadonlySet<string>, expec
       if (typeof id !== "string" || used.has(id) || !roster.has(id)) return false;
       used.add(id);
     }
+    // Each wave must use the same four squad members exactly once. This keeps
+    // workloads equal and prevents two simultaneous games for one player.
+    const opening = OPENING_SLOTS.map(key=>t[key]);
+    const squad = new Set(members(t));
+    if (new Set(opening).size !== 4 || opening.some(id=>typeof id!=="string" || !squad.has(id))) return false;
   }
   return used.size === expectedCount * 4;
 }

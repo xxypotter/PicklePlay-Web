@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { GAME_KINDS, lineups, outcome, robinBlocks, roundRobinReady, standings, validMlpConfig, validateTeams, type Encounter, type Team } from "./rules";
+import { GAME_KINDS, lineups, outcome, robinBlocks, roundRobinReady, standings, teamLineups, validMlpConfig, validateTeams, type Encounter, type Team } from "./rules";
 
 const teams: Team[] = Array.from({length:6},(_,i)=>({id:`t${i}`,slot:i+1,name:`Team ${i+1}`,
-  m1:`${i}m1`,m2:`${i}m2`,w1:`${i}w1`,w2:`${i}w2`}));
+  m1:`${i}m1`,m2:`${i}m2`,w1:`${i}w1`,w2:`${i}w2`,
+  // Deliberately unlike the old position-derived opening pairs.
+  women1:`${i}m1`,women2:`${i}w2`,men1:`${i}w1`,men2:`${i}m2`}));
 const encounter = (scores:number[][], extra:Partial<Encounter>={}): Encounter => ({
   id:"tie",index:1,block:1,stage:"robin",teamAId:"t0",teamBId:"t1",tiebreakWinner:null,
   games:scores.map(([scoreA,scoreB],i)=>({kind:GAME_KINDS[i],scoreA,scoreB,status:"completed"})),...extra,
@@ -33,11 +35,24 @@ describe("Mini MLP",()=>{
     if(count===5) expect(byes).toEqual([1,1,1,1,1]);
     if(count===4) expect(byes).toEqual([0,0,0,0]);
   });
-  it("keeps setup mixed partners against every opponent, including playoff encounters",()=>{
+  it("keeps all four explicitly selected pairs against every opponent, including playoff encounters",()=>{
     for(const a of teams) for(const b of teams.filter(t=>t!==a)) {
       const games=lineups(a,b);
+      expect(games[0].players).toEqual([a.women1,a.women2,b.women1,b.women2]);
+      expect(games[1].players).toEqual([a.men1,a.men2,b.men1,b.men2]);
       expect(games[2].players).toEqual([a.m1,a.w1,b.m1,b.w1]);
       expect(games[3].players).toEqual([a.m2,a.w2,b.m2,b.w2]);
+    }
+  });
+  it("preserves legacy draws while requiring explicit opening pairs for new setups",()=>{
+    const legacy=teams.map(t=>({...t,women1:null,women2:null,men1:null,men2:null}));
+    expect(teamLineups(legacy[0])).toEqual({women:["0w1","0w2"],men:["0m1","0m2"],mixed1:["0m1","0w1"],mixed2:["0m2","0w2"]});
+    expect(validateTeams(legacy,new Set(legacy.flatMap(t=>[t.m1,t.m2,t.w1,t.w2])),6)).toBe(false);
+  });
+  it("rejects missing, duplicate, foreign-team and outsider opening selections",()=>{
+    const roster=new Set(teams.flatMap(t=>[t.m1,t.m2,t.w1,t.w2]));
+    for(const change of [{women1:""},{men1:null},{women1:teams[0].men1},{women2:teams[1].w1},{men2:"outsider"}]) {
+      expect(validateTeams([{...teams[0],...change},...teams.slice(1)],roster,6)).toBe(false);
     }
   });
   it.each([4,5,6])("validates exactly %i teams using distinct roster members, without gender restrictions", count=>{

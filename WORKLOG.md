@@ -1,5 +1,68 @@
 # Shared work log
 
+## Ready to release: explicit Mini MLP lineups — Codex, 2026-09-27
+
+Branch codex/mlp-partner-review, baseline ef1c9f9. This resolves the investigation
+below: user clarified that organizers choose four category-specific pairs
+(men, women, mixed 1, mixed 2), fixed for the session. It is NOT two pairs playing
+both opposing pairs. All gender combinations remain allowed.
+
+- New setup explicitly selects opening women/men pairs independently from the
+  two mixed pairs. Each wave uses the four squad members exactly once. New
+  draws require all four categories; RR and playoffs use the saved selections.
+- Additive migration 0015_hot_spirit adds nullable women1/2, men1/2 player FKs.
+  Old null rows keep their original opening slots for compatibility. No auto
+  changes to existing draws, score history or rating tuning.
+- One-time correction UI for entirely untouched old draws: organizer/superadmin
+  can review opening pairs, including on closed test sessions. Server rejects
+  score/void/entry metadata, rating events, playoffs, changed mixed pairs/roster,
+  unauthorized callers or a second correction. Session lock serializes scoring;
+  audit records before/after. Match identity/time/court/opponents/status survive.
+- Team standings expand all four lineups. English, Simplified/Traditional Chinese
+  and v1.7 notes updated; PROJECT, PORT and PORT-v1.7 describe the new rule.
+- Checks: 338 standard tests pass; all six development DB workflows pass in
+  162 seconds, including complete 4/5/6-team tournaments and independent lineup
+  assertions for every RR/playoff game. Typecheck, lint and final build pass.
+- Browser: five-team setup saves explicit opening selections, creates 40 games,
+  locks the setup, displays all four categories and has no mobile overflow.
+  Legacy correction was exercised on a synthetic closed draw: all 40 games
+  retained, mixed games bit-identical, status remains closed, correction locks.
+  Screenshot: ignored .scratch/v1.7-explicit-lineups.png. Fixture cleaned up;
+  temporary browser tab closed and development server stopped.
+- Migration applied to development and production successfully after backup:
+  local-backups/v1.7-lineups-before-2026-09-27T20-50-06-394Z.json (ignored).
+  Snapshot counts: 118 players, 125 seeds, 22 sessions, 222 signups, 204 rounds,
+  449 matches, 1540 rating events, 118 stats, 6 MLP teams, 15 encounters.
+  Post-migration hashes confirm matches/seeds/events/stats/rounds/encounters and
+  existing team fields unchanged. Authentication data excluded from backup.
+- Rollback tag backup/v1.7-before-explicit-lineups points to ef1c9f9. Release
+  push and Vercel verification pending. No production lineup correction has
+  been performed; the organizer must choose opening pairs explicitly in the UI.
+
+## Investigated: Mini MLP opening-game partners — Codex, 2026-09-27
+
+Branch: codex/mlp-partner-review, baseline ef1c9f9. Product code unchanged.
+User reported that an organizer-selected mixed pair was split in the draw.
+
+- Read-only production audit found one closed six-team Mini MLP session, with
+  60 scheduled games and no completed scores. Every game matches the current
+  generator; all five designated fixed-pair games preserve the reported pair.
+- Cause: opening doubles use w1+w2 and m1+m2 (the two Player 1s / Player 2s),
+  whereas fixed-pair games use m1+w1 and m2+w2. After gender restrictions were
+  removed, slot order can produce an unintended mixed pair in opening doubles.
+  This is a product-rule/setup mismatch, not a saved-pair mutation.
+- 15 Mini MLP rule tests pass. Current pair-stability assertions cover the two
+  fixed-pair games only; they do not promise one partner across all four games.
+- Asked user whether selected pairs must stay together in every game (each
+  pair faces both opposing pairs), or whether opening gender doubles should
+  remain where possible before the two fixed mixed-pair games. Await that rule
+  decision before changing generation, labels, or existing draws.
+- No production writes, migrations, release, or rating changes. Audit script is
+  ignored at .scratch/audit-mlp-partners.mjs. If rules change, update PORT and
+  PORT-v1.7 and test all team counts and playoff stages with independent
+  assertions of the selected rule. Existing session has no scores but must not
+  be reopened or rebuilt without including that action in the agreed scope.
+
 ## Completed: flexible Mini MLP within v1.7 — Codex, 2026-09-26
 
 Baseline e5c8984, implementation branch codex/v1.7-flexible-mlp, merged to main.

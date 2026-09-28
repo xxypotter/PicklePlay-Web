@@ -1,12 +1,13 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { matches, mlpTeams, mlpTies, players } from "@/lib/db/schema";
-import type { Encounter, Team } from "./rules";
+import { hasExplicitOpeningPairs, type Encounter, type Team } from "./rules";
 
 export interface MlpData {
   teams: Team[];
   ties: Encounter[];
   names: Record<string, string>;
+  canCorrectOpeningPairs: boolean;
 }
 
 export async function getMlpData(sessionId: string): Promise<MlpData> {
@@ -21,6 +22,9 @@ export async function getMlpData(sessionId: string): Promise<MlpData> {
     .from(players).where(inArray(players.id, ids)) : [];
   return {
     teams, names: Object.fromEntries(people.map(p => [p.id,p.username])),
+    canCorrectOpeningPairs: teams.length>0 && teams.every(t=>!hasExplicitOpeningPairs(t)) && games.length>0 &&
+      games.every(g=>g.status==="scheduled" && g.scoreA===null && g.scoreB===null && g.enteredBy===null && g.editedAt===null) &&
+      ties.every(t=>t.stage==="robin" && t.tiebreakWinner===null),
     ties: ties.map(t => ({ ...t, games: games.filter(g => g.mlpTieId === t.id).map(g => ({
       kind: g.mlpGame, scoreA: g.scoreA, scoreB: g.scoreB, status: g.status,
     })) })),

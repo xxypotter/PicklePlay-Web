@@ -20,8 +20,10 @@ the code that depends on them, after backup and development validation.
 
 - Mobile doubles organizer: regular, balanced, gender-balanced, fixed partners,
   custom rounds, and Mini MLP (v1.7): 4/5/6 teams of four, four courts, any
-  gender mix, two organizer-selected fixed pairs per squad. Team count is
-  session capacity / 4. Historical m/w columns are lineup slots, not genders.
+  gender mix, four organizer-selected category lineups per squad (women, men,
+  mixed 1, mixed 2), locked for the session. Team count is session capacity / 4.
+  Historical m/w columns store mixed pairs; women1/2 and men1/2 store opening
+  pairs. These category names do not impose player-gender restrictions.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.
 - Rating engine: src/lib/rating/engine.ts; tuning epochs: constants.ts;
