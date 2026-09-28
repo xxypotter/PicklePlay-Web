@@ -894,7 +894,7 @@ export const en = {
   "err.scoreVoided": "This match is voided. It must be restored before its score can be edited.",
   "notes.v17.mlp": "Mini MLP: choose 4, 5 or 6 teams of four, with any gender mix, including all men, all women or mixed teams. Four courts, complete round robin and top-four playoffs.",
   "notes.v17.mlpBronze": "Mini MLP playoffs now include a bronze match: semifinal winners play for gold while the losers play for bronze on the other two courts at the same time, so it adds no time. Six-team round robins are rest-balanced so no team plays more than two matchups in a row, and team setup shows each player's gender.",
-  "notes.v17.playerSearch": "Creating or editing a session now has a search box above the player list: type a few letters of a name, tap the player, and the box clears for the next one. Enter adds the only match.",
+  "notes.v17.playerSearch": "Creating, editing or running a session now has a search box above the player list: type a few letters of a name, tap the player, and the box clears for the next one. Enter adds the only match.",
   "notes.v17.mlpScores": "Mini MLP team results use four games: at 2–2, total points decide; an exact tie goes to an organizer decision. Includes team standings and playoff results.",
   "notes.v17.fixed": "Fixed partners stay together in added and rebuilt rounds. Organizers can pair late arrivals during play; existing matches keep their original players.",
   "notes.v17.gender": "Gender-balanced draws always avoid two men against two women, with partner rotation prioritized next.",

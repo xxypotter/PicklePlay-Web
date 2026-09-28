@@ -14,6 +14,8 @@ import {
   setAttendanceAction,
   setPartnerAction,
 } from "@/lib/sessions/actions";
+import PlayerSearch from "@/components/PlayerSearch";
+import { matchPlayers } from "@/lib/players/search";
 import {
   addFinalsAction,
   addMedalRoundAction,
@@ -483,20 +485,40 @@ export function AddPlayers({
 }) {
   const t = useT();
   const [pending, start] = useTransition();
+  const [query, setQuery] = useState("");
   if (candidates.length === 0) return null;
+
+  // Same as Edit's Add players: an add clears the search for the next name.
+  const add = (playerId: string) => {
+    setQuery("");
+    start(() => void addPlayerAction(sessionId, playerId));
+  };
+  const shown = matchPlayers(candidates, query);
 
   return (
     <details className="mt-4">
       <summary className="cursor-pointer text-sm font-semibold text-[var(--accent)]">
         {t("play.addSomeone", { count: candidates.length })}
       </summary>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {candidates.map((c) => (
+      <div className="mt-3">
+        <PlayerSearch
+          value={query}
+          onChange={setQuery}
+          onPickOnly={() => {
+            if (shown.length === 1 && !pending) add(shown[0].id);
+          }}
+        />
+      </div>
+      {shown.length === 0 ? (
+        <p className="hint">{t("search.none", { query: query.trim() })}</p>
+      ) : null}
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {shown.map((c) => (
           <button
             key={c.id}
             type="button"
             disabled={pending}
-            onClick={() => start(() => void addPlayerAction(sessionId, c.id))}
+            onClick={() => add(c.id)}
             className="truncate rounded-xl border border-[var(--border)] px-3 py-2.5 text-left
               text-sm disabled:opacity-50"
           >

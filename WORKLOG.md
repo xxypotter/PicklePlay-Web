@@ -1,5 +1,19 @@
 # Shared work log
 
+## Released: player search on the play console — Claude, 2026-09-28
+
+Branch claude/play-player-search from main a051e2d. User approved extending
+the search below to the play console's "Add someone who didn't sign up".
+
+- src/app/s/[id]/play/PlayControls.tsx AddPlayers now uses PlayerSearch +
+  matchPlayers exactly like Edit's Add players (an add clears the box; Enter
+  adds the single match). v1.7 note and PORT §7 now say create, edit or run.
+- Checks: 348 tests, typecheck, lint, build pass. Browser (dev, dev_ana, open
+  "Copy test — main" fixture): "fa"+Enter added dev_fay, tap added dev_cara,
+  box cleared and kept focus, section stayed open, 375px no overflow. Test
+  signups removed afterwards.
+- Deployment: recorded in the follow-up commit.
+
 ## Released: player search on create/edit session — Claude, 2026-09-28
 
 Branch claude/player-search from main 25407d0. User asked for a letter search
