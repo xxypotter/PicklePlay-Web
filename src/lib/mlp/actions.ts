@@ -7,7 +7,7 @@ import { requireOrganizer } from "@/lib/sessions/guards";
 import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
 import { auditLog, matches, mlpTeams, mlpTies, players, ratingEvents, rounds, sessions, signups } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
-import { hasExplicitOpeningPairs, lineups, members, outcome, robinBlocks, roundRobinReady, standings, validMlpConfig, validateTeams, type Encounter, type Stage, type Team } from "./rules";
+import { hasExplicitOpeningPairs, lineups, members, outcome, robinBlocks, roundRobinReady, semiResults, standings, validMlpConfig, validateTeams, type Encounter, type Stage, type Team } from "./rules";
 
 function refresh(id: string) {
   revalidatePath(`/s/${id}`); revalidatePath(`/s/${id}/play`);
@@ -172,10 +172,12 @@ export async function addMlpPlayoffAction(sessionId: string): Promise<void> {
     if (ties.some(t=>t.stage==="final")) throw new Error(t("err.finalsExist"));
     const semis=ties.filter(t=>t.stage==="semifinal");
     if (semis.length) {
-      const winners=semis.map(s=>outcome(s).winner);
-      if (semis.length!==2 || winners.some(w=>!w)) throw new Error(t("mlp.error.playoffReady"));
-      const finalists=winners.map(id=>teams.find(t=>t.id===id)!);
-      await appendBlocks(db,sessionId,finalists,[[[0,1]]],"final");
+      const results=semiResults(ties);
+      if (!results) throw new Error(t("mlp.error.playoffReady"));
+      // Winners play for gold on courts 1–2 while the losers play for bronze on
+      // 3–4 — the same waves, so the bronze match costs no extra time.
+      const four=[...results.winners,...results.losers].map(id=>teams.find(t=>t.id===id)!);
+      await appendBlocks(db,sessionId,four,[[[0,1],[2,3]]],"final");
     } else {
       const robin=ties.filter(t=>t.stage==="robin");
       if (!roundRobinReady(teams,robin)) {

@@ -3,20 +3,24 @@ import ConfirmAction from "./ConfirmAction";
 import { useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import type { MlpData } from "@/lib/mlp/queries";
-import { encounterCount, GAME_KINDS, outcome, roundRobinReady, standings, teamLineups, type Encounter } from "@/lib/mlp/rules";
+import { encounterCount, finalsOf, GAME_KINDS, outcome, podium, roundRobinReady, standings, teamLineups, type Encounter } from "@/lib/mlp/rules";
 import { addMlpPlayoffAction, removeMlpPlayoffsAction, setMlpTiebreakAction } from "@/lib/mlp/actions";
 
 export default function MlpBoard({data,sessionId,organizer=false,live=false}:{data:MlpData;sessionId:string;organizer?:boolean;live?:boolean}) {
   const t=useT(),[pending,start]=useTransition(),[error,setError]=useState("");
   const run=(fn:()=>Promise<void>)=>start(async()=>{setError("");try{await fn();}catch(e){setError(e instanceof Error?e.message:String(e));}});
   const name=(id:string)=>data.teams.find(team=>team.id===id)?.name ?? "?";
-  const semis=data.ties.filter(tie=>tie.stage==="semifinal"), final=data.ties.find(tie=>tie.stage==="final");
+  const semis=data.ties.filter(tie=>tie.stage==="semifinal");
+  // Gold and bronze are drawn together, so one "final stage" covers both.
+  const {gold,bronze}=finalsOf(data.ties);
+  const finals=[gold,bronze].filter((tie):tie is Encounter=>tie!==null);
+  const places=podium(data.ties);
   const robin=data.ties.filter(tie=>tie.stage==="robin");
-  const ready=!final && (semis.length===2 ? semis.every(s=>outcome(s).winner) : roundRobinReady(data.teams,robin));
-  const removable=(final?[final]:semis);
+  const ready=!gold && (semis.length===2 ? semis.every(s=>outcome(s).winner) : roundRobinReady(data.teams,robin));
+  const removable=(finals.length?finals:semis);
   const card=(tie:Encounter)=>{
     const result=outcome(tie);
-    const downstream=tie.stage==="robin"?semis.length>0:tie.stage==="semifinal"?!!final:false;
+    const downstream=tie.stage==="robin"?semis.length>0:tie.stage==="semifinal"?!!gold:false;
     return <div key={tie.id} className="card-tight p-3">
       <p className="mb-2 text-xs text-[var(--muted)]">{t("mlp.encounter",{n:tie.index,block:tie.block})}</p>
       {[tie.teamAId,tie.teamBId].map((id,i)=><div key={id} className={`flex justify-between gap-3 ${result.winner===id?"font-bold text-[var(--accent)]":""}`}>
@@ -36,9 +40,15 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
       <h2 className="font-semibold">{t("mlp.playoffs")}</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div className="space-y-2"><h3 className="label">{t("schedule.stage.semifinal")}</h3>{semis.map(card)}</div>
-        <div className="space-y-2"><h3 className="label">{t("mlp.championship")}</h3>{final?card(final):<p className="hint">{t("mlp.finalPending")}</p>}</div>
+        <div className="space-y-2">
+          <h3 className="label">{t("mlp.championship")}</h3>
+          {gold?card(gold):<p className="hint">{t("mlp.finalPending")}</p>}
+          {bronze?<><h3 className="label pt-2">{t("mlp.bronze")}</h3>{card(bronze)}</>:null}
+        </div>
       </div>
-      {final&&outcome(final).winner?<p className="mt-4 font-bold">🏆 {name(outcome(final).winner!)}</p>:null}
+      {places.length?<ul className="mt-4 space-y-1 border-t border-[var(--border)] pt-3">
+        {places.map(p=><li key={p.place} className="font-bold">{["🥇","🥈","🥉"][p.place-1]} {name(p.teamId)}</li>)}
+      </ul>:null}
     </section>:null}
     <section className="card overflow-x-auto">
       <h2 className="font-semibold">{t("mlp.standings")}</h2><p className="hint">{t("mlp.rankRule")}</p>
@@ -53,7 +63,7 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
         </td><td className="px-2 py-3 whitespace-nowrap">{r.wins}–{r.losses}</td><td className="px-2 py-3 whitespace-nowrap">{r.gamesWon}–{r.gamesLost}</td><td className="py-3 pl-2">{r.pointsFor-r.pointsAgainst}</td>
       </tr>)}</tbody></table>
     </section>
-    {organizer&&live&&!final?<div className="card"><p className="hint">{t("mlp.playoffHint",{count:encounterCount(data.teams.length)})}</p>
+    {organizer&&live&&!gold?<div className="card"><p className="hint">{t("mlp.playoffHint",{count:encounterCount(data.teams.length)})}</p>
       <ConfirmAction label={t(semis.length?"mlp.addFinal":"mlp.addSemis")} confirmation={t("mlp.playoffConfirm")}
         disabled={pending||!ready} onConfirm={()=>run(()=>addMlpPlayoffAction(sessionId))} />
     </div>:null}

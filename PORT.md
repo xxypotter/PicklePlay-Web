@@ -1093,8 +1093,10 @@ one partner per player across different game types. These are category labels,
 not gender restrictions: all-men/all-women/asymmetric teams remain valid.
 
 Setup selects mixed pairs (which establish the four-member roster), then two
-opening pairs from that roster. Each wave must use each squad member exactly
-once: women+men are one partition of four; mixed1+mixed2 are another. Reject
+opening pairs from that roster. Each player's name carries their profile gender
+— "name (F)" / "name (M)", nothing for unspecified — so the organizer can see
+who they are pairing. Information only: it never filters or validates.
+Each wave must use each squad member exactly once: women+men are one partition of four; mixed1+mixed2 are another. Reject
 missing, duplicate, outsider or other-squad players. Each player plays twice
 per encounter. The app decides opposing squads and matches like categories.
 All four saved lineups lock when the draw is generated and persist to playoffs.
@@ -1123,23 +1125,39 @@ courts for two waves. Complete verified zero-indexed schedules:
 4 teams: [(0,3),(1,2)], [(0,2),(3,1)], [(0,1),(2,3)]
 5 teams: [(1,4),(2,3)], [(0,4),(1,2)], [(0,3),(4,2)],
          [(0,2),(3,1)], [(0,1),(3,4)]
-6 teams: [(0,5),(1,4)], [(2,3),(0,4)], [(5,3),(1,2)], [(0,3),(4,2)],
-         [(5,1),(0,2)], [(3,1),(4,5)], [(0,1),(2,5)], [(3,4)]
+6 teams: [(0,1),(2,3)], [(0,4),(1,5)], [(2,4),(3,5)], [(0,2),(1,3)],
+         [(0,5),(1,4)], [(2,5),(3,4)], [(0,3),(1,2)], [(4,5)]
 ```
+
+Rest balancing (v1.7, 2026-09-28). Each six-team squad plays five of the eight
+blocks. The order above spreads the three rests so no squad plays more than two
+blocks (four games) in a row or waits more than one; two in a row is the floor.
+The original order sent one squad through four straight blocks. Five teams are
+already at their floor: one bye per block forces the first-block bye team to
+play the next four. Four teams play every block. Found by exhaustive search.
+The table applies to new draws only. A draw is stored (encounters, blocks,
+rounds, courts) when generated and never regenerated, so earlier draws —
+including the original six-team order — keep working unchanged.
 
 | Teams | Players | RR encounters | RR games | RR waves | Games/player in RR | Games including playoffs |
 | --- | --- | --- | --- | --- | --- | --- |
-| 4 | 16 | 6 | 24 | 6 | 6 | 36 |
-| 5 | 20 | 10 | 40 | 10 | 8 | 52 |
-| 6 | 24 | 15 | 60 | 16 | 10 | 72 |
+| 4 | 16 | 6 | 24 | 6 | 6 | 40 |
+| 5 | 20 | 10 | 40 | 10 | 8 | 56 |
+| 6 | 24 | 15 | 60 | 16 | 10 | 76 |
 
 Five teams have one bye each over five encounter blocks; no team or player
-is double-booked. Preserve the original six-team sequence. After every unique
-round-robin encounter resolves, seed top four 1v4 and 2v3, then winners contest
-one final. With four teams, all qualify and the round robin determines seeding.
-Each playoff encounter adds four games (12 total) and the playoffs add four
-court waves. No DreamBreaker or bronze match. No promised duration; score
-format is organizer-dependent.
+is double-booked. After every unique round-robin encounter resolves, seed top
+four 1v4 and 2v3. Once both semifinals resolve, the winners play for gold and
+the losers for bronze in ONE block: gold on courts 1–2, bronze on courts 3–4,
+the same two waves. Bronze therefore adds no time — it uses the two courts that
+would otherwise sit idle during the final. Both are stage `final`; creation
+order (encounter index) says which is which: first gold, second bronze. A final
+drawn before bronze existed has one encounter and reads as gold alone. Podium:
+gold winner 1st, gold loser 2nd, bronze winner 3rd, each shown only once its own
+match resolves. Undoing an unplayed final removes gold and bronze together.
+With four teams, all qualify and the round robin determines seeding. The four
+playoff encounters add 16 games and four court waves. No DreamBreaker. No
+promised duration; score format is organizer-dependent.
 
 Encounter winner: most games won; at 2–2, greater sum of points; equal sums
 require the organizer to record a winner. All four games must have valid,

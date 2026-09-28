@@ -85,14 +85,27 @@ export function standings(teams: Team[], ties: Encounter[]) {
 /** Minimum eight two-court blocks for 15 encounters, every pairing exactly once.
  * Each entry uses courts 1–2, then 3–4. Two waves per block; no team double-books.
  * Explicit verified design avoids a heuristic missing or repeating an edge.
+ *
+ * Rest-balanced. Every team plays five of the eight blocks, and this order
+ * spreads the three rests so nobody plays more than two blocks (four games) in
+ * a row and nobody waits more than one block. Two in a row is the floor: five
+ * games cannot strictly alternate across eight blocks. Found by exhaustive
+ * search; the earlier order sent the third team entered through four blocks —
+ * eight games — without a break, while others rested every other block.
+ * Only the order changed, so existing draws are untouched: they are stored,
+ * never regenerated from this table.
  */
 const SIX_TEAM_BLOCKS: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
-  [[0,5],[1,4]], [[2,3],[0,4]], [[5,3],[1,2]], [[0,3],[4,2]],
-  [[5,1],[0,2]], [[3,1],[4,5]], [[0,1],[2,5]], [[3,4]],
+  [[0,1],[2,3]], [[0,4],[1,5]], [[2,4],[3,5]], [[0,2],[1,3]],
+  [[0,5],[1,4]], [[2,5],[3,4]], [[0,3],[1,2]], [[4,5]],
 ];
 
 /** Four/five-team complete round robins; five teams have one bye per block.
- * Keep the original six-team sequence for backward compatibility.
+ *
+ * Five teams are already as rest-balanced as the arithmetic allows. Each block
+ * has exactly one bye, so the team resting in the first block must then play
+ * four straight, and the one resting in the last block must have played the
+ * first four. The order below reaches that floor. Four teams play every block.
  */
 export function robinBlocks(count: number): ReadonlyArray<ReadonlyArray<readonly [number, number]>> {
   if (count === 4) return [
@@ -103,6 +116,49 @@ export function robinBlocks(count: number): ReadonlyArray<ReadonlyArray<readonly
   ];
   if (count === 6) return SIX_TEAM_BLOCKS;
   throw new RangeError("Mini MLP supports 4, 5 or 6 teams");
+}
+
+/**
+ * The final stage: the championship, and the bronze match beside it.
+ *
+ * Both are drawn together in one block — gold on courts 1–2, bronze on 3–4 —
+ * so bronze uses the two courts that sat idle during the final and adds no time
+ * to the night. Creation order carries which is which, the same convention the
+ * fixed-partner medal round uses for courts. A final drawn before bronze
+ * existed has only the gold match, and reads that way.
+ */
+export function finalsOf(ties: Encounter[]): { gold: Encounter | null; bronze: Encounter | null } {
+  const finals = ties.filter(t => t.stage === "final").sort((a, b) => a.index - b.index);
+  return { gold: finals[0] ?? null, bronze: finals[1] ?? null };
+}
+
+/** Semi-final winners and losers, in bracket order; null until both are decided. */
+export function semiResults(ties: Encounter[]): { winners: [string, string]; losers: [string, string] } | null {
+  const semis = ties.filter(t => t.stage === "semifinal").sort((a, b) => a.index - b.index);
+  if (semis.length !== 2) return null;
+  const decided = semis.map(s => {
+    const winner = outcome(s).winner;
+    return winner ? { winner, loser: winner === s.teamAId ? s.teamBId : s.teamAId } : null;
+  });
+  if (!decided[0] || !decided[1]) return null;
+  return {
+    winners: [decided[0].winner, decided[1].winner],
+    losers: [decided[0].loser, decided[1].loser],
+  };
+}
+
+/** Gold, silver and bronze — each only once the match deciding it is decided. */
+export function podium(ties: Encounter[]): Array<{ place: 1 | 2 | 3; teamId: string }> {
+  const { gold, bronze } = finalsOf(ties);
+  const places: Array<{ place: 1 | 2 | 3; teamId: string }> = [];
+  const goldWinner = gold ? outcome(gold).winner : null;
+  if (gold && goldWinner) {
+    places.push({ place: 1, teamId: goldWinner });
+    places.push({ place: 2, teamId: goldWinner === gold.teamAId ? gold.teamBId : gold.teamAId });
+  }
+  const bronzeWinner = bronze ? outcome(bronze).winner : null;
+  if (bronzeWinner) places.push({ place: 3, teamId: bronzeWinner });
+  return places;
 }
 
 /** Every distinct pair must have a resolved round-robin encounter. */

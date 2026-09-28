@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GAME_KINDS, lineups, outcome, robinBlocks, roundRobinReady, standings, teamLineups, validMlpConfig, validateTeams, type Encounter, type Team } from "./rules";
+import { GAME_KINDS, finalsOf, lineups, outcome, podium, robinBlocks, roundRobinReady, semiResults, standings, teamLineups, validMlpConfig, validateTeams, type Encounter, type Team } from "./rules";
 
 const teams: Team[] = Array.from({length:6},(_,i)=>({id:`t${i}`,slot:i+1,name:`Team ${i+1}`,
   m1:`${i}m1`,m2:`${i}m2`,w1:`${i}w1`,w2:`${i}w2`,
@@ -34,6 +34,23 @@ describe("Mini MLP",()=>{
     expect([...counts.values()]).toEqual(Array(count*4).fill((count-1)*2));
     if(count===5) expect(byes).toEqual([1,1,1,1,1]);
     if(count===4) expect(byes).toEqual([0,0,0,0]);
+  });
+  // Longest run of consecutive blocks a team plays, and longest run it sits out.
+  const streaks=(count:number)=>Array.from({length:count},(_,team)=>{
+    let run=0,wait=0,maxRun=0,maxWait=0;
+    for(const block of robinBlocks(count)){
+      if(block.some(pair=>pair.includes(team))){run++;wait=0;}else{wait++;run=0;}
+      maxRun=Math.max(maxRun,run); maxWait=Math.max(maxWait,wait);
+    }
+    return {maxRun,maxWait};
+  });
+  it("rest-balances six teams: nobody plays more than two blocks in a row or waits more than one",()=>{
+    for(const s of streaks(6)){ expect(s.maxRun).toBeLessThanOrEqual(2); expect(s.maxWait).toBeLessThanOrEqual(1); }
+  });
+  it("five teams sit at the floor a single bye per block allows",()=>{
+    // The first block's bye team must play the next four; nothing can do better.
+    expect(Math.max(...streaks(5).map(s=>s.maxRun))).toBe(4);
+    expect(Math.max(...streaks(5).map(s=>s.maxWait))).toBe(1);
   });
   it("keeps all four explicitly selected pairs against every opponent, including playoff encounters",()=>{
     for(const a of teams) for(const b of teams.filter(t=>t!==a)) {
@@ -116,5 +133,35 @@ describe("Mini MLP",()=>{
     expect(standings(teams,[robin,semi])).toEqual(standings(teams,[robin]));
     expect(standings(teams,[{...robin,games:robin.games.slice(0,3)}]).every(r=>r.wins===0)).toBe(true);
     expect(standings(teams,[robin])[0]).toMatchObject({team:teams[0],wins:1,played:1,gamesWon:4});
+  });
+  describe("playoffs with bronze",()=>{
+    const win=[[11,5],[11,5],[11,5],[11,5]], lose=[[5,11],[5,11],[5,11],[5,11]];
+    const semi1=encounter(win,{id:"s1",index:16,stage:"semifinal",teamAId:"t0",teamBId:"t3"});
+    const semi2=encounter(lose,{id:"s2",index:17,stage:"semifinal",teamAId:"t1",teamBId:"t2"});
+    it("pairs semifinal winners for gold and losers for bronze, only once both are decided",()=>{
+      expect(semiResults([semi1,semi2])).toEqual({winners:["t0","t2"],losers:["t3","t1"]});
+      expect(semiResults([semi2,semi1])).toEqual({winners:["t0","t2"],losers:["t3","t1"]});
+      expect(semiResults([semi1])).toBeNull();
+      expect(semiResults([semi1,{...semi2,games:semi2.games.slice(1)}])).toBeNull();
+      const tied={...semi2,games:encounter([[11,8],[8,11],[11,8],[8,11]]).games};
+      expect(semiResults([semi1,tied])).toBeNull();
+      expect(semiResults([semi1,{...tied,tiebreakWinner:"t1"}])).toEqual({winners:["t0","t1"],losers:["t3","t2"]});
+    });
+    it("reads the first final drawn as gold and the second as bronze",()=>{
+      const gold=encounter(win,{id:"g",index:18,stage:"final",teamAId:"t0",teamBId:"t2"});
+      const bronze=encounter(lose,{id:"b",index:19,stage:"final",teamAId:"t3",teamBId:"t1"});
+      expect(finalsOf([bronze,semi1,gold])).toEqual({gold,bronze});
+      expect(finalsOf([semi1,semi2])).toEqual({gold:null,bronze:null});
+      expect(podium([semi1,semi2,gold,bronze])).toEqual([{place:1,teamId:"t0"},{place:2,teamId:"t2"},{place:3,teamId:"t1"}]);
+      // Each medal appears only once its own match is decided.
+      const pending=(t:Encounter)=>({...t,games:t.games.slice(1)});
+      expect(podium([gold,pending(bronze)])).toEqual([{place:1,teamId:"t0"},{place:2,teamId:"t2"}]);
+      expect(podium([pending(gold),bronze])).toEqual([{place:3,teamId:"t1"}]);
+    });
+    it("still reads a final drawn before bronze existed as gold alone",()=>{
+      const gold=encounter(win,{id:"g",index:18,stage:"final",teamAId:"t0",teamBId:"t2"});
+      expect(finalsOf([gold])).toEqual({gold,bronze:null});
+      expect(podium([gold])).toEqual([{place:1,teamId:"t0"},{place:2,teamId:"t2"}]);
+    });
   });
 });

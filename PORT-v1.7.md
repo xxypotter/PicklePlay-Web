@@ -22,6 +22,8 @@ The iOS app has independent users, database and rating history.
    offer the count; reject other capacities/court counts server-side.
 2. Permit ANY gender combination: all men, all women, 3+1, 1+3, 2+2 and unknown
    gender. No gender filtering in setup and no gender validation on the server.
+   Setup shows each name with its profile gender (F/M; none when unspecified)
+   purely as information for the organizer.
 3. Explicitly choose FOUR fixed category lineups: women's doubles, men's
    doubles, mixed 1, mixed 2. Never infer opening partners from mixed-selector
    positions. Each wave uses all four squad members exactly once; each player
@@ -33,13 +35,17 @@ The iOS app has independent users, database and rating history.
 5. Full round robin: 4 teams → 6 encounters/24 games/6 waves; 5 → 10/40/10;
    6 → 15/60/16. Every player gets 6, 8 or 10 RR games respectively. Five teams
    get one bye each. See PORT §16 and robinBlocks() for verified schedules.
+   Six teams are rest-balanced: nobody plays more than two blocks in a row or
+   waits more than one. The order applies to new draws; stored draws are kept.
 6. After all four valid scores: more games won wins; 2–2 uses total points;
    equal points requires an explicit organizer-recorded winner. No DreamBreaker.
 7. Standings use round robin only: squad wins, game difference, point difference,
    points scored, setup slot. Top four seed 1v4 and 2v3. With four squads all
-   qualify. Winners play a four-game final; no bronze. Total games: 36/52/72.
+   qualify. Semifinal winners play a four-game gold final while the losers
+   play a four-game bronze match in the same block (gold courts 1–2, bronze
+   3–4), so bronze adds no time. Total games: 40/56/76.
 8. Create playoffs only after EVERY distinct RR opponent pairing is resolved,
-   then the final only after both semifinals resolve. Membership and all lineups
+   then gold and bronze together only after both semifinals resolve. Membership and all lineups
    lock at generation; no routine edits during play. Only untouched legacy
    draws get the one-time opening-pair correction described below.
 9. Personal records/ratings apply per game; never rate the aggregate result a
@@ -48,7 +54,8 @@ The iOS app has independent users, database and rating history.
     playoff stage before an upstream correction; never discard scored stages.
 11. Test real workflows for all three counts, all gender compositions, preserved
     partner assignments, byes, cap/duplicate/outsider validation, top-four seeding,
-    tie resolution and old six-team schedule compatibility.
+    tie resolution, gold/bronze pairing and podium, rest balance, and old
+    six-team schedule compatibility.
 12. Earlier unscored draws: offer an explicit, confirmed opening-pair correction
     to the organizer/superadmin. Keep mixed partners and roster fixed. Reject
     any recorded score, void, score-entry metadata, rating event, playoff or

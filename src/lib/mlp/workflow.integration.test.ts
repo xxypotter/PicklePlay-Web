@@ -13,7 +13,7 @@ import { makeBackup } from "@/lib/db/backup";
 import { addMlpPlayoffAction, correctMlpOpeningPairsAction, createMlpScheduleAction, removeMlpPlayoffsAction, saveMlpTeamsAction, setMlpTiebreakAction } from "./actions";
 import { createManualRoundAction, discardRoundAction, generateAllRoundsAction, rebuildMatchupsAction, restoreMatchAction, saveScoreAction, voidMatchAction } from "@/lib/sessions/play-actions";
 import { addPlayerAction, removePlayerAction, setAttendanceAction, setPartnerAction } from "@/lib/sessions/actions";
-import { lineups, outcome, standings, type Encounter, type TeamInput } from "./rules";
+import { finalsOf, lineups, outcome, podium, standings, type Encounter, type TeamInput } from "./rules";
 import { deletePlayerAction } from "@/app/admin/actions";
 
 let actor:Actor;
@@ -76,7 +76,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   const score=async(matchId:string,a:number,b:number)=>{
     const fd=new FormData();fd.set("matchId",matchId);fd.set("scoreA",String(a));fd.set("scoreB",String(b));return saveScoreAction({},fd);
   };
-  it("runs setup through a 72-game tournament; rejects partner changes, premature playoffs and stale bracket edits",async()=>{
+  it("runs setup through a 76-game tournament with a bronze match; rejects partner changes, premature playoffs and stale bracket edits",async()=>{
     await expect(saveMlpTeamsAction(id,input.map((t,i)=>i? t:{...t,m1:t.w1}))).rejects.toThrow();
     await saveMlpTeamsAction(id,input);
     const deletion = new FormData(); deletion.set("playerId",personIds[1]);
@@ -118,11 +118,21 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     for(const m of await db.select().from(matches).where(inArray(matches.mlpTieId,playoffs.map(t=>t.id))))expect(await score(m.id,11,8)).toEqual({});
     await expect(removeMlpPlayoffsAction(id)).rejects.toThrow();
     await addMlpPlayoffAction(id);
+    // Undoing an unplayed final takes the bronze match with it, then redraws both.
+    await removeMlpPlayoffsAction(id);
+    expect(await db.select().from(mlpTies).where(and(eq(mlpTies.sessionId,id),eq(mlpTies.stage,"final")))).toHaveLength(0);
+    expect(await db.select().from(rounds).where(and(eq(rounds.sessionId,id),eq(rounds.stage,"final")))).toHaveLength(0);
+    await addMlpPlayoffAction(id);
     playoffs=await db.select().from(mlpTies).where(and(eq(mlpTies.sessionId,id),eq(mlpTies.stage,"final")));
-    expect(playoffs).toHaveLength(1);
-    for(const m of await db.select().from(matches).where(eq(matches.mlpTieId,playoffs[0].id)))expect(await score(m.id,11,8)).toEqual({});
+    expect(playoffs).toHaveLength(2);
+    // Gold and bronze share one block, so the playoffs add no extra waves.
+    expect(new Set(playoffs.map(t=>t.block)).size).toBe(1);
+    const finalGames=await db.select().from(matches).where(inArray(matches.mlpTieId,playoffs.map(t=>t.id)));
+    expect(new Set(finalGames.map(g=>g.roundId)).size).toBe(2);
+    for(const m of finalGames)expect(await score(m.id,11,8)).toEqual({});
+    await expect(addMlpPlayoffAction(id)).rejects.toThrow();
     games=await db.select().from(matches).where(eq(matches.sessionId,id));
-    expect(games).toHaveLength(72);expect(games.every(g=>g.status==="completed")).toBe(true);
+    expect(games).toHaveLength(76);expect(games.every(g=>g.status==="completed")).toBe(true);
     await assertSavedLineups(id);
     await expect(correctMlpOpeningPairsAction(id,input)).rejects.toThrow();
   },300000);
@@ -165,12 +175,19 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     ]));
     for(const m of await db.select().from(matches).where(inArray(matches.mlpTieId,semis.map(t=>t.id)))) expect(await score(m.id,11,8)).toEqual({});
     await addMlpPlayoffAction(sessionId);
-    const [final]=await db.select().from(mlpTies).where(and(eq(mlpTies.sessionId,sessionId),eq(mlpTies.stage,"final")));
-    expect([final.teamAId,final.teamBId].sort()).toEqual([seeds[0],seeds[1]].sort());
-    const finalGames=await db.select().from(matches).where(eq(matches.mlpTieId,final.id));
+    // Every team-A seed won its semifinal, so 1 and 2 play for gold, 4 and 3 for bronze.
+    const finals=await db.select().from(mlpTies).where(and(eq(mlpTies.sessionId,sessionId),eq(mlpTies.stage,"final")));
+    const {gold,bronze}=finalsOf(finals.map(t=>({...t,games:[]})));
+    expect([gold!.teamAId,gold!.teamBId]).toEqual([seeds[0],seeds[1]]);
+    expect([bronze!.teamAId,bronze!.teamBId]).toEqual([seeds[3],seeds[2]]);
+    const finalGames=await db.select().from(matches).where(inArray(matches.mlpTieId,finals.map(t=>t.id)));
+    const court=(tieId:string)=>finalGames.filter(g=>g.mlpTieId===tieId).map(g=>g.courtNo).sort();
+    expect(court(gold!.id)).toEqual([1,1,2,2]);expect(court(bronze!.id)).toEqual([3,3,4,4]);
     for(const m of finalGames) expect(await score(m.id,11,8)).toEqual({});
-    expect(outcome({...final,games:finalGames.map(g=>({kind:g.mlpGame,scoreA:11,scoreB:8,status:"completed"}))}).winner).toBe(final.teamAId);
-    expect(await db.select().from(matches).where(eq(matches.sessionId,sessionId))).toHaveLength(count*(count-1)*2+12);
+    const scored=(tie:typeof gold)=>({...tie!,games:finalGames.filter(g=>g.mlpTieId===tie!.id).map(g=>({kind:g.mlpGame,scoreA:11,scoreB:8,status:"completed" as const}))});
+    expect(podium([scored(gold),scored(bronze)])).toEqual([{place:1,teamId:seeds[0]},{place:2,teamId:seeds[1]},{place:3,teamId:seeds[3]}]);
+    expect(outcome(scored(gold)).winner).toBe(gold!.teamAId);
+    expect(await db.select().from(matches).where(eq(matches.sessionId,sessionId))).toHaveLength(count*(count-1)*2+16);
     await expect(addMlpPlayoffAction(sessionId)).rejects.toThrow();
     await assertSavedLineups(sessionId);
   },180000);
@@ -241,7 +258,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   },120000);
   it("backs up complete session structure and publishes concurrent rating replays atomically",async()=>{
     const db=getDb(),backup=await makeBackup();
-    expect(backup.schema).toBe(2);expect(backup.mlpTies.filter(t=>t.sessionId===id)).toHaveLength(18);
+    expect(backup.schema).toBe(2);expect(backup.mlpTies.filter(t=>t.sessionId===id)).toHaveLength(19);
     expect(backup.rounds.filter(r=>r.sessionId===id)).toHaveLength(20);
     expect(backup.players[0]).not.toHaveProperty("pinHash");expect(backup.players[0]).toHaveProperty("gender");
     const first=new Date("2026-09-25T00:00:00Z");
@@ -249,7 +266,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     await db.update(sessions).set({rated:true}).where(eq(sessions.id,id));
     await Promise.all([recomputeAll(),recomputeAll()]);
     const ids=(await db.select({id:matches.id}).from(matches).where(eq(matches.sessionId,id))).map(m=>m.id);
-    expect(await db.select().from(ratingEvents).where(inArray(ratingEvents.matchId,ids))).toHaveLength(72*4);
+    expect(await db.select().from(ratingEvents).where(inArray(ratingEvents.matchId,ids))).toHaveLength(76*4);
     const before=await db.select().from(playerStats).where(inArray(playerStats.playerId,personIds));
     await expect(inTransaction(async tx=>{await tx.delete(playerStats).where(inArray(playerStats.playerId,personIds));throw new Error("simulated rollback");})).rejects.toThrow("simulated rollback");
     expect(await db.select().from(playerStats).where(inArray(playerStats.playerId,personIds))).toEqual(before);

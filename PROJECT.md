@@ -24,6 +24,8 @@ the code that depends on them, after backup and development validation.
   mixed 1, mixed 2), locked for the session. Team count is session capacity / 4.
   Historical m/w columns store mixed pairs; women1/2 and men1/2 store opening
   pairs. These category names do not impose player-gender restrictions.
+  Top four play semifinals, then gold and bronze side by side (no extra time).
+  Six-team round robins are rest-balanced; setup labels players F/M.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.
 - Rating engine: src/lib/rating/engine.ts; tuning epochs: constants.ts;

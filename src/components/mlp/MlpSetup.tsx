@@ -14,6 +14,15 @@ export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,c
     const pairs=teamLineups(saved);
     return {...saved,women1:pairs.women[0],women2:pairs.women[1],men1:pairs.men[0],men2:pairs.men[1]};
   }));
+  /*
+   * Each name carries its gender. Selection is still unrestricted — any mix is
+   * allowed — but a bare username list is how a real draw ended up with two
+   * men in its "women's doubles" slot: the organizer has to remember everyone.
+   */
+  const label=(p:{username:string;gender?:string})=>
+    p.gender==="female"||p.gender==="male"
+      ? t("mlp.nameGender",{name:p.username,gender:t(`mlp.gender.${p.gender}`)})
+      : p.username;
   const [correcting,setCorrecting]=useState(false);
   const [pending,start]=useTransition(), [error,setError]=useState("");
   const run=(action:()=>Promise<void>)=>start(async()=>{
@@ -51,7 +60,7 @@ export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,c
             <select aria-label={`${team.name} ${t(n===1?"mlp.game.mixed1":"mlp.game.mixed2")} ${t("mlp.player",{n:key.startsWith("w")?1:2})}`}
               className="field" value={team[key]} disabled={correcting} onChange={e=>set(i,key,e.target.value)}>
               <option value="">{t("mlp.choose")}</option>
-              {roster.map(p=><option key={p.id} value={p.id} disabled={used.has(p.id)&&team[key]!==p.id}>{p.username}</option>)}
+              {roster.map(p=><option key={p.id} value={p.id} disabled={used.has(p.id)&&team[key]!==p.id}>{label(p)}</option>)}
             </select>
           </label>)}
         </div>)}
@@ -65,7 +74,7 @@ export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,c
                 className="field" value={team[key]??""} onChange={e=>set(i,key,e.target.value)}>
                 <option value="">{t("mlp.choose")}</option>
                 {roster.filter(p=>members(team).includes(p.id)).map(p=><option key={p.id} value={p.id}
-                  disabled={OPENING_SLOTS.some(slot=>slot!==key&&team[slot]===p.id)}>{p.username}</option>)}
+                  disabled={OPENING_SLOTS.some(slot=>slot!==key&&team[slot]===p.id)}>{label(p)}</option>)}
               </select>
             </label>;
           })}

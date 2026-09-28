@@ -1,5 +1,43 @@
 # Shared work log
 
+## Released: Mini MLP bronze, rest balance, gender labels — Claude, 2026-09-28
+
+Branch claude/mlp-bronze-rest-labels from main 6169b41. Follows a review of
+Codex's v1.7 Mini MLP against the user's request. User decisions: HUI's closed
+Oct 3 MLP session is a test (leave it alone); keep up to six teams and revisit
+evening length later; add a bronze match, gender labels and rest balancing.
+Version stays 1.7 (unreleased-to-users follow-up, same precedent as Codex).
+
+- Bronze: once both semis resolve, one action draws gold (winners, courts 1–2)
+  and bronze (losers, courts 3–4) in the same block and waves, so it adds no
+  time. No schema change: both are stage `final`; creation order says which is
+  gold. New pure helpers finalsOf/semiResults/podium in rules.ts. Board shows
+  both cards and a 🥇🥈🥉 podium. Removing an unplayed final removes both.
+  A pre-bronze final (single encounter) still reads as gold alone.
+- Rest balance: six-team robin order replaced after exhaustive search — max two
+  blocks in a row and max one block waiting, versus one squad playing four in
+  a row before. Five teams were already at their floor (one bye per block);
+  four teams never rest. New draws only; stored draws are never regenerated,
+  so the production test session is untouched.
+- Gender labels: setup dropdowns show "name (F)/(M)" (nothing for unspecified).
+  Information only; no filtering or validation, any mix still allowed.
+- zh-Hant: three MLP strings said 準決賽 while the rest of the app (13 places)
+  and the same screen's headings say 半決賽; aligned to 半決賽.
+- Files: src/lib/mlp/rules.ts, actions.ts, rules.test.ts,
+  workflow.integration.test.ts; src/components/mlp/MlpBoard.tsx, MlpSetup.tsx;
+  three dictionaries; release-notes.ts (notes.v17.mlpBronze); PORT, PORT-v1.7,
+  PROJECT.
+- Checks: 343 standard tests pass (new: rest-balance bound, confirmed to fail
+  on the old order; semi pairing; gold/bronze/podium; legacy single final).
+  All six dev DB workflows pass on pickleplay_dev with 40/56/76-game totals,
+  bronze courts 3–4, podium, and remove/redraw of an unplayed final.
+  Typecheck, lint and production build pass.
+- Browser (dev, dev_ana): 4-team fixture — labels in mixed and opening
+  dropdowns, real draw/semis/final buttons, gold+bronze in block 5, podium
+  Dinks/Ernies/Kitchen, zh-Hant 銅牌賽; no console errors. Fixture sessions and
+  four temporary dev_ accounts purged; dev server stopped.
+- Deployment: see the release record below once verified.
+
 ## Released: explicit Mini MLP lineups — Codex, 2026-09-27
 
 Implementation branch codex/mlp-partner-review, baseline ef1c9f9; merged to main.
