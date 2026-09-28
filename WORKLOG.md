@@ -1,5 +1,44 @@
 # Shared work log
 
+## Released: Back to setup with a draw, 0–0 clearing, Copy with players — Claude, 2026-09-28
+
+Branch claude/setup-and-copy-players from main 32eb7e9. Version stays 1.7.
+User decisions (asked and answered): Back to setup for EVERY format, organizer
+only, only while no score exists; a mistaken score is cleared by the organizer
+entering 0:0. Copy gets two options; "with players" copies everyone signed up
+(confirmed + waitlist, in order) and also Mini MLP teams/lineups or fixed pairs.
+
+- reopenSessionAction (play-actions.ts): organizer; under lockSession, refuses
+  if any match is non-scheduled or has a score (err.resultsExist); deletes
+  matches, mlp_ties, rounds; live→open; audit session.back_to_setup. Signups,
+  mlp_teams, partner pairs kept.
+- saveScoreAction: 0–0 by the organizer (canOrganizeSession) clears a completed
+  match to scheduled, nulls scores/enteredBy/editedAt, audit match.clear with the
+  old score; guardMlpResultChange applies; others get the tie error. MatchCard
+  canClear prop (play console always; session page for organizer) turns Save
+  into "Clear score" at 0–0.
+- ReopenSessionButton now shown whenever live: one tap before a draw, confirm
+  when a draw exists, explanation (no action) when results exist.
+- Copy: pure copyRoster/teamsCarryOver/pairsCarryOver in sessions/copy.ts; new
+  sessions/copy-source.ts (loadCopySource, shared visibility rule, moved from
+  the create page). Create page ?players=1; form preselects players (waitlist
+  beyond capacity), notes whether teams/pairs carry over, posts copyFrom.
+  createSessionAction re-reads teams/pairs from the source, validates against
+  confirmed players, inserts in one transaction; invite ids deduplicated.
+- Strings in three languages; notes.v17.backToSetup/copyPlayers; startedHint
+  updated. PORT §5, §9, v1.6 copy and PORT-v1.7 scope updated.
+- Checks: 360 tests incl. all dev DB workflows pass (new copy.test cases and
+  sessions/setup.integration.test.ts: regular + MLP back to setup, 0–0 by
+  player/other admin/organizer, audit rows, redraw after team edit, copy with
+  teams/partial/pairs/waitlist/private source). Typecheck, lint, build pass.
+- Browser (dev, dev_ana): finished MLP fixture shows both copy buttons; Copy
+  with players preselected 16/16 and "All 4 teams…"; unticking flips the note;
+  created session had the 4 teams and lineups; started, drew 24 matches, scored
+  one; Back to setup explained; 0–0 showed Clear score and cleared it; Back to
+  setup confirmed "Deletes all 24…", returned to open with teams editable.
+  Fixtures, four temporary dev_ accounts and test audit rows removed.
+- Deployment: recorded in the follow-up commit.
+
 ## Released: player search on the play console — Claude, 2026-09-28
 
 Branch claude/play-player-search from main a051e2d. User approved extending

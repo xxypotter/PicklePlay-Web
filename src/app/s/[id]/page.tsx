@@ -275,6 +275,7 @@ export default async function SessionPage({
             canScoreAny={canScoreAny}
             canScoreMine={canScoreMine}
             canVoid={!!me && canVoidMatch(me)}
+            canClear={organizer}
           />
         ) : (
           <>
@@ -411,12 +412,21 @@ export default async function SessionPage({
                       until the organizer checks the new date and presses Create.
                     */}
                     {canCopy ? (
-                      <Link
-                        href={`/sessions/new?copy=${id}&from=${encodeURIComponent(backHere)}`}
-                        className="btn-accent block text-center"
-                      >
-                        {t("session.copyAsNew")}
-                      </Link>
+                      <>
+                        <Link
+                          href={`/sessions/new?copy=${id}&from=${encodeURIComponent(backHere)}`}
+                          className="btn-accent block text-center"
+                        >
+                          {t("session.copyAsNew")}
+                        </Link>
+                        {/* Same setup plus everyone signed up, and any teams or pairs. */}
+                        <Link
+                          href={`/sessions/new?copy=${id}&players=1&from=${encodeURIComponent(backHere)}`}
+                          className="btn-ghost block text-center"
+                        >
+                          {t("session.copyWithPlayers")}
+                        </Link>
+                      </>
                     ) : null}
                     {organizer ? (
                       <Link href={`${base}/play?from=${encodeURIComponent(backHere)}`} className="btn-ghost block text-center">

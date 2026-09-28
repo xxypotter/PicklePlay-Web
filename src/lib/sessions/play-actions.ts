@@ -1,15 +1,15 @@
 "use server";
 
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Actor } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { auditLog, matches, rounds, sessions } from "@/lib/db/schema";
+import { auditLog, matches, mlpTies, rounds, sessions } from "@/lib/db/schema";
 import { createAllRounds, createNextRound, getAttending } from "@/lib/matchmaking/service";
 import { requireLogin } from "@/lib/auth/permissions";
-import { canScoreMatch, canVoidMatch, PermissionError } from "@/lib/auth/policy";
+import { canOrganizeSession, canScoreMatch, canVoidMatch, PermissionError } from "@/lib/auth/policy";
 import { finals, semiFinals, teamStandings, type PlayedMatch } from "./medal";
 import { checkManualRound } from "./manual-round";
 import { requireOrganizer, requireScorer } from "./guards";
@@ -42,31 +42,66 @@ export async function startSessionAction(sessionId: string): Promise<void> {
 }
 
 /**
- * Undo a start — only while nothing has been played.
+ * Back to setup — only while no game has a result.
  *
- * Tapping Start a day early shouldn't be permanent, but once a round exists the
- * session has really begun and reopening it would put edits back in reach of a
- * night in progress.
+ * Tapping Start a day early shouldn't be permanent. Neither should a draw made
+ * before the teams or the courts were right: this used to refuse as soon as any
+ * round existed, which left deleting the whole session as the only way back —
+ * and for Mini MLP, whose teams lock with the draw, no way to fix a team at all.
+ *
+ * So the unplayed draw is thrown away with it. What decides is a *result*: a
+ * score, or a void (voiding records that a game happened). A score entered by
+ * mistake can be cleared first — the organizer enters 0–0 on it. Players, Mini
+ * MLP teams and lineups, and fixed pairs are all kept; only the matches go.
  */
 export async function reopenSessionAction(sessionId: string): Promise<void> {
   const t = await getT();
-  await requireOrganizer(sessionId);
-  const db = getDb();
+  const { me } = await requireOrganizer(sessionId);
 
-  const existing = await db
-    .select({ id: rounds.id })
-    .from(rounds)
-    .where(eq(rounds.sessionId, sessionId))
-    .limit(1);
+  await inTransaction(async (db) => {
+    // Serializes with score entry, which takes the same lock, so a score saved
+    // at the same moment either lands first and blocks this, or finds no match.
+    await lockSession(db, sessionId);
+    const [session] = await db
+      .select({ status: sessions.status })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId));
+    if (session?.status !== "live") return;
 
-  if (existing.length > 0) {
-    throw new Error(t("err.matchesExist"));
-  }
+    const played = await db
+      .select({ id: matches.id })
+      .from(matches)
+      .where(and(eq(matches.sessionId, sessionId), or(
+        ne(matches.status, "scheduled"), isNotNull(matches.scoreA), isNotNull(matches.scoreB),
+      )))
+      .limit(1);
+    if (played.length > 0) throw new Error(t("err.resultsExist"));
 
-  await db
-    .update(sessions)
-    .set({ status: "open" })
-    .where(and(eq(sessions.id, sessionId), eq(sessions.status, "live")));
+    const drawn = await db
+      .select({ id: matches.id })
+      .from(matches)
+      .where(eq(matches.sessionId, sessionId));
+
+    // Matches before rounds: `matches.round_id` is ON DELETE SET NULL, so the
+    // rounds alone would leave orphaned games behind.
+    await db.delete(matches).where(eq(matches.sessionId, sessionId));
+    await db.delete(mlpTies).where(eq(mlpTies.sessionId, sessionId));
+    await db.delete(rounds).where(eq(rounds.sessionId, sessionId));
+    await db
+      .update(sessions)
+      .set({ status: "open" })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.status, "live")));
+
+    if (drawn.length > 0) {
+      await db.insert(auditLog).values({
+        actorId: me.id,
+        action: "session.back_to_setup",
+        targetType: "session",
+        targetId: sessionId,
+        detail: JSON.stringify({ discardedMatches: drawn.length }),
+      });
+    }
+  });
 
   revalidatePath(`/s/${sessionId}/play`);
   revalidatePath(`/s/${sessionId}`);
@@ -626,7 +661,13 @@ export async function saveScoreAction(
   if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0) {
     return { error: t("schedule.error.whole") };
   }
-  if (scoreA === scoreB) return { error: t("schedule.error.tie") };
+  /*
+   * 0–0 is never a result, so the organizer uses it to take one back: the match
+   * returns to unplayed. That is what lets a score entered by mistake be undone
+   * without a void — and what lets Back to setup run once nothing is scored.
+   */
+  const clearing = scoreA === 0 && scoreB === 0;
+  if (scoreA === scoreB && !clearing) return { error: t("schedule.error.tie") };
   if (scoreA > 99 || scoreB > 99) return { error: t("schedule.error.range") };
 
   try {
@@ -640,6 +681,17 @@ export async function saveScoreAction(
       }
       // Score entry cannot undo a void, even for an organizer. Use Restore.
       if(previous.status==="void") throw new Error(t("err.scoreVoided"));
+      if(clearing) {
+        if(!scope || !canOrganizeSession(me,scope)) throw new Error(t("schedule.error.tie"));
+        if(previous.status!=="completed") return;
+        await guardMlpResultChange(tx,previous);
+        await tx.update(matches).set({scoreA:null,scoreB:null,status:"scheduled",enteredBy:null,editedAt:null})
+          .where(eq(matches.id,matchId));
+        // The row forgets the score; the log keeps what it was and who cleared it.
+        await tx.insert(auditLog).values({actorId:me.id,action:"match.clear",targetType:"match",targetId:matchId,
+          detail:JSON.stringify({scoreA:previous.scoreA,scoreB:previous.scoreB})});
+        return;
+      }
       const changed=previous.status!=="completed" || previous.scoreA!==scoreA || previous.scoreB!==scoreB;
       if(!changed) return;
       await guardMlpResultChange(tx,previous);

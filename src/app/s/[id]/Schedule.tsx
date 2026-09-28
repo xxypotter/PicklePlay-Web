@@ -29,6 +29,7 @@ export default function Schedule({
   canScoreAny = false,
   canScoreMine = false,
   canVoid = false,
+  canClear = false,
 }: {
   rounds: CurrentRound[];
   meId?: string;
@@ -38,6 +39,8 @@ export default function Schedule({
   canScoreMine?: boolean;
   /** Super admin only — voiding removes a game from four people's records. */
   canVoid?: boolean;
+  /** The organizer, who may clear a score by entering 0–0. */
+  canClear?: boolean;
 }) {
   const t = useT();
   const [picked, setPicked] = useState<string[]>([]);
@@ -167,7 +170,7 @@ export default function Schedule({
 
               if (canScoreAny || (mine && canScoreMine)) {
                 return (
-                  <MatchCard key={m.id} match={m} meId={meId} canVoid={canVoid} highlight={mine} />
+                  <MatchCard key={m.id} match={m} meId={meId} canVoid={canVoid} canClear={canClear} highlight={mine} />
                 );
               }
 

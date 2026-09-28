@@ -565,30 +565,83 @@ export function StartSessionButton({
   );
 }
 
-export function ReopenSessionButton({ sessionId }: { sessionId: string }) {
+/**
+ * Back to setup.
+ *
+ * Before a draw it is one tap. With a draw it asks first, because it deletes
+ * every match — none played, but the draw is gone. Once any game has a result
+ * it does nothing but say how to get there: clear those scores with 0–0 first.
+ * The server enforces the same rule; this only explains it.
+ */
+export function ReopenSessionButton({
+  sessionId,
+  drawn = 0,
+  scored = 0,
+}: {
+  sessionId: string;
+  /** Matches that would be deleted. */
+  drawn?: number;
+  /** Matches with a score or a void. Any at all blocks going back. */
+  scored?: number;
+}) {
   const t = useT();
   const [pending, start] = useTransition();
+  const [armed, setArmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const go = () =>
+    start(async () => {
+      try {
+        await reopenSessionAction(sessionId);
+        setError(null);
+        setArmed(false);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t("play.reopenFailed"));
+      }
+    });
 
   return (
     <div className="mt-3">
       <button
         type="button"
         disabled={pending}
-        onClick={() =>
-          start(async () => {
-            try {
-              await reopenSessionAction(sessionId);
-              setError(null);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : t("play.reopenFailed"));
-            }
-          })
+        onClick={() => {
+          if (scored > 0 || drawn === 0) {
+            if (scored > 0) setArmed((a) => !a);
+            else go();
+            return;
+          }
+          if (armed) go();
+          else setArmed(true);
+        }}
+        className={
+          armed && scored === 0
+            ? "w-full rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            : "btn-ghost text-sm text-[var(--muted)]"
         }
-        className="btn-ghost text-sm text-[var(--muted)]"
       >
-        {pending ? "…" : t("play.backToSetup")}
+        {pending
+          ? "…"
+          : armed && scored === 0
+            ? t("play.backToSetupConfirm")
+            : t("play.backToSetup")}
       </button>
+      {armed && !pending ? (
+        <>
+          <p className="hint text-center">
+            {scored > 0
+              ? t.plural("play.backToSetupScored", scored, { count: scored })
+              : t.plural("play.backToSetupKeeps", drawn, { count: drawn })}
+          </p>
+          <button
+            type="button"
+            onClick={() => setArmed(false)}
+            className="mt-1 w-full text-xs font-semibold text-[var(--muted)] underline"
+          >
+            {scored > 0 ? t("play.backToSetupGotIt") : t("common.nevermind")}
+          </button>
+        </>
+      ) : null}
       {error ? (
         <p role="alert" className="hint text-[var(--danger)]">
           {error}

@@ -13,7 +13,9 @@ The iOS app has independent users, database and rating history.
   fixed-pair standings and bracket; correct complete fixed-team round robin.
 - v1.6: expectation-based record insights, D_POINTS=2.05 for future ratings,
   explicit starting-level selection, copying finished sessions to a new date.
-- v1.7: Mini MLP plus six audited reliability/permission/documentation fixes.
+- v1.7: Mini MLP plus six audited reliability/permission/documentation fixes;
+  bronze, rest balance, gender labels, player search, Back to setup while no
+  game has a result, organizer 0–0 score clearing, Copy with players.
 
 ## Mini MLP acceptance criteria
 

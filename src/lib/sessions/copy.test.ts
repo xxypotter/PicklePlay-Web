@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copySourceFrom, type CopyableSession } from "./copy";
+import { copyRoster, copySourceFrom, pairsCarryOver, teamsCarryOver, type CopiedTeam, type CopyableSession } from "./copy";
 
 const base: CopyableSession = {
   title: "Sunday Round Robin",
@@ -61,5 +61,53 @@ describe("copySourceFrom", () => {
     const secret = { ...base, isPrivate: true };
     expect(copySourceFrom(secret, true).isPrivate).toBe(true);
     expect(copySourceFrom(secret, false).isPrivate).toBe(false);
+  });
+});
+
+describe("copy with players", () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 8, 20, 23, minute));
+
+  it("copies everyone signed up: confirmed by join time, then the waitlist in queue order", () => {
+    expect(copyRoster([
+      { playerId: "w2", state: "waitlist", waitlistPos: 2, createdAt: at(1) },
+      { playerId: "late", state: "in", waitlistPos: null, createdAt: at(9) },
+      { playerId: "gone", state: "out", waitlistPos: null, createdAt: at(0) },
+      { playerId: "early", state: "in", waitlistPos: null, createdAt: at(2) },
+      { playerId: "w1", state: "waitlist", waitlistPos: 1, createdAt: at(8) },
+    ])).toEqual(["early", "late", "w1", "w2"]);
+  });
+
+  // Four teams of four; team i is players i0..i3.
+  const teams: CopiedTeam[] = Array.from({ length: 4 }, (_, i) => ({
+    name: `Team ${i + 1}`,
+    m1: `${i}a`, w1: `${i}b`, m2: `${i}c`, w2: `${i}d`,
+    women1: `${i}b`, women2: `${i}d`, men1: `${i}a`, men2: `${i}c`,
+  }));
+  const everyone = teams.flatMap((t) => [t.m1, t.w1, t.m2, t.w2]);
+
+  it("keeps Mini MLP teams only when every team is whole among the confirmed players", () => {
+    expect(teamsCarryOver(teams, "mlp", 16, everyone)).toBe(true);
+    // Order doesn't matter, and extra people beyond capacity only queue.
+    expect(teamsCarryOver(teams, "mlp", 16, [...everyone].reverse())).toBe(true);
+    expect(teamsCarryOver(teams, "mlp", 16, [...everyone, "extra"])).toBe(true);
+    // One player unticked: nothing is kept, because a draw needs every team whole.
+    expect(teamsCarryOver(teams, "mlp", 16, everyone.slice(1))).toBe(false);
+    // A team member pushed to the waitlist by someone new ahead of them.
+    expect(teamsCarryOver(teams, "mlp", 16, ["new", ...everyone])).toBe(false);
+    // Format or team count changed.
+    expect(teamsCarryOver(teams, "regular", 16, everyone)).toBe(false);
+    expect(teamsCarryOver(teams, "mlp", 20, everyone)).toBe(false);
+    expect(teamsCarryOver(undefined, "mlp", 16, everyone)).toBe(false);
+  });
+
+  it("keeps each fixed pair whose two players are both confirmed", () => {
+    const pairs: Array<[string, string]> = [["a", "b"], ["c", "d"], ["e", "f"]];
+    expect(pairsCarryOver(pairs, "fixed", 8, ["a", "b", "c", "d", "e", "f"])).toEqual(pairs);
+    expect(pairsCarryOver(pairs, "fixed", 8, ["a", "b", "c", "e", "f"])).toEqual([["a", "b"], ["e", "f"]]);
+    // f is sixth, past a capacity of five, so on the waitlist and unpaired.
+    expect(pairsCarryOver(pairs, "fixed", 5, ["a", "b", "c", "d", "e", "f"])).toEqual([["a", "b"], ["c", "d"]]);
+    expect(pairsCarryOver(pairs, "regular", 8, ["a", "b"])).toEqual([]);
+    // Never the same player in two pairs, nor paired with themselves.
+    expect(pairsCarryOver([["a", "b"], ["b", "c"], ["d", "d"]], "fixed", 8, ["a", "b", "c", "d"])).toEqual([["a", "b"]]);
   });
 });

@@ -112,6 +112,10 @@ export default async function PlayPage({
     r.matches.some((m) => m.completed || m.voided),
   ).length;
 
+  // Back to setup deletes the draw, but only while no game has a result.
+  const drawnMatches = allRounds.flatMap((r) => r.matches);
+  const withResult = drawnMatches.filter((m) => m.completed || m.voided).length;
+
   // Where the bracket has got to. Only fixed-partner nights have one.
   const semis = allRounds.find((r) => r.stage === "semifinal");
   const medalStage = allRounds.some((r) => r.stage === "final")
@@ -368,7 +372,7 @@ export default async function PlayPage({
             ) : null}
 
             </> : null}
-            {allRounds.length === 0 ? <ReopenSessionButton sessionId={id} /> : null}
+            <ReopenSessionButton sessionId={id} drawn={drawnMatches.length} scored={withResult} />
           </>
         ) : (
           <p className="hint mt-4">{t("play.closedNote")}</p>
@@ -420,7 +424,7 @@ export default async function PlayPage({
 
                 <div className="flex flex-col gap-3">
                   {round.matches.map((m) => (
-                    <MatchCard key={m.id} match={m} meId={me.id} canVoid={canVoidMatch(me)} />
+                    <MatchCard key={m.id} match={m} meId={me.id} canVoid={canVoidMatch(me)} canClear />
                   ))}
                 </div>
 

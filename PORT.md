@@ -595,12 +595,22 @@ Medal matches rate exactly like any other game.
 ```
 open  ──start──▶  live  ──end──▶  closed
   ▲                 │
-  └─── reopen ──────┘   (only while no rounds exist)
+  └─── reopen ──────┘   (while no game has a result — v1.7)
 ```
 
 - **open** — people sign up; the organizer edits details and sets fixed pairs.
 - **live** — details lock, matches get built, scores get entered.
 - **closed** — a record. Scores can still be corrected by the organizer.
+
+**Back to setup** (reopen, v1.7; organizer only). Before v1.7 it required zero
+rounds, so a draw made too early — or a Mini MLP draw whose teams locked with it
+— could only be escaped by deleting the session. Now it works while no match
+has a *result*: no score and no void (a void records that a game happened). It
+deletes every match, round and MLP encounter under the session lock (score
+entry takes the same lock), sets the session back to open and audits
+`session.back_to_setup` with the number discarded. Signups, Mini MLP teams and
+lineups, and fixed pairs are kept. The button asks for confirmation when a draw
+exists; with results it only explains how to clear them (below).
 
 A session auto-closes **48 hours** after its start time, so a night nobody ended
 doesn't linger in Upcoming. It was 24, which was too tight: closing narrows
@@ -828,6 +838,11 @@ showing a misleading 0.000.
 - Games to 11 by convention, but any whole numbers accepted.
 - **No ties** — pickleball has none; reject equal scores.
 - Both scores required; 0–0 is a fresh card, not a tie.
+- **0–0 clears a score** (v1.7), for the session's organizer only (creator admin
+  or super admin): the match returns to scheduled with scores, `enteredBy` and
+  `editedAt` nulled, and an audit `match.clear` keeps the old score. Anyone else
+  gets the no-ties error. Refused on a void (restore first) and, for Mini MLP,
+  when a drawn later stage depends on the result. Rated sessions recompute.
 - Max 99 per side (a guard against typos).
 - Saving a score triggers a full rating recompute.
 - Voiding keeps the row with `status = 'void'`; the recompute skips it.
@@ -1083,6 +1098,17 @@ Copy a finished session prepopulates title, location, courts, capacity, format,
 notes and rated setting; move date to the next occurrence of that weekday/time.
 Do not copy players or matches. Only permitted actors copy private visibility.
 Nothing is created until the organizer reviews the form and submits.
+
+v1.7 adds a second button, **Copy with players**. It also preselects everyone
+signed up — confirmed by join time, then the waitlist in queue order; absent
+players included, opted-out excluded, deactivated accounts dropped. Past
+capacity they queue in that order. Mini MLP teams (with lineups spelled out,
+legacy fallbacks resolved) are copied only if the format and team count are
+unchanged and every member is among the confirmed players — all or nothing.
+Fixed pairs are copied pair by pair when both are confirmed. Create re-reads
+teams and pairs from the source under the same visibility rule rather than
+trusting the form, and writes session, signups, teams and pairs in one
+transaction. The form states whether teams/pairs will carry over.
 
 ### v1.7: Mini MLP
 

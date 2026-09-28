@@ -47,11 +47,14 @@ export default function MatchCard({
   match,
   meId,
   canVoid = false,
+  canClear = false,
   highlight = false,
 }: {
   match: MatchCardData;
   meId?: string;
   canVoid?: boolean;
+  /** The organizer: 0–0 on a scored match clears it back to unplayed. */
+  canClear?: boolean;
   highlight?: boolean;
 }) {
   const t = useT();
@@ -64,6 +67,8 @@ export default function MatchCard({
   const nb = Number.parseInt(b, 10);
   const bothEntered = Number.isInteger(na) && Number.isInteger(nb);
   const tied = bothEntered && na === nb;
+  // 0–0 is never a result, so for the organizer it means "take this score back".
+  const clearing = canClear && match.completed && na === 0 && nb === 0;
 
   const mine = (team: RoundPlayer[]) => team.some((p) => p.id === meId);
 
@@ -166,18 +171,22 @@ export default function MatchCard({
 
       <button
         type="submit"
-        disabled={pending || !bothEntered || tied}
+        disabled={pending || !bothEntered || (tied && !clearing)}
         className="btn-primary mt-4 disabled:opacity-40"
       >
         {pending
           ? t("common.saving")
-          : match.completed
-            ? t("schedule.updateScore")
-            : t("schedule.saveScore")}
+          : clearing
+            ? t("schedule.clearScore")
+            : match.completed
+              ? t("schedule.updateScore")
+              : t("schedule.saveScore")}
       </button>
 
       {/* Only once someone has actually scored — 0–0 is a fresh card, not a tie. */}
-      {tied && na > 0 ? (
+      {clearing ? (
+        <p className="hint text-center">{t("schedule.clearHint")}</p>
+      ) : tied && na > 0 ? (
         <p className="hint text-center">{t("schedule.error.tie")}</p>
       ) : !bothEntered ? (
         <p className="hint text-center">{t("schedule.error.bothScores")}</p>

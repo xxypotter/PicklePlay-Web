@@ -7,7 +7,7 @@ import DateTimeField from "@/components/DateTimeField";
 import LocationField, { noteForVenue } from "@/components/LocationField";
 import { useT } from "@/lib/i18n/client";
 import MlpTeamCount from "@/components/mlp/MlpTeamCount";
-import type { CopySource } from "@/lib/sessions/copy";
+import { pairsCarryOver, teamsCarryOver, type CopySource } from "@/lib/sessions/copy";
 import PlayerSearch from "@/components/PlayerSearch";
 import { matchPlayers } from "@/lib/players/search";
 
@@ -43,8 +43,15 @@ export default function SessionForm({
   const [state, action, pending] = useActionState(createSessionAction, {} as FormState);
   const [courts, setCourts] = useState(copy?.courts ?? "1, 2");
   const [format, setFormat] = useState<string>(copy?.format ?? "regular");
-  // Never copied: a new night is a new sign-up.
-  const [invited, setInvited] = useState<string[]>([]);
+  /*
+   * Empty for a new night or a plain copy. Copy with players starts from last
+   * time's list in its order — confirmed, then waitlist — and the organizer
+   * unticks anyone not coming before pressing Create.
+   */
+  const [invited, setInvited] = useState<string[]>(() => {
+    const known = new Set(roster.map((p) => p.id));
+    return (copy?.players ?? []).filter((id) => known.has(id));
+  });
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState(copy?.location ?? "");
   const [notes, setNotes] = useState(copy?.notes ?? "");
@@ -91,6 +98,12 @@ export default function SessionForm({
     setQuery("");
   };
 
+  // A copied list can run past capacity: the extra people join the waitlist.
+  const waitlisted = Math.max(0, invited.length - cap);
+  // The same rules Create applies, so the note says what will really happen.
+  const teamsKept = teamsCarryOver(copy?.teams, format, maxPlayers, invited);
+  const pairsKept = pairsCarryOver(copy?.pairs, format, maxPlayers, invited).length;
+
   return (
     <form
       action={action}
@@ -106,7 +119,9 @@ export default function SessionForm({
       {copy ? (
         <div className="card-tight border border-[var(--accent)] bg-[var(--accent-soft)] px-4 py-3">
           <p className="text-sm font-semibold">{t("form.copyingFrom", { title: copy.title })}</p>
-          <p className="hint mt-0.5">{t("form.copyingHint")}</p>
+          <p className="hint mt-0.5">
+            {t(copy.players ? "form.copyingPlayersHint" : "form.copyingHint")}
+          </p>
         </div>
       ) : null}
 
@@ -250,7 +265,7 @@ export default function SessionForm({
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="label mb-0">
-              {t("form.whosPlaying", { count: invited.length, max: cap })}
+              {t("form.whosPlaying", { count: Math.min(invited.length, cap), max: cap })}
             </span>
             <button
               type="button"
@@ -311,10 +326,28 @@ export default function SessionForm({
           <p className="hint">
             {invited.length === 0
               ? t("form.invitedHint")
-              : atCap
-                ? t("form.invitedFull", { cap })
-                : t("form.invitedAdded", { count: invited.length })}
+              : waitlisted > 0
+                ? t("form.invitedWaitlist", { count: waitlisted })
+                : atCap
+                  ? t("form.invitedFull", { cap })
+                  : t("form.invitedAdded", { count: invited.length })}
           </p>
+
+          {copy?.copyFrom ? <input type="hidden" name="copyFrom" value={copy.copyFrom} /> : null}
+          {copy?.teams?.length ? (
+            <p className="hint">
+              {teamsKept
+                ? t("form.copyTeamsKept", { count: copy.teams.length })
+                : t("form.copyTeamsDropped")}
+            </p>
+          ) : null}
+          {copy?.pairs?.length ? (
+            <p className="hint">
+              {format === "fixed"
+                ? t("form.copyPairsKept", { count: pairsKept, total: copy.pairs.length })
+                : t("form.copyPairsDropped")}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

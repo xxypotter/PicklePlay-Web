@@ -6,14 +6,15 @@ import { redirect } from "next/navigation";
 import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
 import { canSeeSession, canCreatePrivateSession } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
-import { getDb } from "@/lib/db";
-import { rounds, sessions, signups } from "@/lib/db/schema";
+import { mlpTeams, rounds, sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { validMlpConfig } from "@/lib/mlp/rules";
 
 import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
 import { requireMutableRoster } from "@/lib/mlp/guards";
+import { pairsCarryOver, teamsCarryOver } from "./copy";
+import { loadCopySource } from "./copy-source";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const num = (fd: FormData, key: string) => Number(str(fd, key));
@@ -98,58 +99,75 @@ export async function createSessionAction(
   if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
   if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
 
-  const db = getDb();
-
-  const inserted = await db
-    .insert(sessions)
-    .values({
-      title,
-      location: str(formData, "location") || null,
-      startsAt,
-      courtNames,
-      courtCount,
-      maxPlayers,
-      format,
-      rated: formData.get("rated") !== null,
-      /*
-       * Checked server-side, not merely hidden in the form. The checkbox is
-       * absent for everyone below super admin, but a hidden field is a
-       * suggestion — anyone can post one.
-       */
-      isPrivate:
-        formData.get("isPrivate") !== null && canCreatePrivateSession(me),
-      notes: str(formData, "notes") || null,
-      status: "open",
-      createdBy: me.id,
-    })
-    .returning({ id: sessions.id });
-
-  const sessionId = inserted[0].id;
-
   /*
    * Players the organizer picked up front are marked in, not merely invited.
    * For a standing group the organizer already knows who's coming, and making
    * twelve people each tap "I'm in" to confirm what's already true is friction
    * for its own sake. Anyone can still opt out themselves from the session page.
+   * Deduplicated, since one id twice would break the insert.
    */
-  const invited = formData
-    .getAll("invite")
-    .map((v) => String(v))
-    .filter(Boolean)
+  const invited = [...new Set(formData.getAll("invite").map((v) => String(v)).filter(Boolean))]
     .slice(0, 64);
 
-  if (invited.length > 0) {
-    await db.insert(signups).values(
-      invited.map((playerId, i) => ({
-        sessionId,
-        playerId,
-        // Beyond capacity they queue, exactly as a self-RSVP would.
-        state: (i < maxPlayers ? "in" : "waitlist") as "in" | "waitlist",
-        waitlistPos: i < maxPlayers ? null : i - maxPlayers + 1,
-        addedByOrganizer: true,
-      })),
-    );
-  }
+  /*
+   * Copy with players also brings the old Mini MLP teams or fixed pairs. They
+   * are re-read from the source here — under the same visibility rule the form
+   * used — never taken from the browser, and kept only if they still fit the
+   * players this session confirms.
+   */
+  const source = await loadCopySource(me, str(formData, "copyFrom"), true);
+  const teams = teamsCarryOver(source?.teams, format, maxPlayers, invited) ? source?.teams ?? [] : [];
+  const pairs = pairsCarryOver(source?.pairs, format, maxPlayers, invited);
+
+  // One transaction, so a copy never lands half made: session, players, teams.
+  const sessionId = await inTransaction(async (db) => {
+    const [inserted] = await db
+      .insert(sessions)
+      .values({
+        title,
+        location: str(formData, "location") || null,
+        startsAt,
+        courtNames,
+        courtCount,
+        maxPlayers,
+        format,
+        rated: formData.get("rated") !== null,
+        /*
+         * Checked server-side, not merely hidden in the form. The checkbox is
+         * absent for everyone below super admin, but a hidden field is a
+         * suggestion — anyone can post one.
+         */
+        isPrivate:
+          formData.get("isPrivate") !== null && canCreatePrivateSession(me),
+        notes: str(formData, "notes") || null,
+        status: "open",
+        createdBy: me.id,
+      })
+      .returning({ id: sessions.id });
+    const id = inserted.id;
+
+    if (invited.length > 0) {
+      await db.insert(signups).values(
+        invited.map((playerId, i) => ({
+          sessionId: id,
+          playerId,
+          // Beyond capacity they queue, exactly as a self-RSVP would.
+          state: (i < maxPlayers ? "in" : "waitlist") as "in" | "waitlist",
+          waitlistPos: i < maxPlayers ? null : i - maxPlayers + 1,
+          addedByOrganizer: true,
+        })),
+      );
+    }
+
+    if (teams.length > 0) {
+      await db.insert(mlpTeams).values(teams.map((team, i) => ({ sessionId: id, slot: i + 1, ...team })));
+    }
+    for (const [a, b] of pairs) {
+      await db.update(signups).set({ partnerId: b }).where(and(eq(signups.sessionId, id), eq(signups.playerId, a)));
+      await db.update(signups).set({ partnerId: a }).where(and(eq(signups.sessionId, id), eq(signups.playerId, b)));
+    }
+    return id;
+  });
 
   redirect(`/s/${sessionId}`);
 }
