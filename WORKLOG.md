@@ -1,8 +1,9 @@
 # Shared work log
 
-## Ready to release: explicit Mini MLP lineups — Codex, 2026-09-27
+## Released: explicit Mini MLP lineups — Codex, 2026-09-27
 
-Branch codex/mlp-partner-review, baseline ef1c9f9. This resolves the investigation
+Implementation branch codex/mlp-partner-review, baseline ef1c9f9; merged to main.
+Active checkout main. This resolves the investigation
 below: user clarified that organizers choose four category-specific pairs
 (men, women, mixed 1, mixed 2), fixed for the session. It is NOT two pairs playing
 both opposing pairs. All gender combinations remain allowed.
@@ -35,9 +36,13 @@ both opposing pairs. All gender combinations remain allowed.
   449 matches, 1540 rating events, 118 stats, 6 MLP teams, 15 encounters.
   Post-migration hashes confirm matches/seeds/events/stats/rounds/encounters and
   existing team fields unchanged. Authentication data excluded from backup.
-- Rollback tag backup/v1.7-before-explicit-lineups points to ef1c9f9. Release
-  push and Vercel verification pending. No production lineup correction has
-  been performed; the organizer must choose opening pairs explicitly in the UI.
+- Rollback tag backup/v1.7-before-explicit-lineups points to ef1c9f9 and is pushed.
+  Release commit 5f73ed9 is on origin/main. Vercel deployment
+  H4rQSs3fGHHDT862zVqXy6ZWWTRx reports success; public /notes returns HTTP 200,
+  version 1.7 and the explicit-lineup note. No production lineup correction has
+  been performed; the organizer chooses opening pairs explicitly in the UI.
+  No implementation work remains. This final documentation entry records the
+  verified deployment; future agents can start a new task from main.
 
 ## Investigated: Mini MLP opening-game partners — Codex, 2026-09-27
 
