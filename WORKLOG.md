@@ -12,7 +12,9 @@ the search below to the play console's "Add someone who didn't sign up".
   "Copy test — main" fixture): "fa"+Enter added dev_fay, tap added dev_cara,
   box cleared and kept focus, section stayed open, 375px no overflow. Test
   signups removed afterwards.
-- Deployment: recorded in the follow-up commit.
+- Released: 0f99eba fast-forwarded to main and pushed. GitHub commit status
+  success; public /notes returned HTTP 200 with the updated note about 50
+  seconds after push. Code-only. No work remains on this branch.
 
 ## Released: player search on create/edit session — Claude, 2026-09-28
 
