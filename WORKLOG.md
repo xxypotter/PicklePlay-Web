@@ -36,7 +36,10 @@ Version stays 1.7 (unreleased-to-users follow-up, same precedent as Codex).
   dropdowns, real draw/semis/final buttons, gold+bronze in block 5, podium
   Dinks/Ernies/Kitchen, zh-Hant 銅牌賽; no console errors. Fixture sessions and
   four temporary dev_ accounts purged; dev server stopped.
-- Deployment: see the release record below once verified.
+- Released: dfbc927 fast-forwarded to main and pushed (branch pushed too).
+  GitHub commit status success; public /notes returned HTTP 200 with the new
+  v1.7 bronze note about 20 seconds after push. Code-only: no migration, no
+  production data touched, no rating changes. No work remains on this branch.
 
 ## Released: explicit Mini MLP lineups — Codex, 2026-09-27
 
