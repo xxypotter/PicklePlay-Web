@@ -37,7 +37,10 @@ entering 0:0. Copy gets two options; "with players" copies everyone signed up
   one; Back to setup explained; 0–0 showed Clear score and cleared it; Back to
   setup confirmed "Deletes all 24…", returned to open with teams editable.
   Fixtures, four temporary dev_ accounts and test audit rows removed.
-- Deployment: recorded in the follow-up commit.
+- Released: 35bb628 fast-forwarded to main and pushed. GitHub commit status
+  success; public /notes (HTTP 200) showed the new notes about 60 seconds after
+  push; home HTTP 200. Code-only: no migration, no production data touched.
+  No work remains on this branch.
 
 ## Released: player search on the play console — Claude, 2026-09-28
 
