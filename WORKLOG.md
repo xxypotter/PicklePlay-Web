@@ -1,5 +1,28 @@
 # Shared work log
 
+## Released: player search on create/edit session — Claude, 2026-09-28
+
+Branch claude/player-search from main 25407d0. User asked for a letter search
+so organizers can find a player to add; version stays 1.7, note added.
+
+- New src/lib/players/search.ts matchPlayers(): any-part match ignoring case,
+  accents and full-width letters; prefix matches first, else list order.
+  New src/components/PlayerSearch.tsx input (✕ / Escape clear; Enter picks the
+  single match and never submits the create form).
+- Used in src/app/sessions/new/SessionForm.tsx (invite grid) and
+  src/app/s/[id]/edit/RosterEditor.tsx (Add players). A pick clears the box.
+  "Select all" is unchanged (first N of the whole roster).
+- Not added to the play console's "Add someone" list (not requested); it uses
+  the same pattern and could take the same component.
+- Strings search.players/clear/none and notes.v17.playerSearch in all three
+  languages; PORT §7 layout note.
+- Checks: 348 tests pass (new search.test.ts); typecheck, lint, build pass.
+  Browser (dev, dev_ana): create — filter "an", tap pick, "KIT"+Enter picks
+  without submitting, "zz" shows no-match, ✕ restores; edit — tap and Enter
+  add via server action, section stays open; 375px has no overflow; no console
+  errors. Two test signups on the dev "Copy test — main" fixture removed.
+- Deployment: recorded in the follow-up commit.
+
 ## Released: Mini MLP bronze, rest balance, gender labels — Claude, 2026-09-28
 
 Branch claude/mlp-bronze-rest-labels from main 6169b41. Follows a review of

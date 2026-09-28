@@ -8,6 +8,8 @@ import LocationField, { noteForVenue } from "@/components/LocationField";
 import { useT } from "@/lib/i18n/client";
 import MlpTeamCount from "@/components/mlp/MlpTeamCount";
 import type { CopySource } from "@/lib/sessions/copy";
+import PlayerSearch from "@/components/PlayerSearch";
+import { matchPlayers } from "@/lib/players/search";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
 const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
@@ -43,6 +45,7 @@ export default function SessionForm({
   const [format, setFormat] = useState<string>(copy?.format ?? "regular");
   // Never copied: a new night is a new sign-up.
   const [invited, setInvited] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
   const [location, setLocation] = useState(copy?.location ?? "");
   const [notes, setNotes] = useState(copy?.notes ?? "");
 
@@ -79,6 +82,14 @@ export default function SessionForm({
     setInvited((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= cap ? prev : [...prev, id],
     );
+
+  /* A pick clears the search, ready for the next name — the usual job is
+     adding several different people, not several with the same letters. */
+  const shown = matchPlayers(roster, query);
+  const pick = (id: string) => {
+    toggle(id);
+    setQuery("");
+  };
 
   return (
     <form
@@ -254,14 +265,27 @@ export default function SessionForm({
             </button>
           </div>
 
+          <div className="mb-2">
+            <PlayerSearch
+              value={query}
+              onChange={setQuery}
+              onPickOnly={() => {
+                if (shown.length === 1 && !atCap && !invited.includes(shown[0].id)) pick(shown[0].id);
+              }}
+            />
+          </div>
+          {shown.length === 0 ? (
+            <p className="hint">{t("search.none", { query: query.trim() })}</p>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-2">
-            {roster.map((p) => {
+            {shown.map((p) => {
               const on = invited.includes(p.id);
               return (
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => toggle(p.id)}
+                  onClick={() => pick(p.id)}
                   aria-pressed={on}
                   disabled={!on && atCap}
                   className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5

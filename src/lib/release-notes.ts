@@ -19,7 +19,7 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
-  { version: "1.7", date: "2026-09-27", notes: ["notes.v17.mlp", "notes.v17.mlpLineups", "notes.v17.mlpScores", "notes.v17.mlpBronze", "notes.v17.fixed", "notes.v17.gender", "notes.v17.safety"] },
+  { version: "1.7", date: "2026-09-27", notes: ["notes.v17.mlp", "notes.v17.mlpLineups", "notes.v17.mlpScores", "notes.v17.mlpBronze", "notes.v17.playerSearch", "notes.v17.fixed", "notes.v17.gender", "notes.v17.safety"] },
   {
     version: "1.6",
     date: "2026-09-21",

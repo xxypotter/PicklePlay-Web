@@ -1,8 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import { addPlayerAction, removePlayerAction } from "@/lib/sessions/actions";
+import PlayerSearch from "@/components/PlayerSearch";
+import { matchPlayers } from "@/lib/players/search";
 
 export interface RosterRow {
   playerId: string;
@@ -37,10 +39,16 @@ export default function RosterEditor({
 }) {
   const t = useT();
   const [pending, start] = useTransition();
+  const [query, setQuery] = useState("");
 
   const remove = (playerId: string) =>
     start(() => void removePlayerAction(sessionId, playerId));
-  const add = (playerId: string) => start(() => void addPlayerAction(sessionId, playerId));
+  // Clearing the search after an add leaves it ready for the next name.
+  const add = (playerId: string) => {
+    setQuery("");
+    start(() => void addPlayerAction(sessionId, playerId));
+  };
+  const shown = matchPlayers(candidates, query);
 
   const full = playing.length >= maxPlayers;
 
@@ -118,8 +126,20 @@ export default function RosterEditor({
           {full ? (
             <p className="hint">{t("roster.fullNote")}</p>
           ) : null}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {candidates.map((c) => (
+          <div className="mt-3">
+            <PlayerSearch
+              value={query}
+              onChange={setQuery}
+              onPickOnly={() => {
+                if (shown.length === 1 && !pending) add(shown[0].id);
+              }}
+            />
+          </div>
+          {shown.length === 0 ? (
+            <p className="hint">{t("search.none", { query: query.trim() })}</p>
+          ) : null}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {shown.map((c) => (
               <button
                 key={c.id}
                 type="button"

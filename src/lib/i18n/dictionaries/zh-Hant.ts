@@ -284,6 +284,9 @@ export const zhHant: Dict = {
   "roster.empty": "還沒有人。可以在下面加入，或者讓大家自己報名。",
   "roster.add": "加入球員（{count}）",
   "roster.fullNote": "本場已額滿，現在加入的人會進候補。",
+  "search.players": "搜尋球員",
+  "search.clear": "清除搜尋",
+  "search.none": "沒有符合「{query}」的球員。",
 
   "sessions.title": "我的活動",
   "sessions.upcoming": "即將開始與進行中",
@@ -794,6 +797,7 @@ export const zhHant: Dict = {
   "err.scoreVoided": "此比賽已作廢，須先恢復才能修改比分。",
   "notes.v17.mlp": "迷你 MLP 可選 4、5 或 6 支四人隊，性別組合不限（包括全男、全女或任意混合組合）。使用四塊場地進行完整循環賽，前四名進入淘汰賽。",
   "notes.v17.mlpBronze": "迷你 MLP 季後賽新增銅牌賽：半決賽勝隊爭奪金牌，負隊同時在另外兩面場地爭奪銅牌，不額外佔用時間。六隊循環賽做了休息均衡，任何隊伍都不會連續打超過兩場隊伍對抗；組隊時會顯示每位球員的性別。",
+  "notes.v17.playerSearch": "建立或編輯活動時，球員列表上方新增搜尋框：輸入名字中的幾個字母，點選球員後搜尋框會自動清空，方便接著找下一位。只有一個結果時按 Enter 即可加入。",
   "notes.v17.mlpScores": "迷你 MLP 每次對決打四場；2–2 時按總分決定，完全平局由組織者指定勝隊。可查看隊伍排名和淘汰賽結果。",
   "notes.v17.fixed": "新增和重建輪次會保留固定搭檔。組織者可在比賽中為遲到球員配對，原有比賽人員不變。",
   "notes.v17.gender": "性別平衡賽程始終避免兩男對兩女，其次盡量輪換搭檔。",

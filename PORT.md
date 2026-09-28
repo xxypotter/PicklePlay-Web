@@ -768,6 +768,12 @@ being shown a button that refuses them.
   end session, delete session, drop a player).
 - **My rating** carries the explanation of the method; **My record** carries no
   rating at all, deliberately.
+- **Player search** (v1.7) sits above the player picker on Create and on Edit's
+  "Add players". Case-, accent- and full-width-insensitive match on any part of
+  the name; names starting with the text come first, otherwise alphabetical.
+  Picking a player clears the box for the next name. Enter picks the single
+  match and never submits the form around it; Escape or ✕ clears. With 100+
+  players an unfiltered grid was a long scroll to find one name.
 
 ### Everyone's screen has to keep up
 
