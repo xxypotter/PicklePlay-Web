@@ -21,7 +21,10 @@ so organizers can find a player to add; version stays 1.7, note added.
   without submitting, "zz" shows no-match, ✕ restores; edit — tap and Enter
   add via server action, section stays open; 375px has no overflow; no console
   errors. Two test signups on the dev "Copy test — main" fixture removed.
-- Deployment: recorded in the follow-up commit.
+- Released: 3d526f1 fast-forwarded to main and pushed. GitHub commit status
+  success; public /notes returned HTTP 200 with the player-search note about
+  40 seconds after push. Code-only; no migration or data changes. No work
+  remains on this branch.
 
 ## Released: Mini MLP bronze, rest balance, gender labels — Claude, 2026-09-28
 
