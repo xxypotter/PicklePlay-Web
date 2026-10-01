@@ -378,7 +378,8 @@ player's history.
 ## 4. Match formats and the generators
 
 Six formats offered: **regular**, **balanced**, **gender**, **fixed**,
-**custom**, **Mini MLP** — in that order in the picker. Mini MLP uses the dedicated team model in §16.
+**Mini MLP**, **custom** — in that order in the picker (v1.8 moved Mini MLP
+above custom). Mini MLP uses the dedicated team model in §16.
 (`king`, `social`, `manual` exist in the enum for old rows; don't offer them.)
 
 Common shape: a round holds one match per court in use;
@@ -770,6 +771,8 @@ being shown a button that refuses them.
   fixed A/B order is how people put numbers in the wrong row. Steppers **and** a
   typeable box: eleven taps to record an 11 is absurd. Scores held as text, not
   numbers — coercing on every keystroke makes the box impossible to clear.
+- **Your own name** in Matchups reads "You (username)" (v1.8), not a bare
+  "You": a screenshot or a phone handed around should still say who it is.
 - **Matchup filter**: tap two players' avatars to see only the games they share,
   split into "together" and "against". Intersection, not union — "when are we on
   court together" is the actual question.

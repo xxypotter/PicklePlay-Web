@@ -9,7 +9,7 @@ import { useT } from "@/lib/i18n/client";
 import MlpTeamCount from "@/components/mlp/MlpTeamCount";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
-const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
+const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "mlp", "custom"] as const;
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;

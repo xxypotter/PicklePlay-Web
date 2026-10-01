@@ -96,13 +96,13 @@ export default function MatchCard({
 
         <div className="mt-2 flex items-center justify-between gap-3 text-sm line-through">
           <span className="min-w-0 flex-1 truncate">
-            {match.teamA.map((p) => (p.id === meId ? t("common.you") : p.username)).join(" & ")}
+            {match.teamA.map((p) => (p.id === meId ? t("common.youNamed", { name: p.username }) : p.username)).join(" & ")}
           </span>
           <span className="shrink-0 font-mono tabular-nums">
             {match.scoreA}–{match.scoreB}
           </span>
           <span className="min-w-0 flex-1 truncate text-right">
-            {match.teamB.map((p) => (p.id === meId ? t("common.you") : p.username)).join(" & ")}
+            {match.teamB.map((p) => (p.id === meId ? t("common.youNamed", { name: p.username }) : p.username)).join(" & ")}
           </span>
         </div>
 
@@ -224,7 +224,7 @@ function Side({
   highlight: boolean;
   t: T;
 }) {
-  const names = players.map((p) => (p.id === meId ? t("common.you") : p.username));
+  const names = players.map((p) => (p.id === meId ? t("common.youNamed", { name: p.username }) : p.username));
   const label = t("schedule.teamJoin", { a: names[0] ?? "", b: names[1] ?? "" });
 
   return (

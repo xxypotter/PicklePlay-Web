@@ -1,5 +1,26 @@
 # Shared work log
 
+## Released: v1.8 — Claude, 2026-09-30
+
+Branch claude/v1.8 from main 425cf18. Version bumped to 1.8.
+
+- Dropped by the user after discussion: a one-off "special event" (清华 vs 交大,
+  2026-11-07, 10 teams of 6, pipelined 10-court schedule). Not built; nothing
+  remains in code. Its input screenshot folder `special event/` is git-ignored.
+- Format picker order (create and edit): Mini MLP now above Custom. Server-side
+  format lists are validation sets only and were left unchanged.
+- Matchups: your own name reads "You (username)" / 你（username） instead of a
+  bare "You", on score cards, read-only rows and voided cards. The old
+  common.you key was replaced by common.youNamed so no caller can miss it. The
+  player-filter chip still says "You"/"我" (schedule.filterYou) by choice.
+- Release notes v1.8 (notes.v18.youNamed, notes.v18.formats) in all three
+  languages; PORT §4 order and §7 layout note updated.
+- Checks: 351 tests pass, typecheck, lint, build. Browser (dev): create form
+  order Regular, Balanced, Gender, Fixed, Mini MLP, Custom; dev_cara (zh-Hans)
+  sees 你（dev_cara） on read-only rows; dev_ana sees "You (dev_ana) & dev_ben"
+  on score cards; Me shows version 1.8.
+- Deployment: recorded in the follow-up commit.
+
 ## Released: Back to setup with a draw, 0–0 clearing, Copy with players — Claude, 2026-09-28
 
 Branch claude/setup-and-copy-players from main 32eb7e9. Version stays 1.7.

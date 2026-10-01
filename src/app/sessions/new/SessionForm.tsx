@@ -12,7 +12,7 @@ import PlayerSearch from "@/components/PlayerSearch";
 import { matchPlayers } from "@/lib/players/search";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
-const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
+const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "mlp", "custom"] as const;
 
 const MAX_COURTS = 4;
 const PLAYERS_PER_COURT = 6;

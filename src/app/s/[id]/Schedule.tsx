@@ -293,7 +293,7 @@ function Team({
                   : ""
             }`}
           >
-            {p.id === meId ? t("common.you") : p.username}
+            {p.id === meId ? t("common.youNamed", { name: p.username }) : p.username}
           </span>
         </div>
       ))}
