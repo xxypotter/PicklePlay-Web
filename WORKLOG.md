@@ -19,7 +19,9 @@ Branch claude/v1.8 from main 425cf18. Version bumped to 1.8.
   order Regular, Balanced, Gender, Fixed, Mini MLP, Custom; dev_cara (zh-Hans)
   sees 你（dev_cara） on read-only rows; dev_ana sees "You (dev_ana) & dev_ben"
   on score cards; Me shows version 1.8.
-- Deployment: recorded in the follow-up commit.
+- Released: c7aac01 fast-forwarded to main and pushed. GitHub commit status
+  success; public /notes (HTTP 200) showed version 1.8 and its notes about 60
+  seconds after push. Code-only, no migration. No work remains on this branch.
 
 ## Released: Back to setup with a draw, 0–0 clearing, Copy with players — Claude, 2026-09-28
 
