@@ -1,5 +1,28 @@
 # Shared work log
 
+## Completed: BoRong login moved to rongbo — Codex, 2026-10-02
+
+Owner requested a replacement login, then specified lowercase `rongbo`. The old
+account had eight matches, one signup, one seed and eight rating events. Renamed
+the existing player identity to preserve every linked record and profile field,
+including avatar, rather than deleting/recreating its database ID. The requested
+PIN was reset separately; no credentials are included in this handoff. Revoked
+the prior sign-in and cleared failed attempts for both names. Audited the change.
+
+Read-only audit found six attempts under rongbo while the account was still named
+BoRong; three were recent failures. This supports a possible username mismatch,
+not a diagnosis of her phone. Backup (no PIN hashes/tokens):
+local-backups/rongbo-recovery-2026-10-02T22-46-13-747Z.json.
+
+Verified all profile fields except login name and PIN were unchanged, and all
+linked record snapshots matched. A fresh public login-form POST returned 303 to
+/me; the isolated session loaded the authenticated rongbo profile with HTTP 200.
+Then logged out and verified that the same test session could no longer access
+/me. Live profile also shows lowercase rongbo and eight matches. Ignored proof:
+.scratch/rongbo-recovery-confirmed.png. The old BoRong login no longer exists.
+No application code, rating equation, release notes, or port behavior changed;
+version remains 1.8. No follow-up implementation remains.
+
 ## Released: v1.8 Mini MLP court extension — Codex, 2026-10-02
 
 Branch codex/mlp-six-courts from main 7428143. Reviewed Claude's v1.8 and
