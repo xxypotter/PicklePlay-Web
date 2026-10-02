@@ -23,7 +23,7 @@ import {
 
 /**
  * Role hierarchy (SPEC.md §3):
- *   superadmin — exactly one (Jason). Sole authority to promote/demote admins.
+ *   superadmin — owners; only this role can promote/demote admins.
  *   admin      — creates sessions, manages the invite code, edits matches.
  *   player     — RSVPs and records their own matches.
  *

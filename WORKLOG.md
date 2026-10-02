@@ -43,8 +43,35 @@ the preceding explicit lineups, bronze/rest balance, search, Back to setup,
   User additionally explicitly requested promoting HUI to Jason's superadmin
   role, with no public release-note mention. Backup and guarded update script
   are ignored under .scratch/ and local-backups/, exclude PIN hashes/tokens.
-- Deployment and production configuration: pending final browser verification
-  and push. No production writes yet. Final verified status will be added below.
+- Local code commit: b4b1a42. Rollback tag: backup/v1.8-before-mlp-courts
+  at 7428143. First publication attempt never executed: automatic approval
+  review hit an account usage limit. User then requested continuation and an
+  independent agent's additional tests. Git fetch now succeeds; main and
+  origin/main remain 7428143. Publication and court/role changes remain pending.
+- Independent agent Hooke authored independent-audit.test.ts (56 tests), then
+  hit its account usage limit before supplying a final review verdict. Parent
+  reviewed and executed the suite successfully: all nine team/court combinations,
+  576 ordered lineup assignments per team position, all 720 six-team orderings,
+  randomized lineups, chronological collision/overlap checks, frozen four-court
+  compatibility, real actions with mocked persistence, playoffs and UI boundaries.
+  These supplement, not replace, the earlier 20 real development DB workflows.
+  Final regression: 421 standard tests pass; typecheck and lint pass. Production
+  build passed on b4b1a42; only independent tests/documentation added since then.
+- Owner-requested BoRong account recovery completed through the existing scrypt
+  implementation. Verified exact active player account; stored hash verifies the
+  requested PIN, prior sign-in sessions revoked and eight old login-attempt rows
+  cleared; audit entry attributes recovery to Jason. No credentials committed.
+  The normal reset form rejects sequential PINs; this was a one-time explicitly
+  requested override, not a change to public PIN validation. No active lockout
+  existed at the read-only audit. No match/rating records changed for recovery.
+  Do not claim a completed browser sign-in: verification was hash + account/rate
+  checks, not impersonating the player in the UI.
+- Recovery note: the rollback tag restores the preceding code. Before any
+  rollback, inspect whether a five/six-court draw has since been played. Do not
+  blindly restore four-court settings on a draw using court 5/6 or restore a
+  stale snapshot over new scores. If new-court games exist, preserve the new
+  validation and stored schedule while fixing forward. Current pre-release
+  target has no draw, so its two court fields are still independently reversible.
 
 ## Released: v1.8 — Claude, 2026-09-30
 
