@@ -1,10 +1,16 @@
 # Shared work log
 
-## v1.8 Mini MLP court extension — Codex, 2026-10-02
+## Released: v1.8 Mini MLP court extension — Codex, 2026-10-02
 
 Branch codex/mlp-six-courts from main 7428143. Reviewed Claude's v1.8 and
 the preceding explicit lineups, bronze/rest balance, search, Back to setup,
 0–0 clearing and Copy with players releases before editing. Version stays 1.8.
+
+Completed and deployed. Main/origin/main contain release b6b8b8c (implementation
+b4b1a42 plus independent tests). Vercel deployment 3uy3qNu81x29fe2sQ4FU47qiYKWh
+reports success. Public home and /notes return 200, the new court note is live,
+and /api/dev-login remains 404. No migration needed. Active checkout: main.
+The final documentation-only commit records verification; no task remains open.
 
 - Mini MLP accepts 4–6 courts; other formats keep their four-court cap.
   Shared sessions/limits.ts applies to create/edit forms, server validation,
@@ -47,7 +53,7 @@ the preceding explicit lineups, bronze/rest balance, search, Back to setup,
   at 7428143. First publication attempt never executed: automatic approval
   review hit an account usage limit. User then requested continuation and an
   independent agent's additional tests. Git fetch now succeeds; main and
-  origin/main remain 7428143. Publication and court/role changes remain pending.
+  origin/main remained 7428143 until the successful release recorded above.
 - Independent agent Hooke authored independent-audit.test.ts (56 tests), then
   hit its account usage limit before supplying a final review verdict. Parent
   reviewed and executed the suite successfully: all nine team/court combinations,
@@ -66,6 +72,21 @@ the preceding explicit lineups, bronze/rest balance, search, Back to setup,
   existed at the read-only audit. No match/rating records changed for recovery.
   Do not claim a completed browser sign-in: verification was hash + account/rate
   checks, not impersonating the player in the UI.
+- Production changes completed after successful deployment and a fresh sanitized
+  backup: local-backups/v1.8-courts-before-2026-10-02T21-52-43-580Z.json.
+  HUI's October 3 session now has courts 1,2,3,4,5; HUI and Jason both have
+  superadmin. Both changes are audited under Jason. The role change is deliberately
+  absent from public revision notes. No real draw generated or test scores entered.
+  Comparison of all ten backed-up tables is identical after excluding only the
+  requested HUI role and target session's court fields; 549 matches, 127 seeds,
+  1,540 rating events and all existing team lineups remain unchanged. This snapshot
+  was taken after BoRong's recovery and excludes PIN hashes and auth tokens.
+  Browser confirms Sat Oct 3, 2 PM, courts 1–5. Screenshot (ignored):
+  .scratch/v1.8-tomorrow-courts.png.
+- Organizer readiness: still 23/24 confirmed, zero saved teams and no draw. HUI
+  must add the last player and save all six teams/four category lineups before
+  generating the real schedule. The software has been rehearsed with synthetic
+  complete rosters; do not describe this incomplete real roster as already drawn.
 - Recovery note: the rollback tag restores the preceding code. Before any
   rollback, inspect whether a five/six-court draw has since been played. Do not
   blindly restore four-court settings on a draw using court 5/6 or restore a
