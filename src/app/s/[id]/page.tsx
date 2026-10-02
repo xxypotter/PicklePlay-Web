@@ -25,6 +25,7 @@ import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { getLocale, getT } from "@/lib/i18n/server";
 import { shareDescription } from "@/lib/sessions/share";
 import RsvpButtons, { type MyState } from "./RsvpButtons";
+import MlpCourtHint from "@/components/mlp/MlpCourtHint";
 import MlpBoard from "@/components/mlp/MlpBoard";
 import { getMlpData } from "@/lib/mlp/queries";
 import Schedule from "./Schedule";
@@ -252,6 +253,7 @@ export default async function SessionPage({
       />
 
       <main className="screen pt-4">
+        {mlp && active === "schedule" ? <MlpCourtHint teams={session.maxPlayers/4} courts={session.courtNames} /> : null}
         {/*
           Each tab answers one question. Pinning "your next match" on all three
           assumed rounds get played in order, which they don't — so scores now

@@ -1,5 +1,51 @@
 # Shared work log
 
+## v1.8 Mini MLP court extension — Codex, 2026-10-02
+
+Branch codex/mlp-six-courts from main 7428143. Reviewed Claude's v1.8 and
+the preceding explicit lineups, bronze/rest balance, search, Back to setup,
+0–0 clearing and Copy with players releases before editing. Version stays 1.8.
+
+- Mini MLP accepts 4–6 courts; other formats keep their four-court cap.
+  Shared sessions/limits.ts applies to create/edit forms, server validation,
+  and copying. Copies retain all five/six court labels. An edit's UPDATE now
+  checks status=open atomically so a concurrent Start cannot change drawn courts.
+- New pure mlp/schedule.ts: preserves all four-court schedules; six teams on
+  five courts use 12 full waves, on six courts 10. Five-court construction:
+  three four-wave blocks, each with a different pair of squads on court 5
+  playing four games sequentially; remaining squads play two opponents on
+  courts 1–4. Each squad faces every opponent once, each player plays ten
+  games/rests two waves, all saved category lineups are preserved.
+- Four/five squads keep four active courts and their existing bye order;
+  any extra booked courts stay free. Playoffs still use courts 1–4: two waves
+  of 1v4/2v3, then two waves of gold/bronze. No extra-team expansion.
+- appendSchedule persists explicit per-game waves/courts; never derive a wave
+  as block*2 for the five-court layout. Monotonic playedAt per wave is retained.
+  No schema migration, rating retuning, or historical draw rewriting.
+- UI hints explain sequential court 5 / spare courts, in all three languages.
+  v1.8 release note added; PORT.md, PROJECT.md, PORT-v1.8.md updated, and the
+  v1.7 handoff points to the amendment. Superadmin permissions already apply
+  equally to multiple accounts; stale single-owner comments/docs corrected.
+- Checks: 365 standard tests pass; all 20 opt-in development DB workflows pass
+  (15 MLP tests on final rerun, five setup tests from initial run). Covers all
+  nine team/court combinations, incomplete 23/24 roster, saved pair integrity,
+  collision-free courts/players, scoring/ties, seeding, gold/bronze, copy/edit,
+  Back to setup, backup structure and atomic rating replay. Initial backup test
+  expected the old 20 waves; corrected to 16 for five courts and reran MLP.
+  Typecheck, lint, production build pass. Browser: saved six courts, restored
+  five, started a synthetic session and generated the draw; Matchups displayed
+  all 12 rounds with five courts each, the fixed lineup on court 5, and the
+  sequencing hint. Development browser fixtures removed after verification.
+- Production target identified unambiguously: HUI's OPEN "Mini mlp",
+  2026-10-03 14:00 America/Chicago, id 8dd364e2-33f6-4459-82f2-f5df2897bfa8.
+  Read-only audit: four courts, 23/24 players, no saved teams/draw/results.
+  The other three closed Mini MLP sessions are tests and must stay untouched.
+  User additionally explicitly requested promoting HUI to Jason's superadmin
+  role, with no public release-note mention. Backup and guarded update script
+  are ignored under .scratch/ and local-backups/, exclude PIN hashes/tokens.
+- Deployment and production configuration: pending final browser verification
+  and push. No production writes yet. Final verified status will be added below.
+
 ## Released: v1.8 — Claude, 2026-09-30
 
 Branch claude/v1.8 from main 425cf18. Version bumped to 1.8.

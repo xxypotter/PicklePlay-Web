@@ -25,6 +25,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   const personIds:string[]=Array.from({length:25},()=>randomUUID());
   const id=randomUUID(), otherId=randomUUID(), fixedId=randomUUID();
   const flexibleIds=[randomUUID(),randomUUID()];
+  const courtCases=[4,5,6].flatMap(count=>[4,5,6].map(courts=>({count,courts,id:randomUUID()})));
   const legacyId=randomUUID();
   let verified=false;
   // Exercise every composition in actual stored player profiles, including unknown gender.
@@ -61,15 +62,15 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     verified=true;
     actor={id:personIds[0],role:"admin"};
     await getDb().insert(players).values(personIds.map((pid,i)=>({id:pid,username:`v17test_${pid}`,usernameLower:`v17test_${pid}`,pinHash:"disabled-test-only",role:i===0?"admin" as const:"player" as const,gender:genders[i]})));
-    await getDb().insert(sessions).values([{id,title:"Mini MLP integration",createdBy:actor.id,format:"mlp",courtCount:4,courtNames:["1","2","3","4"],maxPlayers:24,status:"live",rated:false,startsAt:new Date()},
+    await getDb().insert(sessions).values([{id,title:"Mini MLP integration",createdBy:actor.id,format:"mlp",courtCount:5,courtNames:["1","2","3","4","5"],maxPlayers:24,status:"live",rated:false,startsAt:new Date()},
       {id:otherId,title:"Other integration",createdBy:personIds[24],status:"live",rated:false,startsAt:new Date()},
       {id:fixedId,title:"Fixed integration",createdBy:actor.id,format:"fixed",courtCount:4,courtNames:["1","2","3","4"],maxPlayers:16,status:"live",rated:false,startsAt:new Date()}]);
-    await getDb().insert(signups).values(personIds.slice(0,24).map(playerId=>({sessionId:id,playerId,state:"in" as const})));
+    await getDb().insert(signups).values(personIds.slice(0,23).map(playerId=>({sessionId:id,playerId,state:"in" as const})));
     await getDb().insert(signups).values(personIds.slice(0,16).map(playerId=>({sessionId:fixedId,playerId,state:"in" as const})));
   },30000);
   afterAll(async()=>{
     if(!verified)return;
-    await getDb().delete(sessions).where(inArray(sessions.id,[id,otherId,fixedId,legacyId,...flexibleIds]));
+    await getDb().delete(sessions).where(inArray(sessions.id,[id,otherId,fixedId,legacyId,...flexibleIds,...courtCases.map(c=>c.id)]));
     await getDb().delete(auditLog).where(inArray(auditLog.actorId,personIds));
     await getDb().delete(players).where(inArray(players.id,personIds));
   },30000);
@@ -77,6 +78,9 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     const fd=new FormData();fd.set("matchId",matchId);fd.set("scoreA",String(a));fd.set("scoreB",String(b));return saveScoreAction({},fd);
   };
   it("runs setup through a 76-game tournament with a bronze match; rejects partner changes, premature playoffs and stale bracket edits",async()=>{
+    // Tomorrow's shape: 23/24 present, five courts. No partial tournament.
+    await expect(saveMlpTeamsAction(id,input)).rejects.toThrow();
+    await addPlayerAction(id,personIds[23]);
     await expect(saveMlpTeamsAction(id,input.map((t,i)=>i? t:{...t,m1:t.w1}))).rejects.toThrow();
     await saveMlpTeamsAction(id,input);
     const deletion = new FormData(); deletion.set("playerId",personIds[1]);
@@ -88,6 +92,8 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     const ties=await db.select().from(mlpTies).where(eq(mlpTies.sessionId,id));
     let games=await db.select().from(matches).where(eq(matches.sessionId,id));
     expect(ties).toHaveLength(15);expect(games).toHaveLength(60);
+    expect(new Set(games.map(g=>g.roundId)).size).toBe(12);
+    expect(new Set(games.map(g=>g.courtNo))).toEqual(new Set([1,2,3,4,5]));
     for(const tie of ties){
       const expected=lineups(teams.find(t=>t.id===tie.teamAId)!,teams.find(t=>t.id===tie.teamBId)!);
       for(const g of expected){const actual=games.find(m=>m.mlpTieId===tie.id&&m.mlpGame===g.kind)!;expect([actual.a1,actual.a2,actual.b1,actual.b2]).toEqual(g.players);}
@@ -136,6 +142,36 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     await assertSavedLineups(id);
     await expect(correctMlpOpeningPairsAction(id,input)).rejects.toThrow();
   },300000);
+  it.each(courtCases)("persists $count teams / $courts courts without court or player collisions",async({count,courts,id:sessionId})=>{
+    const db=getDb();
+    await db.insert(sessions).values({id:sessionId,title:"Court matrix",createdBy:actor.id,format:"mlp",
+      courtCount:courts,courtNames:Array.from({length:courts},(_,i)=>String(i+1)),maxPlayers:count*4,status:"live",rated:false,startsAt:new Date()});
+    await db.insert(signups).values(personIds.slice(0,count*4).map(playerId=>({sessionId,playerId,state:"in" as const})));
+    await saveMlpTeamsAction(sessionId,input.slice(0,count));
+    await createMlpScheduleAction(sessionId);
+    const games=await db.select().from(matches).where(eq(matches.sessionId,sessionId));
+    const ties=await db.select().from(mlpTies).where(eq(mlpTies.sessionId,sessionId));
+    const rs=await db.select().from(rounds).where(eq(rounds.sessionId,sessionId)).orderBy(rounds.index);
+    expect(games).toHaveLength(count*(count-1)*2);
+    expect(new Set(ties.map(t=>[t.teamAId,t.teamBId].sort().join("|"))).size).toBe(count*(count-1)/2);
+    expect(rs).toHaveLength(count===4?6:count===5?10:courts===4?16:courts===5?12:10);
+    for(const r of rs) {
+      const gs=games.filter(g=>g.roundId===r.id);
+      expect(new Set(gs.map(g=>g.courtNo)).size).toBe(gs.length);
+      expect(new Set(gs.flatMap(g=>[g.a1,g.a2,g.b1,g.b2])).size).toBe(gs.length*4);
+      expect(gs.every(g=>g.courtNo!==null&&g.courtNo>=1&&g.courtNo<=courts)).toBe(true);
+    }
+    for(let i=1;i<rs.length;i++) expect(Math.min(...games.filter(g=>g.roundId===rs[i].id).map(g=>g.playedAt.getTime())))
+      .toBeGreaterThan(Math.max(...games.filter(g=>g.roundId===rs[i-1].id).map(g=>g.playedAt.getTime())));
+    await assertSavedLineups(sessionId);
+    // Simulated results stay exclusively in the guarded development database.
+    await db.update(matches).set({status:"completed",scoreA:11,scoreB:8}).where(eq(matches.sessionId,sessionId));
+    await addMlpPlayoffAction(sessionId);
+    await db.update(matches).set({status:"completed",scoreA:11,scoreB:8}).where(eq(matches.sessionId,sessionId));
+    await addMlpPlayoffAction(sessionId);
+    expect(await db.select().from(matches).where(eq(matches.sessionId,sessionId))).toHaveLength(count*(count-1)*2+16);
+    await assertSavedLineups(sessionId);
+  },90000);
   it.each([4,5])("runs a %i-team tournament with all-men, all-women and asymmetric teams, enforcing capacity and playoff seeding",async count=>{
     const db=getDb(),sessionId=flexibleIds[count-4],roster=personIds.slice(0,count*4);
     const selected=input.slice(0,count);
@@ -259,7 +295,8 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   it("backs up complete session structure and publishes concurrent rating replays atomically",async()=>{
     const db=getDb(),backup=await makeBackup();
     expect(backup.schema).toBe(2);expect(backup.mlpTies.filter(t=>t.sessionId===id)).toHaveLength(19);
-    expect(backup.rounds.filter(r=>r.sessionId===id)).toHaveLength(20);
+    // Five courts: 12 RR waves + 2 semifinal + 2 gold/bronze.
+    expect(backup.rounds.filter(r=>r.sessionId===id)).toHaveLength(16);
     expect(backup.players[0]).not.toHaveProperty("pinHash");expect(backup.players[0]).toHaveProperty("gender");
     const first=new Date("2026-09-25T00:00:00Z");
     await db.insert(ratingSeeds).values(personIds.slice(0,24).map(playerId=>({playerId,rating:3,source:"picker" as const,effectiveAt:first})));

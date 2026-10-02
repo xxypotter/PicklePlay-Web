@@ -16,8 +16,8 @@ import { validateTeams } from "@/lib/mlp/rules";
 /** The formats the create form offers. Anything else is an old enum value. */
 export const OFFERED_FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
 
-export const MAX_COURTS = 4;
-export const PLAYERS_PER_COURT = 6;
+import { maxCourtsFor, PLAYERS_PER_COURT } from "./limits";
+export { MAX_COURTS, PLAYERS_PER_COURT } from "./limits";
 const MIN_PLAYERS = 4;
 
 export interface CopyableSession {
@@ -129,7 +129,7 @@ export function copySourceFrom(
   /** May this user create a private session? Only then does "private" carry over. */
   canMakePrivate: boolean,
 ): CopySource {
-  const courtNames = session.courtNames.slice(0, MAX_COURTS);
+  const courtNames = session.courtNames.slice(0, maxCourtsFor(session.format));
   const seatCap = Math.max(1, courtNames.length) * PLAYERS_PER_COURT;
 
   return {

@@ -62,8 +62,8 @@ export async function setRoleAction(_prev: FormState, formData: FormData): Promi
   const target = rows[0];
   if (!target) return { error: t("err.playerGone") };
 
-  // There is exactly one superadmin and no UI creates another. Guard anyway, so
-  // a crafted request can't demote the owner and orphan the group.
+  // Superadmins are provisioned separately. The ordinary role picker cannot
+  // demote them, including through a crafted request.
   if (target.role === "superadmin") {
     return { error: t("err.superadminRole") };
   }

@@ -17,7 +17,7 @@ export const isAtLeast = (role: Role, minimum: Role) => RANK[role] >= RANK[minim
 export const canManageSessions = (role: Role) => isAtLeast(role, "admin");
 /** Seeing the code and sharing it around — the everyday case. */
 export const canManageInviteCode = (role: Role) => isAtLeast(role, "admin");
-/** Deliberately superadmin-only: one person decides who runs the group. */
+/** Deliberately superadmin-only: group owners decide who can administer. */
 export const canManageRoles = (role: Role) => isAtLeast(role, "superadmin");
 
 /*

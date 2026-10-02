@@ -19,13 +19,16 @@ the code that depends on them, after backup and development validation.
 ## Product and source map
 
 - Mobile doubles organizer: regular, balanced, gender-balanced, fixed partners,
-  custom rounds, and Mini MLP (v1.7): 4/5/6 teams of four, four courts, any
+  custom rounds, and Mini MLP (v1.8): 4/5/6 teams of four, 4–6 courts, any
   gender mix, four organizer-selected category lineups per squad (women, men,
   mixed 1, mixed 2), locked for the session. Team count is session capacity / 4.
   Historical m/w columns store mixed pairs; women1/2 and men1/2 store opening
   pairs. These category names do not impose player-gender restrictions.
   Top four play semifinals, then gold and bronze side by side (no extra time).
-  Six-team round robins are rest-balanced; setup labels players F/M.
+  Six-team RR: 16/12/10 waves on 4/5/6 courts, respectively. Five courts give
+  every team one sequential four-game encounter on court 5; every player rests
+  two waves. Four/five teams use four active courts. Planner: lib/mlp/schedule.ts.
+  Setup labels players F/M.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.
 - Rating engine: src/lib/rating/engine.ts; tuning epochs: constants.ts;
@@ -34,7 +37,7 @@ the code that depends on them, after backup and development validation.
   caches. Preserve old epochs and playedAt; no new rating tuning is requested.
 - Authorization: auth/policy.ts (pure), permissions.ts and sessions/guards.ts.
   Every action must enforce its own resource ownership and state checks.
-- Roles: player, admin, one superadmin. Organizers manage their own sessions;
+- Roles: player, admin, superadmin. Multiple superadmins are supported. Organizers manage their own sessions;
   superadmin can manage any. Closed-session scoring is organizer/superadmin only.
 - Three dictionaries in src/lib/i18n/dictionaries/: English, zh-Hans, zh-Hant.
   Add every key in all three, preserving placeholders.
@@ -65,3 +68,4 @@ individual games). Margin versus expectation drives personal ratings, so a close
 loss can gain rating. Reliability declarations remain as previously approved;
 changing their policy is not part of v1.7. Automatic closure is 48h after startsAt.
 Player capacity normally follows courts (6 per court), maximum 4 courts.
+Mini MLP alone permits 4–6 courts, still capped at 4/5/6 four-player teams.

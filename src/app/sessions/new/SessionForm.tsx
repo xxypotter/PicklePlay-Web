@@ -14,8 +14,7 @@ import { matchPlayers } from "@/lib/players/search";
 /** Keys only — the labels and descriptions come from the dictionary. */
 const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "mlp", "custom"] as const;
 
-const MAX_COURTS = 4;
-const PLAYERS_PER_COURT = 6;
+import { maxCourtsFor, PLAYERS_PER_COURT } from "@/lib/sessions/limits";
 
 export interface PickablePlayer {
   id: string;
@@ -73,8 +72,9 @@ export default function SessionForm({
    */
   const [maxPlayersText, setMaxPlayersText] = useState(String(copy?.maxPlayers ?? 9));
 
+  const maxCourts = maxCourtsFor(format);
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
-  const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
+  const seatCap = Math.min(maxCourts, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
 
   const maxPlayers = Number.parseInt(maxPlayersText, 10);
   const maxPlayersValid =
@@ -170,18 +170,18 @@ export default function SessionForm({
           required
         />
         <p className="hint">
-          {t("form.courtsHint", { max: MAX_COURTS })}
+          {t("form.courtsHint", { max: maxCourts })}
           {t("form.courtsSeen")}
         </p>
-        {courtCount > MAX_COURTS ? (
+        {courtCount > maxCourts ? (
           <p className="mt-1 text-sm font-medium text-[var(--danger)]">
-            {t("err.maxCourts", { max: MAX_COURTS })}
+            {t("err.maxCourts", { max: maxCourts })}
           </p>
         ) : null}
       </div>
 
       <div>
-        {format === "mlp" ? <MlpTeamCount players={maxPlayersText} onChange={setMaxPlayersText} /> : null}
+        {format === "mlp" ? <MlpTeamCount courts={courts} players={maxPlayersText} onChange={setMaxPlayersText} /> : null}
         <label className="label" htmlFor="maxPlayers">
           {t("form.maxPlayers")}
         </label>
@@ -206,7 +206,7 @@ export default function SessionForm({
             {t("form.maxPlayersHint", {
               perCourt: PLAYERS_PER_COURT,
               total: seatCap,
-              courts: Math.min(MAX_COURTS, Math.max(1, courtCount)),
+              courts: Math.min(maxCourts, Math.max(1, courtCount)),
             })}
           </p>
         ) : null}

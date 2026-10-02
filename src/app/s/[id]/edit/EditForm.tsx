@@ -11,8 +11,7 @@ import MlpTeamCount from "@/components/mlp/MlpTeamCount";
 /** Keys only — the labels and descriptions come from the dictionary. */
 const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "mlp", "custom"] as const;
 
-const MAX_COURTS = 4;
-const PLAYERS_PER_COURT = 6;
+import { maxCourtsFor, PLAYERS_PER_COURT } from "@/lib/sessions/limits";
 
 export interface EditableSession {
   id: string;
@@ -44,8 +43,9 @@ export default function EditForm({ session }: { session: EditableSession }) {
   };
 
 
+  const maxCourts = maxCourtsFor(format);
   const courtCount = courts.split(",").map((c) => c.trim()).filter(Boolean).length;
-  const seatCap = Math.min(MAX_COURTS, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
+  const seatCap = Math.min(maxCourts, Math.max(1, courtCount)) * PLAYERS_PER_COURT;
   const maxPlayers = Number.parseInt(maxPlayersText, 10);
   const maxPlayersValid =
     Number.isInteger(maxPlayers) && maxPlayers >= session.confirmed && maxPlayers <= seatCap;
@@ -108,11 +108,11 @@ export default function EditForm({ session }: { session: EditableSession }) {
           onChange={(e) => setCourts(e.target.value)}
           required
         />
-        <p className="hint">{t("form.courtsHint", { max: MAX_COURTS })}</p>
+        <p className="hint">{t("form.courtsHint", { max: maxCourts })}</p>
       </div>
 
       <div>
-        {format === "mlp" ? <MlpTeamCount players={maxPlayersText} onChange={setMaxPlayersText} /> : null}
+        {format === "mlp" ? <MlpTeamCount courts={courts} players={maxPlayersText} onChange={setMaxPlayersText} /> : null}
         <label className="label" htmlFor="maxPlayers">
           {t("form.maxPlayers")}
         </label>
@@ -137,7 +137,7 @@ export default function EditForm({ session }: { session: EditableSession }) {
             {t("form.maxPlayersHint", {
               perCourt: PLAYERS_PER_COURT,
               total: seatCap,
-              courts: Math.min(MAX_COURTS, Math.max(1, courtCount)),
+              courts: Math.min(maxCourts, Math.max(1, courtCount)),
             })}
           </p>
         ) : null}

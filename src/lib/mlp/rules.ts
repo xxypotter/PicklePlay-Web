@@ -1,11 +1,12 @@
 /** Mini MLP house rules. No database or UI dependencies. */
 export const MLP_TEAM_COUNTS = [4, 5, 6] as const;
 export type TeamCount = (typeof MLP_TEAM_COUNTS)[number];
-export const MLP_COURTS = 4;
+export const MLP_MIN_COURTS = 4;
+export const MLP_MAX_COURTS = 6;
 export const validTeamCount = (count: number): count is TeamCount =>
   MLP_TEAM_COUNTS.some(n => n === count);
 export const validMlpConfig = (courts: number, players: number) =>
-  courts === MLP_COURTS && validTeamCount(players / 4);
+  Number.isInteger(courts) && courts >= MLP_MIN_COURTS && courts <= MLP_MAX_COURTS && validTeamCount(players / 4);
 export const encounterCount = (teams: number) => teams * (teams - 1) / 2;
 // Persisted game/slot names remain compatible with the original v1.7 schema.
 // They identify lineup positions, never a required player gender.

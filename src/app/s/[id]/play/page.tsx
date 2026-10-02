@@ -14,6 +14,7 @@ import { getAllRounds, getSessionStandings } from "@/lib/sessions/queries";
 import { teamStandings, type PlayedMatch } from "@/lib/sessions/medal";
 import { bracketFrom, teamRowsFrom } from "@/lib/sessions/team-view";
 import MlpSetup from "@/components/mlp/MlpSetup";
+import MlpCourtHint from "@/components/mlp/MlpCourtHint";
 import MlpBoard from "@/components/mlp/MlpBoard";
 import { getMlpData } from "@/lib/mlp/queries";
 import ManualRound, { type ManualPlayer } from "./ManualRound";
@@ -270,6 +271,7 @@ export default async function PlayPage({
         <AddPlayers sessionId={id} candidates={notSignedUp} />
       </section> : null}
 
+      {mlp ? <MlpCourtHint teams={session.maxPlayers/4} courts={session.courtNames} /> : null}
       {mlp ? <MlpSetup key={`${session.maxPlayers}:${JSON.stringify(mlp.teams)}`} teamCount={session.maxPlayers/4} sessionId={id} teams={mlp.teams} roster={sortByUsername(attending)} locked={allRounds.length>0 || session.status==="closed"} live={session.status==="live"} canCorrectOpeningPairs={mlp.canCorrectOpeningPairs} /> : null}
 
 

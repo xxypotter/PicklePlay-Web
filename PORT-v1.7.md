@@ -4,6 +4,8 @@ Read PORT.md first, especially §16. It now covers the full release through
 v1.7 (updated 2026-09-27), including the v1.4 roster-rebuild and medal features and the
 v1.5/v1.6 work that followed them. This file is the implementation checklist.
 The iOS app has independent users, database and rating history.
+For the subsequent court expansion and v1.8 UI changes, also read PORT-v1.8.md;
+it supersedes the four-court-only requirement below.
 
 ## Scope to compare with the native app
 

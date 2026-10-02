@@ -23,8 +23,7 @@ const FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as c
 type Format = (typeof FORMATS)[number];
 
 /** Server-side caps; the form mirrors these but is not what enforces them. */
-const MAX_COURTS = 4;
-const PLAYERS_PER_COURT = 6;
+import { maxCourtsFor, PLAYERS_PER_COURT } from "./limits";
 
 /**
  * How many of a session's places are actually taken.
@@ -63,6 +62,9 @@ export async function createSessionAction(
   }
 
   // "3, 4" or "Center, North" — whatever the venue actually calls them.
+  const format = str(formData, "format") as Format;
+  if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
+  const maxCourts = maxCourtsFor(format);
   const courtNames = str(formData, "courtNames")
     .split(",")
     .map((c) => c.trim())
@@ -71,8 +73,8 @@ export async function createSessionAction(
   if (courtNames.length === 0) {
     return { error: t("err.nameCourt"), field: "courtNames" };
   }
-  if (courtNames.length > MAX_COURTS) {
-    return { error: t("err.maxCourts", { max: MAX_COURTS }), field: "courtNames" };
+  if (courtNames.length > maxCourts) {
+    return { error: t("err.maxCourts", { max: maxCourts }), field: "courtNames" };
   }
   if (new Set(courtNames.map((c) => c.toLowerCase())).size !== courtNames.length) {
     return { error: t("err.courtsDistinct"), field: "courtNames" };
@@ -95,8 +97,6 @@ export async function createSessionAction(
     };
   }
 
-  const format = str(formData, "format") as Format;
-  if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
   if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
 
   /*

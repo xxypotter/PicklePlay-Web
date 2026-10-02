@@ -13,8 +13,7 @@ import { validMlpConfig } from "@/lib/mlp/rules";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
-const MAX_COURTS = 4;
-const PLAYERS_PER_COURT = 6;
+import { maxCourtsFor, PLAYERS_PER_COURT } from "./limits";
 const FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
 type Format = (typeof FORMATS)[number];
 
@@ -57,6 +56,9 @@ export async function updateSessionAction(
     return { error: t("err.pickDateTime"), field: "startsAtLocal" };
   }
 
+  const format = str(formData, "format") as Format;
+  if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
+  const maxCourts = maxCourtsFor(format);
   const courtNames = str(formData, "courtNames")
     .split(",")
     .map((c) => c.trim())
@@ -65,8 +67,8 @@ export async function updateSessionAction(
   if (courtNames.length === 0) {
     return { error: t("err.nameCourt"), field: "courtNames" };
   }
-  if (courtNames.length > MAX_COURTS) {
-    return { error: t("err.maxCourts", { max: MAX_COURTS }), field: "courtNames" };
+  if (courtNames.length > maxCourts) {
+    return { error: t("err.maxCourts", { max: maxCourts }), field: "courtNames" };
   }
   if (new Set(courtNames.map((c) => c.toLowerCase())).size !== courtNames.length) {
     return { error: t("err.courtsDistinct"), field: "courtNames" };
@@ -102,11 +104,9 @@ export async function updateSessionAction(
     };
   }
 
-  const format = str(formData, "format") as Format;
-  if (!FORMATS.includes(format)) return { error: t("err.pickFormat"), field: "format" };
   if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
 
-  await db
+  const updated = await db
     .update(sessions)
     .set({
       title,
@@ -119,7 +119,10 @@ export async function updateSessionAction(
       rated: formData.get("rated") !== null,
       notes: str(formData, "notes") || null,
     })
-    .where(eq(sessions.id, sessionId));
+    .where(and(eq(sessions.id, sessionId), eq(sessions.status, "open")))
+    .returning({ id: sessions.id });
+  // Starting from another screen must not let a stale edit change drawn courts.
+  if (!updated.length) return { error: t("err.sessionStarted") };
 
   revalidatePath(`/s/${sessionId}`);
   // The edit screen itself, or reopening it serves the values you just changed.

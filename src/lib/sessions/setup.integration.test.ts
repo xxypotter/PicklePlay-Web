@@ -11,6 +11,7 @@ import { createMlpScheduleAction, saveMlpTeamsAction } from "@/lib/mlp/actions";
 import type { TeamInput } from "@/lib/mlp/rules";
 import { generateAllRoundsAction, reopenSessionAction, saveScoreAction, startSessionAction } from "./play-actions";
 import { createSessionAction } from "./actions";
+import { updateSessionAction } from "./edit-actions";
 import { loadCopySource } from "./copy-source";
 
 let actor: Actor;
@@ -110,6 +111,32 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v1.7 back to setup, cl
     name: `Setup team ${i + 1}`, m1: roster[i * 4], w1: roster[i * 4 + 1], m2: roster[i * 4 + 2], w2: roster[i * 4 + 3],
     women1: roster[i * 4 + 1], women2: roster[i * 4 + 3], men1: roster[i * 4], men2: roster[i * 4 + 2],
   }));
+
+  it.each([5,6])("creates, edits, copies and redraws Mini MLP with %i courts",async courts=>{
+    const roster=ids.slice(2,18),courtNames=Array.from({length:courts},(_,i)=>String(i+1)).join(", ");
+    const fields={title:"Extra courts",startsAt:new Date().toISOString(),courtNames,format:"mlp",maxPlayers:"16"};
+    const id=await create({...fields,invite:roster});
+    await saveMlpTeamsAction(id,teamsOf(roster));
+    const fd=new FormData();for(const [k,v] of Object.entries({...fields,sessionId:id}))fd.set(k,v);
+    await expect(updateSessionAction({},fd)).rejects.toBeInstanceOf(Redirected);
+    const copy=await loadCopySource(actor,id,true);
+    expect(copy!.courts).toBe(courtNames);expect(copy!.teams).toHaveLength(4);
+    const copied=await create({...fields,courtNames:copy!.courts,copyFrom:id,invite:copy!.players!});
+    expect(await db().select().from(mlpTeams).where(eq(mlpTeams.sessionId,copied))).toHaveLength(4);
+    await startSessionAction(id);await createMlpScheduleAction(id);
+    expect((await updateSessionAction({},fd)).error).toBe(t("err.sessionStarted"));
+    await reopenSessionAction(id);await startSessionAction(id);await createMlpScheduleAction(id);
+    expect((await db().select().from(sessions).where(eq(sessions.id,id)))[0].courtCount).toBe(courts);
+    expect(await db().select().from(matches).where(eq(matches.sessionId,id))).toHaveLength(24);
+    await reopenSessionAction(id);
+    for(const action of [createSessionAction,updateSessionAction]) {
+      for(const invalid of [{format:"mlp",courtNames:"1,2,3"},{format:"mlp",courtNames:"1,2,3,4,5,6,7"},
+        {format:"regular",courtNames},{format:"mlp",courtNames:"1,2,3,4,4"},{format:"mlp",maxPlayers:"28"}]) {
+        const bad=new FormData();for(const [k,v] of Object.entries({...fields,sessionId:id,...invalid}))bad.set(k,v);
+        expect((await action({},bad)).error).toBeTruthy();
+      }
+    }
+  },120000);
 
   it("undoes a Mini MLP draw once its score is cleared, keeping teams so they can be fixed and redrawn", async () => {
     const roster = ids.slice(2, 18);

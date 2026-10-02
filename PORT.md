@@ -686,7 +686,8 @@ read-then-write that both requests win.
 
 ## 6. Permissions
 
-Three roles: `player` < `admin` < `superadmin`. Exactly one superadmin.
+Three roles: `player` < `admin` < `superadmin`. Multiple superadmins are supported;
+each has the same permissions. The ordinary role picker only grants player/admin.
 
 | Action | Who |
 |---|---|
@@ -1115,8 +1116,8 @@ transaction. The form states whether teams/pairs will carry over.
 
 ### v1.7: Mini MLP
 
-Choose 4, 5 or 6 squads, each exactly four distinct players, on exactly four
-courts. Capacity stores the choice as 16, 20 or 24 players. Select the team count
+Choose 4, 5 or 6 squads, each exactly four distinct players, on 4–6 named
+courts (v1.8). Capacity stores the choice as 16, 20 or 24 players. Select the team count
 when creating or editing an unstarted session. Any gender combination is valid:
 all men, all women, 3+1, 1+3, 2+2, or profiles with unspecified gender. Gender
 must not filter the picker or reject a team on the server.
@@ -1131,7 +1132,9 @@ Setup selects mixed pairs (which establish the four-member roster), then two
 opening pairs from that roster. Each player's name carries their profile gender
 — "name (F)" / "name (M)", nothing for unspecified — so the organizer can see
 who they are pairing. Information only: it never filters or validates.
-Each wave must use each squad member exactly once: women+men are one partition of four; mixed1+mixed2 are another. Reject
+Women+men are one partition of four; mixed1+mixed2 are another. A two-court
+encounter uses each member once per wave; a single-court encounter plays the
+four games sequentially over four waves. Reject
 missing, duplicate, outsider or other-squad players. Each player plays twice
 per encounter. The app decides opposing squads and matches like categories.
 All four saved lineups lock when the draw is generated and persist to playoffs.
@@ -1153,8 +1156,8 @@ Record an audit event. Never automatically rewrite existing draws or reopen a
 session. Scored sessions keep their original lineups. Native implementations
 need their own compatibility/correction policy, not our production data.
 
-At most two disjoint encounters share four courts; each encounter uses two
-courts for two waves. Complete verified zero-indexed schedules:
+With four courts, at most two disjoint encounters run together; each uses two
+courts for two waves. Complete verified zero-indexed four-court schedules:
 
 ```
 4 teams: [(0,3),(1,2)], [(0,2),(3,1)], [(0,1),(2,3)]
@@ -1179,6 +1182,31 @@ including the original six-team order — keep working unchanged.
 | 4 | 16 | 6 | 24 | 6 | 6 | 40 |
 | 5 | 20 | 10 | 40 | 10 | 8 | 56 |
 | 6 | 24 | 15 | 60 | 16 | 10 | 76 |
+
+**v1.8 court extension:** the table above describes four courts. Six teams on
+five courts use 12 RR waves; on six courts they use 10. Four/five teams keep
+their existing 6/10-wave schedule and use the first four courts even when more
+are booked, so a squad never faces two opponents simultaneously. Every court
+number is a one-based index into the organizer's courtNames, not a venue label.
+
+Five-court construction (zero-based team slots): three blocks of four waves.
+In block 1, teams 0–1 play women, men, mixed1, mixed2 sequentially on court 5;
+teams 2–4 and 3–5 use courts 1–4 in waves 1–2, then 2–5 and 3–4 in waves 3–4.
+Block 2: sequential 2–3; parallel 0–4/1–5 then 0–5/1–4.
+Block 3: sequential 4–5; parallel 0–2/1–3 then 0–3/1–2.
+All 15 unique encounters appear once, all five courts are used in every wave,
+each squad has one single-court encounter, each player plays ten games and
+rests two waves. Opening games precede mixed games; partners never change.
+The UI explains the fifth court's sequential games and tells players to follow
+the round list. Blocks can span four waves; do not infer rounds from block * 2.
+
+Six-court blocks, each two waves: 0–5/1–4/2–3; 0–4/5–3/1–2;
+0–3/4–2/5–1; 0–2/3–1/4–5; 0–1/2–5/3–4. Each squad plays every block.
+See src/lib/mlp/schedule.ts and schedule.test.ts for the pure plan and invariants.
+Create, edit, and both copy flows preserve five/six courts; other formats retain
+their four-court maximum. Court changes are allowed only before starting, or
+after Back to setup removes a wholly unscored draw. Existing draws are untouched.
+No database migration or personal rating changes accompany this extension.
 
 Five teams have one bye each over five encounter blocks; no team or player
 is double-booked. After every unique round-robin encounter resolves, seed top

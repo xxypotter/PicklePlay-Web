@@ -7,13 +7,14 @@ import { requireOrganizer } from "@/lib/sessions/guards";
 import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
 import { auditLog, matches, mlpTeams, mlpTies, players, ratingEvents, rounds, sessions, signups } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
-import { hasExplicitOpeningPairs, lineups, members, outcome, robinBlocks, roundRobinReady, semiResults, standings, validMlpConfig, validateTeams, type Encounter, type Stage, type Team } from "./rules";
+import { hasExplicitOpeningPairs, lineups, members, outcome, roundRobinReady, semiResults, standings, validMlpConfig, validateTeams, type Encounter, type Stage, type Team } from "./rules";
+import { roundRobinSchedule, twoCourtSchedule, type PlannedEncounter } from "./schedule";
 
 function refresh(id: string) {
   revalidatePath(`/s/${id}`); revalidatePath(`/s/${id}/play`);
 }
 
-async function organize<T>(id: string, work: (db: Transaction, context: { actorId: string; teamCount: number }) => Promise<T>, live: boolean | null = true) {
+async function organize<T>(id: string, work: (db: Transaction, context: { actorId: string; teamCount: number; courtCount: number }) => Promise<T>, live: boolean | null = true) {
   const { me } = await requireOrganizer(id);
   const t = await getT();
   return inTransaction(async db => {
@@ -26,7 +27,7 @@ async function organize<T>(id: string, work: (db: Transaction, context: { actorI
     if (live !== null && (live ? session.status !== "live" : !["open","live"].includes(session.status))) {
       throw new Error(t("err.startFirst"));
     }
-    return work(db,{actorId:me.id,teamCount:session.maxPlayers/4});
+    return work(db,{actorId:me.id,teamCount:session.maxPlayers/4,courtCount:session.courtCount});
   });
 }
 
@@ -102,8 +103,8 @@ async function readEncounters(db: Transaction, sessionId: string): Promise<Encou
   }))}));
 }
 
-async function appendBlocks(db: Transaction, sessionId: string, teams: Team[],
-  blocks: ReadonlyArray<ReadonlyArray<readonly [number,number]>>, stage: Stage) {
+async function appendSchedule(db: Transaction, sessionId: string, teams: Team[],
+  plan: PlannedEncounter[], stage: Stage) {
   const [lastRound] = await db.select({n:sql<number>`coalesce(max(${rounds.index}),0)::int`})
     .from(rounds).where(eq(rounds.sessionId,sessionId));
   const [lastTie] = await db.select({n:sql<number>`coalesce(max(${mlpTies.index}),0)::int`,
@@ -111,30 +112,33 @@ async function appendBlocks(db: Transaction, sessionId: string, teams: Team[],
     .from(mlpTies).where(eq(mlpTies.sessionId,sessionId));
   let nextTie = lastTie.n;
   const baseTime = Date.now();
-  for (const [bi, block] of blocks.entries()) {
-    const waveRows = await db.insert(rounds).values([0,1].map(w=>({
-      sessionId,index:lastRound.n+bi*2+w+1,state:"active" as const,stage,
-    }))).returning();
-    waveRows.sort((a,b)=>a.index-b.index);
-    for (const [ci,[ai,biTeam]] of block.entries()) {
-      const a=teams[ai], b=teams[biTeam];
-      const [tie] = await db.insert(mlpTies).values({sessionId,stage,index:++nextTie,
-        block:lastTie.block+bi+1,teamAId:a.id,teamBId:b.id}).returning();
-      await db.insert(matches).values(lineups(a,b).map((g,gi)=>({
-        sessionId,roundId:waveRows[Math.floor(gi/2)].id,courtNo:ci*2+(gi%2)+1,
+  const waveCount = 1 + Math.max(...plan.flatMap(tie=>tie.games.map(g=>g.wave)));
+  const waveRows = await db.insert(rounds).values(Array.from({length:waveCount},(_,w)=>({
+    sessionId,index:lastRound.n+w+1,state:"active" as const,stage,
+  }))).returning();
+  waveRows.sort((a,b)=>a.index-b.index);
+  for (const planned of plan) {
+    const a=teams[planned.teams[0]], b=teams[planned.teams[1]];
+    const [tie] = await db.insert(mlpTies).values({sessionId,stage,index:++nextTie,
+      block:lastTie.block+planned.block,teamAId:a.id,teamBId:b.id}).returning();
+    const chosen=lineups(a,b);
+    await db.insert(matches).values(planned.games.map(({kind,wave,court})=>{
+      const g=chosen.find(g=>g.kind===kind)!;
+      return {
+        sessionId,roundId:waveRows[wave].id,courtNo:court,
         a1:g.players[0],a2:g.players[1],b1:g.players[2],b2:g.players[3],
         mlpTieId:tie.id,mlpGame:g.kind,status:"scheduled" as const,
         // Sequential waves must replay in the same order even when one
         // transaction creates them all (Postgres now() would be identical).
-        playedAt:new Date(baseTime+bi*2+Math.floor(gi/2)),
-      })));
-    }
+        playedAt:new Date(baseTime+wave),
+      };
+    }));
   }
 }
 
 export async function createMlpScheduleAction(sessionId: string): Promise<void> {
   const t = await getT();
-  await organize(sessionId,async (db,{teamCount})=>{
+  await organize(sessionId,async (db,{teamCount,courtCount})=>{
     const existing = await db.select({id:rounds.id}).from(rounds).where(eq(rounds.sessionId,sessionId)).limit(1);
     if (existing.length) throw new Error(t("mlp.error.teamsLocked"));
     const teams=await db.select().from(mlpTeams).where(eq(mlpTeams.sessionId,sessionId)).orderBy(asc(mlpTeams.slot));
@@ -144,7 +148,7 @@ export async function createMlpScheduleAction(sessionId: string): Promise<void> 
     if (!validateTeams(teams,new Set(roster.map(p=>p.id)),teamCount)) {
       throw new Error(t("mlp.error.teams"));
     }
-    await appendBlocks(db,sessionId,teams,robinBlocks(teamCount),"robin");
+    await appendSchedule(db,sessionId,teams,roundRobinSchedule(teamCount,courtCount),"robin");
   });
   refresh(sessionId);
 }
@@ -177,14 +181,14 @@ export async function addMlpPlayoffAction(sessionId: string): Promise<void> {
       // Winners play for gold on courts 1–2 while the losers play for bronze on
       // 3–4 — the same waves, so the bronze match costs no extra time.
       const four=[...results.winners,...results.losers].map(id=>teams.find(t=>t.id===id)!);
-      await appendBlocks(db,sessionId,four,[[[0,1],[2,3]]],"final");
+      await appendSchedule(db,sessionId,four,twoCourtSchedule([[[0,1],[2,3]]]),"final");
     } else {
       const robin=ties.filter(t=>t.stage==="robin");
       if (!roundRobinReady(teams,robin)) {
         throw new Error(t("mlp.error.playoffReady"));
       }
       const seeds=standings(teams,robin).map(r=>r.team);
-      await appendBlocks(db,sessionId,seeds,[[[0,3],[1,2]]],"semifinal");
+      await appendSchedule(db,sessionId,seeds,twoCourtSchedule([[[0,3],[1,2]]]),"semifinal");
     }
   });
   refresh(sessionId);

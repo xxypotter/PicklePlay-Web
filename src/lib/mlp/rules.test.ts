@@ -91,7 +91,9 @@ describe("Mini MLP",()=>{
       expect(()=>robinBlocks(count)).toThrow();
     }
     expect(validMlpConfig(3,16)).toBe(false);
-    expect(validMlpConfig(5,20)).toBe(false);
+    expect(validMlpConfig(5,20)).toBe(true);
+    expect(validMlpConfig(6,24)).toBe(true);
+    for(const courts of [0,3,4.5,7,NaN]) expect(validMlpConfig(courts,24)).toBe(false);
   });
   it.each([4,5,6])("%i teams: playoffs require every unique opponent, with all four games resolved",count=>{
     const selected=teams.slice(0,count);

@@ -14,6 +14,11 @@ const base: CopyableSession = {
 };
 
 describe("copySourceFrom", () => {
+  it.each([5,6])("preserves %i Mini MLP courts while other formats retain their four-court cap", count => {
+    const courtNames=Array.from({length:count},(_,i)=>String(i+1));
+    expect(copySourceFrom({...base,format:"mlp",courtNames,maxPlayers:24},false).courts).toBe(courtNames.join(", "));
+    expect(copySourceFrom({...base,courtNames},false).courts).toBe("1, 2, 3, 4");
+  });
   it("carries over the setup exactly", () => {
     expect(copySourceFrom(base, false)).toEqual({
       title: "Sunday Round Robin",

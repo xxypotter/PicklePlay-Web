@@ -2,10 +2,11 @@
 
 import { useT } from "@/lib/i18n/client";
 import { MLP_TEAM_COUNTS } from "@/lib/mlp/rules";
+import MlpCourtHint from "./MlpCourtHint";
 
 /** Team count is persisted as capacity (four players per team). */
-export default function MlpTeamCount({ players, onChange }: {
-  players: string; onChange: (players: string) => void;
+export default function MlpTeamCount({ players, courts, onChange }: {
+  players: string; courts: string; onChange: (players: string) => void;
 }) {
   const t = useT();
   return <div className="mb-3">
@@ -17,5 +18,6 @@ export default function MlpTeamCount({ players, onChange }: {
       </option>)}
     </select>
     <p className="hint">{t("mlp.teamCountHint")}</p>
+    <MlpCourtHint teams={Number(players)/4} courts={courts.split(",").map(c=>c.trim()).filter(Boolean)} />
   </div>;
 }
