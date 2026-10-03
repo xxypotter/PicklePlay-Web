@@ -1,5 +1,45 @@
 # Shared work log
 
+## Completed: October 3 Mini MLP moved from five to six courts — Codex, 2026-10-02
+
+Owner requested updating the already-generated 24-player event. Target remains
+8dd364e2-33f6-4459-82f2-f5df2897bfa8, HUI's "Mini mlp", October 3 at 2 PM Chicago.
+It was live, with six complete teams, 15 encounters, 60 scheduled games, 12 rounds,
+no scores/edits/voids, no rating events and no playoff rounds. All four explicitly
+saved category pairs were valid. No replacement event was needed.
+
+- Applied the existing six-court planner to this unplayed draw in one locked
+  transaction. Courts are now 1,2,3,4,5,6; round robin is ten full rounds. Retained
+  the event, all 60 match IDs, 15 encounter IDs, team IDs/names, every saved lineup,
+  player assignments, signup rows, and first ten round IDs. Reassigned only the
+  pending games' round/court/chronological timestamps, encounter order/block, and
+  court fields. Removed the two now-empty surplus rounds. All games remain unscored.
+- Every squad meets all five others exactly once. Every player plays ten games;
+  no byes in the six-court RR. Opening doubles precede mixed doubles, no court or
+  player is double-booked, and a squad never faces two opponents in one round.
+  Existing 1v4/2v3 and gold/bronze playoff rules remain unchanged.
+- Ignored conversion script: .scratch/mlp-six-court-conversion.ts. Modes plan,
+  rehearse, apply, verify. Hard-coded production event/date/owner guards, full
+  sanitized backup, session advisory lock plus row locks, abort on any scoring
+  activity or source changes. Preserves A/B assignments, so existing partner
+  choices and any game links still identify the same participants. Audit action
+  mlp.change_courts_unplayed records Jason's explicit request.
+- Rehearsed the exact SQL conversion against synthetic, anonymized development
+  fixtures based on the saved pair structure; compared all persisted rows with
+  the expected result, then rolled back and confirmed fixture cleanup. All 68
+  focused schedule/independent audit tests passed. Production was never used for
+  test scores or a trial mutation. After commit, a separate read verified all
+  planned fields and unchanged unrelated data across all ten backed-up tables.
+- Backup immediately before apply (no PIN hashes/tokens/settings):
+  local-backups/oct3-six-courts-before-apply-1790999349292.json. Plan/expected-output
+  manifest: local-backups/oct3-six-courts-manifest.json. Do not restore a snapshot
+  over subsequently recorded scores; inspect current state before any recovery.
+- Live browser confirms 24/24 players, courts 1–6, ten round headers, 60 match
+  cards and ten appearances of each court. Proof (ignored):
+  .scratch/oct3-six-courts-confirmed.png. Organizers/players should refresh any
+  already-open Matchups page. No product code/schema/release-note changes;
+  version stays 1.8 and no iOS behavior update is needed for this one-time data edit.
+
 ## Completed: BoRong login moved to rongbo — Codex, 2026-10-02
 
 Owner requested a replacement login, then specified lowercase `rongbo`. The old
