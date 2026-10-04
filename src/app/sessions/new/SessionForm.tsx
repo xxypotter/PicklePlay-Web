@@ -116,6 +116,7 @@ export default function SessionForm({
         hidden.value = local ? new Date(local).toISOString() : "";
       }}
     >
+      <input type="hidden" name="mlpRandomMixed" value={format==="mlp"&&copy?.mlpRandomMixed?"true":"false"} />
       {copy ? (
         <div className="card-tight border border-[var(--accent)] bg-[var(--accent-soft)] px-4 py-3">
           <p className="text-sm font-semibold">{t("form.copyingFrom", { title: copy.title })}</p>

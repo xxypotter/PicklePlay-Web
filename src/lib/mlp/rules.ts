@@ -33,6 +33,7 @@ export interface Encounter {
   id: string; index: number; block: number; stage: Stage;
   teamAId: string; teamBId: string; tiebreakWinner: string | null;
   decisionNote?: string | null;
+  mixedCrossed?: boolean;
   games: Game[];
 }
 
@@ -193,9 +194,12 @@ export function teamLineups(t: TeamInput): Record<GameKind, [string, string]> {
   };
 }
 
-export function lineups(a: Team, b: Team) {
+export function lineups(a: Team, b: Team, mixedCrossed = false) {
   const aa=teamLineups(a), bb=teamLineups(b);
-  return GAME_KINDS.map(kind=>({kind,players:[...aa[kind],...bb[kind]]}));
+  return GAME_KINDS.map(kind=>{
+    const opponentKind=mixedCrossed && kind==="mixed1" ? "mixed2" : mixedCrossed && kind==="mixed2" ? "mixed1" : kind;
+    return {kind,players:[...aa[kind],...bb[opponentKind]]};
+  });
 }
 
 export function validateTeams(input: unknown, roster: ReadonlySet<string>, expectedCount: number): input is TeamInput[] {

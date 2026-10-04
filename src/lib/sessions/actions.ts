@@ -131,6 +131,7 @@ export async function createSessionAction(
         courtCount,
         maxPlayers,
         format,
+        mlpRandomMixed: format==="mlp" && formData.get("mlpRandomMixed")==="true",
         rated: formData.get("rated") !== null,
         /*
          * Checked server-side, not merely hidden in the form. The checkbox is

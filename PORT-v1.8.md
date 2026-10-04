@@ -54,3 +54,22 @@ v1.7's four-court-only Mini MLP requirement; the apps keep independent data.
 No rating equation or individual game records change. Keep release notes at
 1.8 in English, Simplified Chinese, and Traditional Chinese. This amendment
 supersedes the earlier requirement to manually decide every exact RR tie.
+
+## October 4 amendment: optional random mixed opponents
+
+- Team/lineup setup offers Same pair number (default) and Random for each team
+  matchup. Default matches A1–B1 and A2–B2. Random independently chooses that
+  mapping or A1–B2 and A2–B1 with 50/50 probability for each encounter.
+- Choose once per encounter, for both mixed games together, when generating
+  round robin or playoffs. Save actual participants; never reroll on refresh.
+  All four saved partner pairs, team opponents, courts and wave order stay fixed.
+- Save the choice with teams before creating the draw; lock after rounds exist.
+  Copy and Copy with players preserve it. Back to setup keeps it, then allows
+  editing it before a fresh draw under the existing unscored-session rules.
+- Web migration 0017 adds sessions.mlp_random_mixed and mlp_ties.mixed_crossed,
+  default false. Historical assignments stay unchanged. Crossed mixed labels
+  read 1 vs 2 / 2 vs 1; mlp_game identifies team A's slot. Use independent native
+  storage/migrations. This remains v1.8 in all three dictionaries.
+- Tests cover default/aligned/crossed assignments across all nine team/court
+  combinations, saved pairs through semifinals/finals, court/player conflicts,
+  persistence, permissions, copying and returning to setup.

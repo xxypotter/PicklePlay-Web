@@ -21,6 +21,7 @@ export { MAX_COURTS, PLAYERS_PER_COURT } from "./limits";
 const MIN_PLAYERS = 4;
 
 export interface CopyableSession {
+  mlpRandomMixed?: boolean;
   title: string;
   location: string | null;
   startsAt: Date;
@@ -34,6 +35,7 @@ export interface CopyableSession {
 
 /** Plain values, safe to hand from the server page to the client form. */
 export interface CopySource {
+  mlpRandomMixed?: boolean;
   title: string;
   location: string;
   /** The source's start, as ISO. The form works out the new date from it. */
@@ -149,6 +151,7 @@ export function copySourceFrom(
       ? (session.format as CopySource["format"])
       : "regular",
     notes: session.notes ?? "",
+    ...(session.format==="mlp"?{mlpRandomMixed:session.mlpRandomMixed??false}:{}),
     rated: session.rated,
     // Private is the super admin's alone; anyone else's copy is simply public.
     isPrivate: canMakePrivate && session.isPrivate,

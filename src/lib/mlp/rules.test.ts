@@ -61,6 +61,17 @@ describe("Mini MLP",()=>{
       expect(games[3].players).toEqual([a.m2,a.w2,b.m2,b.w2]);
     }
   });
+  it("crosses only opposing mixed pairs, using all eight players once in each wave",()=>{
+    for(const a of teams) for(const b of teams.filter(t=>t!==a)) {
+      const aligned=lineups(a,b),crossed=lineups(a,b,true);
+      expect(crossed.slice(0,2)).toEqual(aligned.slice(0,2));
+      expect(crossed[2].players).toEqual([a.m1,a.w1,b.m2,b.w2]);
+      expect(crossed[3].players).toEqual([a.m2,a.w2,b.m1,b.w1]);
+      expect(crossed.map(g=>g.kind)).toEqual(GAME_KINDS);
+      expect(new Set(crossed.slice(2).flatMap(g=>g.players)).size).toBe(8);
+      expect(lineups(a,b,false)).toEqual(aligned);
+    }
+  });
   it("preserves legacy draws while requiring explicit opening pairs for new setups",()=>{
     const legacy=teams.map(t=>({...t,women1:null,women2:null,men1:null,men2:null}));
     expect(teamLineups(legacy[0])).toEqual({women:["0w1","0w2"],men:["0m1","0m2"],mixed1:["0m1","0w1"],mixed2:["0m2","0w2"]});

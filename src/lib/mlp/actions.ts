@@ -14,7 +14,7 @@ function refresh(id: string) {
   revalidatePath(`/s/${id}`); revalidatePath(`/s/${id}/play`);
 }
 
-async function organize<T>(id: string, work: (db: Transaction, context: { actorId: string; teamCount: number; courtCount: number }) => Promise<T>, live: boolean | null = true) {
+async function organize<T>(id: string, work: (db: Transaction, context: { actorId: string; teamCount: number; courtCount: number; randomMixed: boolean }) => Promise<T>, live: boolean | null = true) {
   const { me } = await requireOrganizer(id);
   const t = await getT();
   return inTransaction(async db => {
@@ -27,13 +27,14 @@ async function organize<T>(id: string, work: (db: Transaction, context: { actorI
     if (live !== null && (live ? session.status !== "live" : !["open","live"].includes(session.status))) {
       throw new Error(t("err.startFirst"));
     }
-    return work(db,{actorId:me.id,teamCount:session.maxPlayers/4,courtCount:session.courtCount});
+    return work(db,{actorId:me.id,teamCount:session.maxPlayers/4,courtCount:session.courtCount,randomMixed:!!session.mlpRandomMixed});
   });
 }
 
-export async function saveMlpTeamsAction(sessionId: string, input: unknown): Promise<void> {
+export async function saveMlpTeamsAction(sessionId: string, input: unknown, randomMixed = false): Promise<void> {
   const t = await getT();
-  await organize(sessionId, async (db,{teamCount}) => {
+  if(typeof randomMixed!=="boolean") throw new Error(t("mlp.error.mixedMode"));
+  await organize(sessionId, async (db,{teamCount,actorId,randomMixed:before}) => {
     const existing = await db.select({id:rounds.id}).from(rounds).where(eq(rounds.sessionId,sessionId)).limit(1);
     if (existing.length) throw new Error(t("mlp.error.teamsLocked"));
     const roster = await db.select({id:players.id}).from(signups)
@@ -42,6 +43,9 @@ export async function saveMlpTeamsAction(sessionId: string, input: unknown): Pro
     if (!validateTeams(input,new Set(roster.map(p=>p.id)),teamCount)) {
       throw new Error(t("mlp.error.teams"));
     }
+    await db.update(sessions).set({mlpRandomMixed:randomMixed}).where(eq(sessions.id,sessionId));
+    if(before!==randomMixed) await db.insert(auditLog).values({actorId,action:"mlp.set_mixed_opponents",targetType:"session",targetId:sessionId,
+      detail:JSON.stringify({before,after:randomMixed})});
     await db.delete(mlpTeams).where(eq(mlpTeams.sessionId,sessionId));
     await db.insert(mlpTeams).values(input.map((team,i)=>({
       sessionId,slot:i+1,name:team.name.trim(),m1:team.m1,m2:team.m2,w1:team.w1,w2:team.w2,
@@ -75,7 +79,7 @@ export async function correctMlpOpeningPairsAction(sessionId: string, input: unk
     for(const tie of ties) {
       const a=byId.get(tie.teamAId),b=byId.get(tie.teamBId);
       if(!a || !b) throw new Error(t("mlp.error.correction"));
-      for(const g of lineups(a,b)) {
+      for(const g of lineups(a,b,tie.mixedCrossed)) {
         const found=gs.filter(m=>m.mlpTieId===tie.id&&m.mlpGame===g.kind);
         if(found.length!==1) throw new Error(t("mlp.error.correction"));
         // Mixed lineups must already match; this action cannot change them.
@@ -104,7 +108,7 @@ async function readEncounters(db: Transaction, sessionId: string): Promise<Encou
 }
 
 async function appendSchedule(db: Transaction, sessionId: string, teams: Team[],
-  plan: PlannedEncounter[], stage: Stage) {
+  plan: PlannedEncounter[], stage: Stage, randomMixed = false) {
   const [lastRound] = await db.select({n:sql<number>`coalesce(max(${rounds.index}),0)::int`})
     .from(rounds).where(eq(rounds.sessionId,sessionId));
   const [lastTie] = await db.select({n:sql<number>`coalesce(max(${mlpTies.index}),0)::int`,
@@ -119,9 +123,12 @@ async function appendSchedule(db: Transaction, sessionId: string, teams: Team[],
   waveRows.sort((a,b)=>a.index-b.index);
   for (const planned of plan) {
     const a=teams[planned.teams[0]], b=teams[planned.teams[1]];
+    // One coin flip selects a complete bijection of fixed pairs. Reusing it for
+    // both mixed games prevents duplicate opponents and double-booked players.
+    const mixedCrossed=randomMixed && Math.random()<0.5;
     const [tie] = await db.insert(mlpTies).values({sessionId,stage,index:++nextTie,
-      block:lastTie.block+planned.block,teamAId:a.id,teamBId:b.id}).returning();
-    const chosen=lineups(a,b);
+      block:lastTie.block+planned.block,teamAId:a.id,teamBId:b.id,mixedCrossed}).returning();
+    const chosen=lineups(a,b,mixedCrossed);
     await db.insert(matches).values(planned.games.map(({kind,wave,court})=>{
       const g=chosen.find(g=>g.kind===kind)!;
       return {
@@ -138,7 +145,7 @@ async function appendSchedule(db: Transaction, sessionId: string, teams: Team[],
 
 export async function createMlpScheduleAction(sessionId: string): Promise<void> {
   const t = await getT();
-  await organize(sessionId,async (db,{teamCount,courtCount})=>{
+  await organize(sessionId,async (db,{teamCount,courtCount,randomMixed})=>{
     const existing = await db.select({id:rounds.id}).from(rounds).where(eq(rounds.sessionId,sessionId)).limit(1);
     if (existing.length) throw new Error(t("mlp.error.teamsLocked"));
     const teams=await db.select().from(mlpTeams).where(eq(mlpTeams.sessionId,sessionId)).orderBy(asc(mlpTeams.slot));
@@ -148,7 +155,7 @@ export async function createMlpScheduleAction(sessionId: string): Promise<void> 
     if (!validateTeams(teams,new Set(roster.map(p=>p.id)),teamCount)) {
       throw new Error(t("mlp.error.teams"));
     }
-    await appendSchedule(db,sessionId,teams,roundRobinSchedule(teamCount,courtCount),"robin");
+    await appendSchedule(db,sessionId,teams,roundRobinSchedule(teamCount,courtCount),"robin",randomMixed);
   });
   refresh(sessionId);
 }
@@ -170,7 +177,7 @@ export async function removeMlpPlayoffsAction(sessionId:string):Promise<void> {
 }
 export async function addMlpPlayoffAction(sessionId: string): Promise<void> {
   const t = await getT();
-  await organize(sessionId,async db=>{
+  await organize(sessionId,async (db,{randomMixed})=>{
     const teams=await db.select().from(mlpTeams).where(eq(mlpTeams.sessionId,sessionId)).orderBy(asc(mlpTeams.slot));
     const ties=await readEncounters(db,sessionId);
     if (ties.some(t=>t.stage==="final")) throw new Error(t("err.finalsExist"));
@@ -181,14 +188,14 @@ export async function addMlpPlayoffAction(sessionId: string): Promise<void> {
       // Winners play for gold on courts 1–2 while the losers play for bronze on
       // 3–4 — the same waves, so the bronze match costs no extra time.
       const four=[...results.winners,...results.losers].map(id=>teams.find(t=>t.id===id)!);
-      await appendSchedule(db,sessionId,four,twoCourtSchedule([[[0,1],[2,3]]]),"final");
+      await appendSchedule(db,sessionId,four,twoCourtSchedule([[[0,1],[2,3]]]),"final",randomMixed);
     } else {
       const robin=ties.filter(t=>t.stage==="robin");
       if (!roundRobinReady(teams,robin)) {
         throw new Error(t("mlp.error.playoffReady"));
       }
       const seeds=standings(teams,robin).map(r=>r.team);
-      await appendSchedule(db,sessionId,seeds,twoCourtSchedule([[[0,3],[1,2]]]),"semifinal");
+      await appendSchedule(db,sessionId,seeds,twoCourtSchedule([[[0,3],[1,2]]]),"semifinal",randomMixed);
     }
   });
   refresh(sessionId);

@@ -15,6 +15,7 @@ import { createManualRoundAction, discardRoundAction, generateAllRoundsAction, r
 import { addPlayerAction, removePlayerAction, setAttendanceAction, setPartnerAction } from "@/lib/sessions/actions";
 import { finalsOf, lineups, outcome, podium, standings, type Encounter, type TeamInput } from "./rules";
 import { deletePlayerAction } from "@/app/admin/actions";
+import { getAllRounds } from "@/lib/sessions/queries";
 
 let actor:Actor;
 vi.mock("next/cache",()=>({revalidatePath:vi.fn()}));
@@ -51,7 +52,8 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     for(const g of games){
       const tie=ties.find(t=>t.id===g.mlpTieId)!;
       expect([g.a1,g.a2]).toEqual(pair(tie.teamAId,g.mlpGame!));
-      expect([g.b1,g.b2]).toEqual(pair(tie.teamBId,g.mlpGame!));
+      const opponentKind=tie.mixedCrossed&&g.mlpGame==="mixed1"?"mixed2":tie.mixedCrossed&&g.mlpGame==="mixed2"?"mixed1":g.mlpGame!;
+      expect([g.b1,g.b2]).toEqual(pair(tie.teamBId,opponentKind));
     }
   };
   beforeAll(async()=>{
@@ -81,6 +83,12 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     // Tomorrow's shape: 23/24 present, five courts. No partial tournament.
     await expect(saveMlpTeamsAction(id,input)).rejects.toThrow();
     await addPlayerAction(id,personIds[23]);
+    // Runtime validation must reject truthy non-booleans, not enable random mode.
+    // @ts-expect-error exercising an untrusted Server Action argument
+    await expect(saveMlpTeamsAction(id,input,"true")).rejects.toThrow();
+    const owner=actor; actor={id:personIds[24],role:"admin"};
+    await expect(saveMlpTeamsAction(id,input,true)).rejects.toThrow();
+    actor=owner;
     await expect(saveMlpTeamsAction(id,input.map((t,i)=>i? t:{...t,m1:t.w1}))).rejects.toThrow();
     await saveMlpTeamsAction(id,input);
     const deletion = new FormData(); deletion.set("playerId",personIds[1]);
@@ -194,14 +202,21 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     await expect(setMlpTiebreakAction(id,exact.id,"draw")).rejects.toThrow();
   },300000);
   it.each(courtCases)("persists $count teams / $courts courts without court or player collisions",async({count,courts,id:sessionId})=>{
+    // Exercise default mode, both coin-flip branches, and all RR/playoff stages
+    // deterministically. Never rely on random luck to cover crossed opponents.
+    const random=vi.spyOn(Math,"random").mockReturnValue(courts===6?0.25:0.75);
+    try {
     const db=getDb();
     await db.insert(sessions).values({id:sessionId,title:"Court matrix",createdBy:actor.id,format:"mlp",
       courtCount:courts,courtNames:Array.from({length:courts},(_,i)=>String(i+1)),maxPlayers:count*4,status:"live",rated:false,startsAt:new Date()});
     await db.insert(signups).values(personIds.slice(0,count*4).map(playerId=>({sessionId,playerId,state:"in" as const})));
-    await saveMlpTeamsAction(sessionId,input.slice(0,count));
+    await saveMlpTeamsAction(sessionId,input.slice(0,count),courts!==4);
+    expect((await db.select().from(sessions).where(eq(sessions.id,sessionId)))[0].mlpRandomMixed).toBe(courts!==4);
     await createMlpScheduleAction(sessionId);
+    await expect(saveMlpTeamsAction(sessionId,input.slice(0,count),courts===4)).rejects.toThrow();
     const games=await db.select().from(matches).where(eq(matches.sessionId,sessionId));
     const ties=await db.select().from(mlpTies).where(eq(mlpTies.sessionId,sessionId));
+    expect(ties.every(t=>t.mixedCrossed===(courts===6))).toBe(true);
     const rs=await db.select().from(rounds).where(eq(rounds.sessionId,sessionId)).orderBy(rounds.index);
     expect(games).toHaveLength(count*(count-1)*2);
     expect(new Set(ties.map(t=>[t.teamAId,t.teamBId].sort().join("|"))).size).toBe(count*(count-1)/2);
@@ -215,6 +230,8 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     for(let i=1;i<rs.length;i++) expect(Math.min(...games.filter(g=>g.roundId===rs[i].id).map(g=>g.playedAt.getTime())))
       .toBeGreaterThan(Math.max(...games.filter(g=>g.roundId===rs[i-1].id).map(g=>g.playedAt.getTime())));
     await assertSavedLineups(sessionId);
+    const displayed=await getAllRounds(sessionId,Array.from({length:courts},(_,i)=>String(i+1)));
+    expect(displayed.flatMap(r=>r.matches).filter(g=>g.stageLabel?.includes("vs")).length).toBe(courts===6?ties.length*2:0);
     // Simulated results stay exclusively in the guarded development database.
     await db.update(matches).set({status:"completed",scoreA:11,scoreB:8}).where(eq(matches.sessionId,sessionId));
     await addMlpPlayoffAction(sessionId);
@@ -222,6 +239,11 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     await addMlpPlayoffAction(sessionId);
     expect(await db.select().from(matches).where(eq(matches.sessionId,sessionId))).toHaveLength(count*(count-1)*2+16);
     await assertSavedLineups(sessionId);
+    const allTies=await db.select().from(mlpTies).where(eq(mlpTies.sessionId,sessionId));
+    expect(allTies.every(t=>t.mixedCrossed===(courts===6))).toBe(true);
+    const again=await db.select().from(matches).where(eq(matches.sessionId,sessionId));
+    for(const original of games) expect(again.find(m=>m.id===original.id)).toMatchObject({a1:original.a1,a2:original.a2,b1:original.b1,b2:original.b2});
+    } finally { random.mockRestore(); }
   },90000);
   it.each([4,5])("runs a %i-team tournament with all-men, all-women and asymmetric teams, enforcing capacity and playoff seeding",async count=>{
     const db=getDb(),sessionId=flexibleIds[count-4],roster=personIds.slice(0,count*4);

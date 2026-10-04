@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { matches, players, ratingEvents, rounds } from "@/lib/db/schema";
+import { matches, mlpTies, players, ratingEvents, rounds } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
 
@@ -78,6 +78,7 @@ export async function getAllRounds(
         roundId: matches.roundId,
         courtNo: matches.courtNo,
         mlpGame: matches.mlpGame,
+        mixedCrossed: mlpTies.mixedCrossed,
         a1: matches.a1,
         a2: matches.a2,
         b1: matches.b1,
@@ -87,6 +88,7 @@ export async function getAllRounds(
         status: matches.status,
       })
       .from(matches)
+      .leftJoin(mlpTies, eq(mlpTies.id, matches.mlpTieId))
       .where(eq(matches.sessionId, sessionId))
       .orderBy(asc(matches.courtNo)),
   ]);
@@ -131,7 +133,9 @@ export async function getAllRounds(
       .filter((m) => m.roundId === round.id)
       .map((r, position) => ({
         id: r.id,
-        stageLabel: r.mlpGame ? t(`mlp.game.${r.mlpGame as "women"|"men"|"mixed1"|"mixed2"}`) : stageLabel(round.stage, position),
+        stageLabel: r.mlpGame ? t(r.mixedCrossed && r.mlpGame==="mixed1" ? "mlp.mixed1Crossed" :
+          r.mixedCrossed && r.mlpGame==="mixed2" ? "mlp.mixed2Crossed" :
+          `mlp.game.${r.mlpGame as "women"|"men"|"mixed1"|"mixed2"}`) : stageLabel(round.stage, position),
         courtNo: r.courtNo,
         courtLabel: courtLabel(t, courtNames, r.courtNo),
         teamA: [person(r.a1), person(r.a2)],

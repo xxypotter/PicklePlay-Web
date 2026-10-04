@@ -189,6 +189,8 @@ export const sessions = pgTable(
     courtCount: integer("court_count").notNull().default(2),
     maxPlayers: integer("max_players").notNull().default(16),
     format: formatEnum("format").notNull().default("balanced"),
+    /** Mini MLP only: choose mixed opponents per encounter, never new partners. */
+    mlpRandomMixed: boolean("mlp_random_mixed").notNull().default(false),
     /** False for a casual night that shouldn't touch anyone's rating. */
     rated: boolean("rated").notNull().default(true),
     /**
@@ -288,6 +290,8 @@ export const mlpTies = pgTable("mlp_ties", {
   block: integer("block").notNull(),
   teamAId: uuid("team_a_id").notNull().references(() => mlpTeams.id),
   teamBId: uuid("team_b_id").notNull().references(() => mlpTeams.id),
+  /** A1 vs B2 and A2 vs B1; chosen once when this encounter is drawn. */
+  mixedCrossed: boolean("mixed_crossed").notNull().default(false),
   // Read only for 2–2 with equal total points; cleared on any score change.
   tiebreakWinner: uuid("tiebreak_winner").references(() => mlpTeams.id),
   /** Optional explanation for an exact tie or organizer override. */

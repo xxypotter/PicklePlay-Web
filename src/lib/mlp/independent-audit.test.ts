@@ -227,7 +227,7 @@ class MemoryWrites {
       const next = this.reads.shift(); assert(next, "Unexpected SELECT"); assert.equal(table, next.table, "Unexpected read order/table");
       const result = Promise.resolve(structuredClone(next.rows));
       const chain = { where: () => chain, orderBy: () => chain,
-        innerJoin: () => chain, limit: () => chain, then: result.then.bind(result) };
+        innerJoin: () => chain, leftJoin: () => chain, limit: () => chain, then: result.then.bind(result) };
       return chain;
     } };
   }

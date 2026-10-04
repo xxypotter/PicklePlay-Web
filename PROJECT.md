@@ -29,6 +29,11 @@ the code that depends on them, after backup and development validation.
   every team one sequential four-game encounter on court 5; every player rests
   two waves. Four/five teams use four active courts. Planner: lib/mlp/schedule.ts.
   Setup labels players F/M.
+  Mixed opponents default to matching pair numbers. Optional random mode flips
+  aligned/crossed once per encounter, including playoffs; all partners stay fixed.
+  Migration 0017: sessions.mlp_random_mixed and mlp_ties.mixed_crossed default
+  false. Generated match participants persist; never reroll on refresh. Copy and
+  Back to setup keep the mode. Setup edits lock after schedule creation.
   Exact RR ties automatically draw (2–2 games and equal total points); standings
   use W–L–D, win 2/draw 1/loss 0 points. Organizer/superadmin can override with
   a DreamBreaker winner and note in management. Playoffs require a winner.

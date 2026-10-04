@@ -272,7 +272,7 @@ export default async function PlayPage({
       </section> : null}
 
       {mlp ? <MlpCourtHint teams={session.maxPlayers/4} courts={session.courtNames} /> : null}
-      {mlp ? <MlpSetup key={`${session.maxPlayers}:${JSON.stringify(mlp.teams)}`} teamCount={session.maxPlayers/4} sessionId={id} teams={mlp.teams} roster={sortByUsername(attending)} locked={allRounds.length>0 || session.status==="closed"} live={session.status==="live"} canCorrectOpeningPairs={mlp.canCorrectOpeningPairs} /> : null}
+      {mlp ? <MlpSetup key={`${session.maxPlayers}:${session.mlpRandomMixed}:${JSON.stringify(mlp.teams)}`} teamCount={session.maxPlayers/4} sessionId={id} teams={mlp.teams} randomMixed={session.mlpRandomMixed} roster={sortByUsername(attending)} locked={allRounds.length>0 || session.status==="closed"} live={session.status==="live"} canCorrectOpeningPairs={mlp.canCorrectOpeningPairs} /> : null}
 
 
       {session.format === "fixed" ? (

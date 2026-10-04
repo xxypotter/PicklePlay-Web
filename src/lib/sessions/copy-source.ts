@@ -35,6 +35,7 @@ export async function loadCopySource(
       courtNames: sessions.courtNames,
       maxPlayers: sessions.maxPlayers,
       format: sessions.format,
+      mlpRandomMixed: sessions.mlpRandomMixed,
       notes: sessions.notes,
       rated: sessions.rated,
       isPrivate: sessions.isPrivate,

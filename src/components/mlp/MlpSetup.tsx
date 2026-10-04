@@ -5,9 +5,10 @@ import { useT } from "@/lib/i18n/client";
 import { correctMlpOpeningPairsAction, saveMlpTeamsAction, createMlpScheduleAction } from "@/lib/mlp/actions";
 import { members, OPENING_SLOTS, teamLineups, validateTeams, type Team, type TeamInput } from "@/lib/mlp/rules";
 
-export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,canCorrectOpeningPairs=false}:{sessionId:string;teams:Team[];
-  roster:{id:string;username:string;gender?:string}[];locked:boolean;live:boolean;teamCount:number;canCorrectOpeningPairs?:boolean}) {
+export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,randomMixed=false,canCorrectOpeningPairs=false}:{sessionId:string;teams:Team[];
+  roster:{id:string;username:string;gender?:string}[];locked:boolean;live:boolean;teamCount:number;randomMixed?:boolean;canCorrectOpeningPairs?:boolean}) {
   const t=useT();
+  const [randomDraft,setRandomDraft]=useState(randomMixed);
   const [draft,setDraft]=useState<TeamInput[]>(()=>Array.from({length:teamCount},(_,i)=>{
     const saved=teams[i];
     if(!saved) return {name:t("mlp.teamDefault",{n:i+1}),m1:"",m2:"",w1:"",w2:"",women1:"",women2:"",men1:"",men2:""};
@@ -30,10 +31,11 @@ export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,c
   });
   if(locked && (!canCorrectOpeningPairs || !correcting)) return <section className="card mt-3">
     <p className="hint">{t("mlp.locked")}</p>
+    <p className="hint">{t("mlp.mixedOpponents")}: {t(randomMixed?"mlp.mixedRandom":"mlp.mixedNumber")}</p>
     {canCorrectOpeningPairs?<><p className="hint">{t("mlp.correctHint")}</p>
       <button className="btn-ghost mt-2 w-full" onClick={()=>setCorrecting(true)}>{t("mlp.correctPairs")}</button></>:null}
   </section>;
-  const saved = teams.length===teamCount && draft.every((d,i)=>(["name","m1","m2","w1","w2",...OPENING_SLOTS] as const).every(k=>d[k]===teams[i][k]));
+  const saved = randomDraft===randomMixed && teams.length===teamCount && draft.every((d,i)=>(["name","m1","m2","w1","w2",...OPENING_SLOTS] as const).every(k=>d[k]===teams[i][k]));
   const used=new Set(draft.flatMap(members).filter(Boolean));
   const ready=validateTeams(draft,new Set(roster.map(p=>p.id)),teamCount);
   const set=(i:number,key:keyof TeamInput,value:string)=>setDraft(old=>old.map((d,j)=>{
@@ -48,6 +50,14 @@ export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,c
   return <section className="card mt-3">
     <h2 className="font-semibold">{t(correcting?"mlp.correctPairs":"mlp.setup")}</h2>
     <p className="hint">{t(correcting?"mlp.correctHint":"mlp.setupHint")}</p>
+    {!correcting?<div className="mt-3">
+      <label className="label" htmlFor="mlp-mixed-opponents">{t("mlp.mixedOpponents")}</label>
+      <select id="mlp-mixed-opponents" className="field" disabled={pending} value={randomDraft?"random":"number"} onChange={e=>setRandomDraft(e.target.value==="random")}>
+        <option value="number">{t("mlp.mixedNumber")}</option>
+        <option value="random">{t("mlp.mixedRandom")}</option>
+      </select>
+      <p className="hint mt-1">{t("mlp.mixedHint")}</p>
+    </div>:null}
     <div className="mt-3 grid gap-3">
       {draft.map((team,i)=><fieldset key={i} disabled={pending} className="min-w-0 rounded-lg border border-[var(--border)] p-3">
         <legend className="px-1 text-sm">{t("mlp.teamDefault",{n:i+1})}</legend>
@@ -88,7 +98,7 @@ export default function MlpSetup({sessionId,teams,roster,locked,live,teamCount,c
       <button className="btn-ghost mt-2 w-full" disabled={pending} onClick={()=>setCorrecting(false)}>{t("mlp.cancel")}</button>
     </>:<>
       <button className="btn-primary mt-3 w-full" disabled={pending || !ready}
-        onClick={()=>run(()=>saveMlpTeamsAction(sessionId,draft))}>{t("mlp.saveTeams")}</button>
+        onClick={()=>run(()=>saveMlpTeamsAction(sessionId,draft,randomDraft))}>{t("mlp.saveTeams")}</button>
       {live&&teams.length===teamCount?<ConfirmAction label={t("mlp.createDraw")} confirmation={t("mlp.drawConfirm")}
         disabled={pending || !saved || !ready} onConfirm={()=>run(()=>createMlpScheduleAction(sessionId))} className="btn-ghost mt-2 w-full" />:null}
       <p className="hint">{t("mlp.setupCount",{n:roster.length,total:teamCount*4,teams:teamCount})}</p>

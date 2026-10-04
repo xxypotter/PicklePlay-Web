@@ -141,7 +141,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v1.7 back to setup, cl
   it("undoes a Mini MLP draw once its score is cleared, keeping teams so they can be fixed and redrawn", async () => {
     const roster = ids.slice(2, 18);
     const id = await newSession({ format: "mlp", courtCount: 4, courtNames: ["1", "2", "3", "4"], maxPlayers: 16 }, roster);
-    await saveMlpTeamsAction(id, teamsOf(roster));
+    await saveMlpTeamsAction(id, teamsOf(roster), true);
     await createMlpScheduleAction(id);
     const [first] = await db().select().from(matches).where(eq(matches.sessionId, id)).limit(1);
     expect(await score(first.id, 11, 4)).toEqual({});
@@ -152,11 +152,13 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v1.7 back to setup, cl
     expect(await db().select().from(mlpTies).where(eq(mlpTies.sessionId, id))).toHaveLength(0);
     expect(await db().select().from(matches).where(eq(matches.sessionId, id))).toHaveLength(0);
     expect(await db().select().from(mlpTeams).where(eq(mlpTeams.sessionId, id))).toHaveLength(4);
+    expect((await db().select().from(sessions).where(eq(sessions.id, id)))[0].mlpRandomMixed).toBe(true);
     // Teams are editable again: swap two players between teams, then start and redraw.
     const fixed = teamsOf(roster);
     [fixed[0].w2, fixed[1].w2] = [fixed[1].w2, fixed[0].w2];
     [fixed[0].women2, fixed[1].women2] = [fixed[0].w2, fixed[1].w2];
     await saveMlpTeamsAction(id, fixed);
+    expect((await db().select().from(sessions).where(eq(sessions.id, id)))[0].mlpRandomMixed).toBe(false);
     await startSessionAction(id);
     await createMlpScheduleAction(id);
     expect(await db().select().from(matches).where(eq(matches.sessionId, id))).toHaveLength(24);
@@ -165,15 +167,18 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v1.7 back to setup, cl
   it("copies with players: everyone in order, plus Mini MLP teams or fixed pairs when they still fit", async () => {
     const roster = ids.slice(2, 18);
     const mlpSource = await newSession({ format: "mlp", courtCount: 4, courtNames: ["1", "2", "3", "4"], maxPlayers: 16 }, roster);
-    await saveMlpTeamsAction(mlpSource, teamsOf(roster));
+    await saveMlpTeamsAction(mlpSource, teamsOf(roster), true);
     await db().update(sessions).set({ status: "closed" }).where(eq(sessions.id, mlpSource));
 
     const copy = await loadCopySource(actor, mlpSource, true);
+    expect(copy?.mlpRandomMixed).toBe(true);
+    expect((await loadCopySource(actor,mlpSource,false))?.mlpRandomMixed).toBe(true);
     expect(copy?.players).toEqual(roster);
     expect(copy?.teams).toHaveLength(4);
     const base = { title: "Copied", startsAt: new Date().toISOString(), courtNames: "1, 2, 3, 4", format: "mlp", maxPlayers: "16" };
 
-    const whole = await create({ ...base, invite: copy!.players!, copyFrom: mlpSource });
+    const whole = await create({ ...base, invite: copy!.players!, copyFrom: mlpSource,mlpRandomMixed:String(copy!.mlpRandomMixed) });
+    expect((await db().select().from(sessions).where(eq(sessions.id,whole)))[0].mlpRandomMixed).toBe(true);
     const copiedTeams = await db().select().from(mlpTeams).where(eq(mlpTeams.sessionId, whole));
     const lineup = ({ name, m1, m2, w1, w2, women1, women2, men1, men2 }: TeamInput) =>
       ({ name, m1, m2, w1, w2, women1, women2, men1, men2 });

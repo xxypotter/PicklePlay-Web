@@ -14,6 +14,11 @@ const base: CopyableSession = {
 };
 
 describe("copySourceFrom", () => {
+  it("carries Mini MLP mixed-opponent mode while legacy/new settings default to aligned",()=>{
+    expect(copySourceFrom({...base,format:"mlp",mlpRandomMixed:true},false).mlpRandomMixed).toBe(true);
+    expect(copySourceFrom({...base,format:"mlp"},false).mlpRandomMixed).toBe(false);
+    expect(copySourceFrom({...base,mlpRandomMixed:true},false).mlpRandomMixed).toBeUndefined();
+  });
   it.each([5,6])("preserves %i Mini MLP courts while other formats retain their four-court cap", count => {
     const courtNames=Array.from({length:count},(_,i)=>String(i+1));
     expect(copySourceFrom({...base,format:"mlp",courtNames,maxPlayers:24},false).courts).toBe(courtNames.join(", "));

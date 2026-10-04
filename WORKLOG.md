@@ -1,5 +1,41 @@
 # Shared work log
 
+## Releasing: v1.8 optional random Mini MLP mixed opponents — Codex, 2026-10-04
+
+Branch codex/v1.8-random-mixed from b6d99a4. User requested matching pair
+numbers by default, with an organizer option to randomize mixed opponents.
+
+- Team/lineup setup saves Same pair number or Random for each team matchup.
+  Random chooses aligned A1–B1/A2–B2 or crossed A1–B2/A2–B1 with equal chance,
+  independently for each new encounter, including semifinals and gold/bronze.
+  Partners and opening pairs stay fixed. Persist the result when drawing games;
+  do not reroll on refresh. Random mode need not balance the two mappings.
+- Migration 0017_parallel_rachel_grey.sql adds default-false booleans
+  sessions.mlp_random_mixed and mlp_ties.mixed_crossed. Existing sessions stay
+  aligned, including later playoff generation. No existing game or rating edits.
+- Mode changes share the locked save-teams transaction and permission checks;
+  reject once rounds exist and audit changed preferences. Copy (both kinds) and
+  Back to setup preserve it; the latter permits a new choice before redrawing.
+  Crossed game labels show 1 vs 2 / 2 vs 1; mlp_game identifies team A's slot.
+- Files: schema/migration; MlpSetup + management page; mlp rules/actions;
+  getAllRounds labels; session create/copy; all dictionaries and v1.8 release
+  notes. PROJECT.md, PORT.md and PORT-v1.8.md describe native/shared handoff.
+- Checks: 427 standard tests, all 20 opt-in development DB tests, typecheck,
+  lint and production build pass. Matrix covers all 4/5/6 team and court counts,
+  default/aligned-random/crossed-random modes, actual persisted pairs through
+  playoffs, no court/player conflicts, permissions and post-draw edit rejection.
+  Extended Back to setup preservation/change test separately passes.
+- Browser: default selected; changed mode disables drawing until saved; save
+  and reload preserve it. Generated six-team/five-court synthetic session:
+  60 games, 15 encounters (9 crossed), 10 games/player, zero collisions, all
+  saved pairs preserved. A second read after reload matches the entire schedule.
+  Fixtures removed; development server stopped. Screenshot:
+  .scratch/v18-random-mixed-setup.png (ignored).
+- Development migration applied. Sanitized production backup before release:
+  local-backups/v1.8-mixed-backup-1791131763315.json. Contains ten source/cache
+  tables, excluding PIN hashes/auth tokens/settings/audit secrets. Remote main
+  remains b6d99a4. Production migration and deployment verification pending.
+
 ## Released: v1.8 automatic Mini MLP draws and result notes — Codex, 2026-10-03
 
 Branch codex/v1.8-mlp-draws from ab284ad. User confirmed 2 points/win, 1/draw,

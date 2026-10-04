@@ -1136,8 +1136,31 @@ Women+men are one partition of four; mixed1+mixed2 are another. A two-court
 encounter uses each member once per wave; a single-court encounter plays the
 four games sequentially over four waves. Reject
 missing, duplicate, outsider or other-squad players. Each player plays twice
-per encounter. The app decides opposing squads and matches like categories.
+per encounter. The app decides opposing squads. By default, matching mixed-pair
+numbers face each other; v1.8 also offers random mixed opponents (see below).
 All four saved lineups lock when the draw is generated and persist to playoffs.
+
+**v1.8 optional random mixed opponents (October 4):** in team/lineup setup,
+offer Same pair number (default) or Random for each team matchup. Aligned means
+A mixed 1 vs B mixed 1 and A mixed 2 vs B mixed 2. Random chooses aligned or
+crossed with equal probability independently per encounter; crossed means A1
+vs B2 and A2 vs B1. One coin flip controls both mixed games. Partners, opening
+women/men pairs, opposing squads, game counts, courts and wave order stay fixed.
+Apply the same session preference to semifinals and gold/bronze, with a fresh
+choice for each newly created encounter. Random can legitimately choose aligned
+for several or all encounters; it does not guarantee equal numbers of each.
+
+Web migration 0017 adds sessions.mlp_random_mixed and mlp_ties.mixed_crossed,
+both non-null booleans defaulting false. Save the preference alongside teams
+under the organizer/session lock; reject changes once rounds exist. Choose and
+persist the encounter flag and actual match player IDs inside the schedule
+transaction. Never reroll on page load, score edit or refresh. The mlp_game kind
+identifies team A's mixed slot; for crossed games team B uses the opposite slot.
+Matchup labels show 1 vs 2 / 2 vs 1 for crossed games. Existing sessions and
+matches retain their original assignments. Copy (with or without players) keeps
+the preference. Back to setup keeps it and allows changing it before a new draw;
+existing scored-session protections still apply. The independent iOS app should
+implement the behavior using its own migrations and storage.
 
 Web compatibility: mixed pairs remain m1+w1 and m2+w2. Migration 0015 adds
 nullable women1/women2/men1/men2 references for the explicit opening pairs.
