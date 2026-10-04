@@ -1,6 +1,6 @@
 # Shared work log
 
-## Releasing: v1.8 optional random Mini MLP mixed opponents — Codex, 2026-10-04
+## Released: v1.8 optional random Mini MLP mixed opponents — Codex, 2026-10-04
 
 Branch codex/v1.8-random-mixed from b6d99a4. User requested matching pair
 numbers by default, with an organizer option to randomize mixed opponents.
@@ -34,7 +34,15 @@ numbers by default, with an organizer option to randomize mixed opponents.
 - Development migration applied. Sanitized production backup before release:
   local-backups/v1.8-mixed-backup-1791131763315.json. Contains ten source/cache
   tables, excluding PIN hashes/auth tokens/settings/audit secrets. Remote main
-  remains b6d99a4. Production migration and deployment verification pending.
+  was b6d99a4 before publication. Rollback tag backup/v1.8-before-random-mixed
+  pushed to origin. Implementation commit 3ede1a9 fast-forwarded and pushed
+  to main. Production migration 0017 succeeded; a fresh read verified every
+  existing row in all ten tables unchanged, with both new booleans false.
+  Post-migration snapshot: local-backups/v1.8-mixed-verify-1791131825167.json.
+  Vercel deployment Cc7pnonfrkJGzxVyjEMdbS6j2y3J reports success. Public notes
+  return 200 with the random-mixed addition and v1.8; existing Mini MLP detail
+  remains accessible. No production test session, redraw or score was entered.
+  Active checkout main. This documentation-only follow-up records the release.
 
 ## Released: v1.8 automatic Mini MLP draws and result notes — Codex, 2026-10-03
 
