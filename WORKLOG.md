@@ -17,7 +17,8 @@ overrides in Manage matches & players. Rating review only; no retuning authorize
   Score edit/clear/void/restore clear override and note together.
 - Migration 0016_youthful_talisman.sql adds only nullable mlp_ties.decision_note.
   No stored draw flag, backfill, personal rating change or new DreamBreaker game.
-  Existing sessions work immediately. Current event must remain live for owner.
+  Existing sessions work immediately. Owner closed the event during the release
+  interruption; preserve its closed state. Organizer controls work after closure.
 - All formats: Matchups Hide scored matches checkbox below avatar filters,
   unchecked by default; intersects selected players, hides completed/voided
   cards, preserves round order/numbers, hides empty rounds, handles refreshes.
@@ -39,8 +40,22 @@ overrides in Manage matches & players. Rating review only; no retuning authorize
   JSON details. Main concern for discussion: a self-reseed can reset reliability
   for a long-time player, retaining high K despite substantial match volume.
   Personal rating formula, epochs and records remain untouched.
-- Production migration, push and deployment verification pending at this entry;
-  update this status before final handoff. Backup manifest .scratch/v18-draw-backup.json.
+- Migration 0016 applied successfully in production before the interruption.
+  Automatic approval review then failed on the verification call because its
+  account usage limit was reached; that call did not execute. Resumed after the
+  user's explicit continuation. Pre-migration backup:
+  local-backups/v1.8-draws-1791073846254.json. Rollback ref:
+  backup/v1.8-before-draws at ab284ad. Implementation commit f83772f.
+- Post-migration audit: new normal activity added four accounts/seeds, two
+  sessions and 36 scheduled games; the owner closed the target. No prior source
+  rows changed except that session status, no matches/seeds were deleted, and
+  MLP teams/encounters remained identical apart from the new nullable column.
+  Rating caches had been rebuilt (fresh event IDs/decayed stats) but all original
+  rating-event values and current ratings were unchanged; full replay still
+  matches. Never restore a pre-migration snapshot over this later activity.
+- Explicit closed-session workflow extension passes; typecheck passes again.
+  Browser verifies controls remain available on the closed development fixture.
+  Push/deployment verification remains pending; update before final handoff.
 
 ## Completed: October 3 Mini MLP moved from five to six courts — Codex, 2026-10-02
 

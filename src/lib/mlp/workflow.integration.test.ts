@@ -184,6 +184,14 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
     expect(games).toHaveLength(76);expect(games.every(g=>g.status==="completed")).toBe(true);
     await assertSavedLineups(id);
     await expect(correctMlpOpeningPairsAction(id,input)).rejects.toThrow();
+    // Closure does not remove the organizer's ability to annotate results.
+    await db.update(sessions).set({status:"closed"}).where(eq(sessions.id,id));
+    await setMlpTiebreakAction(id,exact.id,exact.teamAId,"Closed-session DreamBreaker note");
+    expect((await readExact()).decisionNote).toBe("Closed-session DreamBreaker note");
+    actor={id:personIds[24],role:"admin"};
+    await expect(setMlpTiebreakAction(id,exact.id,exact.teamAId,"Unauthorized")).rejects.toThrow();
+    actor=organizer;
+    await expect(setMlpTiebreakAction(id,exact.id,"draw")).rejects.toThrow();
   },300000);
   it.each(courtCases)("persists $count teams / $courts courts without court or player collisions",async({count,courts,id:sessionId})=>{
     const db=getDb();
