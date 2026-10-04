@@ -1,6 +1,6 @@
 # Shared work log
 
-## Releasing: v1.8 automatic Mini MLP draws and result notes — Codex, 2026-10-03
+## Released: v1.8 automatic Mini MLP draws and result notes — Codex, 2026-10-03
 
 Branch codex/v1.8-mlp-draws from ab284ad. User confirmed 2 points/win, 1/draw,
 0/loss, then explicitly requested automatic exact RR draws and organizer
@@ -55,7 +55,17 @@ overrides in Manage matches & players. Rating review only; no retuning authorize
   matches. Never restore a pre-migration snapshot over this later activity.
 - Explicit closed-session workflow extension passes; typecheck passes again.
   Browser verifies controls remain available on the closed development fixture.
-  Push/deployment verification remains pending; update before final handoff.
+  The closed browser fixture also accepted a DreamBreaker override and showed
+  its saved note. All synthetic browser fixtures removed; development server stopped.
+- Published implementation f83772f plus closed-session checks bf54bf6 to main.
+  Vercel deployment EhDcD8EATUGXgCE7ao26Pa2ToAom reports success. Public notes
+  return 200 with both additions; production dev-login remains 404. Live browser
+  verifies today's closed Mini MLP has W–L–D/points and scoring explanation,
+  two organizer decision/note controls, and a functioning Hide scored matches
+  filter. No real result/note was entered in verification and no session reopened.
+  Proof: .scratch/v18-draw-standings-live.png (ignored). PORT-v1.8.md is current.
+  Active checkout main. This documentation-only commit records final verification.
+  Product work is complete; rating policy review awaits the owner's decision.
 
 ## Completed: October 3 Mini MLP moved from five to six courts — Codex, 2026-10-02
 
