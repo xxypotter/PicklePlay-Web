@@ -1219,23 +1219,62 @@ drawn before bronze existed has one encounter and reads as gold alone. Podium:
 gold winner 1st, gold loser 2nd, bronze winner 3rd, each shown only once its own
 match resolves. Undoing an unplayed final removes gold and bronze together.
 With four teams, all qualify and the round robin determines seeding. The four
-playoff encounters add 16 games and four court waves. No DreamBreaker. No
+playoff encounters add 16 games and four court waves. No generated DreamBreaker game. No
 promised duration; score format is organizer-dependent.
 
-Encounter winner: most games won; at 2–2, greater sum of points; equal sums
-require the organizer to record a winner. All four games must have valid,
-non-tied integer scores (0–99). A void leaves an encounter unresolved until
-restored. Round-robin standings order by team wins, game difference, point
-difference, points scored, then setup slot. This final tie rule is displayed.
+Encounter winner: most games won; at 2–2, greater sum of points. Since the
+October 3 v1.8 amendment, equal sums automatically resolve a round-robin
+encounter as a draw unless the organizer has recorded a tiebreak winner.
+Playoff exact ties still require an organizer-recorded winner. All four games
+must have valid, non-tied integer scores (0–99), one of each category. A void
+leaves an encounter unresolved until restored. Standings show W–L–D and Pts:
+win 2, draw 1, loss 0. A resolved draw adds a played encounter and draw to both
+teams. Order by standings points, game difference, point difference, points
+scored, then setup slot. Explain this and the automatic-draw rule on standings.
 Playoffs never change the round-robin seeding table. Team cards allow expanding
 all four saved lineups; aggregate cards and the bracket show team results.
 
 Keep each underlying game in the player's normal record and rating history;
 there is no second rating event for an encounter win. Reuse score permissions:
 live participants/admins can score; closed sessions require organizer/superadmin.
-Clear an organizer tie decision after any score change. Once a downstream
+Clear an organizer tie decision and its note after any score change. Once a downstream
 stage exists, protect its source results. Removing the last completely unplayed
 stage allows correction and regeneration; stages with scores/voids stay intact.
+
+### v1.8 amendment: automatic draws, overrides and unscored filter
+
+Manage matches & players exposes a result selector on exact tied encounters:
+either squad as winner, or Draw (round robin only). It starts on the automatic
+draw without requiring a save. Organizer/superadmin may record a winner after
+an off-app DreamBreaker, retain/revert to a draw, and save an optional plain-text
+note of up to 500 characters. Confirm saving; display the saved note on both
+the public aggregate result card and management card, preserving line breaks.
+Persist nullable `decision_note` on `mlp_ties` (migration 0016); use the existing
+nullable `tiebreak_winner` for overrides. Do not store a redundant draw flag.
+Null winner + a valid exact RR tie means draw; for playoffs it means unresolved.
+Existing sessions work without backfilling any rows. Do not automatically close.
+
+The decision action verifies resource ownership, exact 2–2/equal-points scores,
+note length, winner membership and stage under the session transaction lock.
+Only the organizer or superadmin can change these decisions, including after
+closure. Once playoffs depend on the result, changing its outcome is blocked;
+note-only edits remain allowed. Clearing a score, voiding/restoring a game or
+editing a score invalidates the override and note together. Audit each decision.
+Draws count as resolved for RR playoff readiness; semifinals/finals require wins.
+Neither a team draw nor DreamBreaker override changes individual game scores or
+adds a personal-rating event. The independent iOS app uses its own data/migrations.
+
+Matchups in every format adds an unchecked-by-default Hide scored matches
+checkbox below the player filter. Checked: hide completed and voided cards,
+remove empty round sections, retain original round numbering/order. Intersect
+with ALL selected players. Unchecked restores the full list subject to player
+selection. Keep the filter state during in-place score refreshes; newly saved
+games disappear and cleared scores reappear. Provide a useful empty-state hint.
+
+Test automatic draws on existing data, all teams' played = W+L+D, 2/1/0 seeding,
+override/revert/note edits, authorization, malformed notes, incomplete/void
+games, score clearing, playoff draw rejection and downstream result locks;
+test filter combinations and switching back to the complete schedule.
 
 ### v1.7: integrity and recovery
 

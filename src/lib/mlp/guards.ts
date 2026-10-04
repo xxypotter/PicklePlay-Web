@@ -26,5 +26,6 @@ export async function guardMlpResultChange(db: Transaction, match: typeof matche
     tie.stage==="robin" ? ne(mlpTies.stage,"robin") : eq(mlpTies.stage,"final"),
   ));
   if(tie.stage!=="final" && later.length) throw new Error((await getT())("mlp.error.downstream"));
-  await db.update(mlpTies).set({tiebreakWinner:null}).where(eq(mlpTies.id,tie.id));
+  // A score correction invalidates the manual decision and its explanation.
+  await db.update(mlpTies).set({tiebreakWinner:null,decisionNote:null}).where(eq(mlpTies.id,tie.id));
 }

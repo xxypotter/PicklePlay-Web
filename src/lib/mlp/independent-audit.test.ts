@@ -300,7 +300,7 @@ describe("real actions and UI queries with synthetic persistence", () => {
     }
     const stamp = (r: SavedRound) => db.rows<SavedMatch>(matches).find(g => g.roundId === r.id)!.playedAt.getTime();
     for (let i = 1; i < rr.length; i++) expect(stamp(rr[i])).toBe(stamp(rr[0]) + i);
-    // Pending and exact aggregate ties must both prevent early playoffs.
+    // Pending games prevent playoffs; a completed exact RR tie is a draw.
     queuePlayoff(db, teams, courts, false);
     await expect(addMlpPlayoffAction("audit-session")).rejects.toThrow(makeT("en")("mlp.error.playoffReady")); db.done();
     const ts = db.rows<SavedTie>(mlpTies);
@@ -312,9 +312,8 @@ describe("real actions and UI queries with synthetic persistence", () => {
     const tiedGames = db.rows<SavedMatch>(matches).filter(g => g.mlpTieId === ts[0].id);
     const originals = tiedGames.map(g => ({ scoreA: g.scoreA, scoreB: g.scoreB }));
     tiedGames.forEach((g, i) => { g.scoreA = i < 2 ? 11 : 1; g.scoreB = i < 2 ? 1 : 11; });
-    expect(outcome(asEncounters(db)[0]).reason).toBe("tied");
-    queuePlayoff(db, teams, courts, false);
-    await expect(addMlpPlayoffAction("audit-session")).rejects.toThrow(makeT("en")("mlp.error.playoffReady")); db.done();
+    expect(outcome(asEncounters(db)[0]).reason).toBe("draw");
+    expect(roundRobinReady(teams, asEncounters(db))).toBe(true);
     tiedGames.forEach((g, i) => Object.assign(g, originals[i]));
     expect(roundRobinReady(teams, asEncounters(db))).toBe(true);
     const expectedSeeds = teams.slice().reverse().map(t => t.id);

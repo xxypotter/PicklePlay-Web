@@ -106,7 +106,7 @@ describe("Mini MLP",()=>{
     expect(roundRobinReady(selected,[{...ties[0],games:ties[0].games.slice(1)},...ties.slice(1)])).toBe(false);
     expect(roundRobinReady(selected,[{...ties[0],teamBId:"outsider"},...ties.slice(1)])).toBe(false);
     const tied={...ties[0],games:encounter([[11,8],[8,11],[11,8],[8,11]]).games};
-    expect(roundRobinReady(selected,[tied,...ties.slice(1)])).toBe(false);
+    expect(roundRobinReady(selected,[tied,...ties.slice(1)])).toBe(true);
     expect(roundRobinReady(selected,[{...tied,tiebreakWinner:tied.teamAId},...ties.slice(1)])).toBe(true);
   });
   it("uses game wins first, then total points only at 2–2",()=>{
@@ -114,11 +114,24 @@ describe("Mini MLP",()=>{
     expect(outcome(encounter([[11,0],[11,0],[9,11],[9,11]])).reason).toBe("points");
     expect(outcome(encounter([[11,0],[11,0],[9,11],[9,11]])).winner).toBe("t0");
   });
-  it("requires explicit organizer adjudication on exact ties",()=>{
+  it("automatically draws exact RR ties, permits an override, and requires playoff winners",()=>{
     const tie=encounter([[11,8],[8,11],[11,8],[8,11]]);
-    expect(outcome(tie)).toMatchObject({complete:true,winner:null,reason:"tied"});
+    expect(outcome(tie)).toMatchObject({complete:true,winner:null,reason:"draw",resolved:true});
+    expect(outcome({...tie,stage:"semifinal"})).toMatchObject({winner:null,reason:"tied",resolved:false});
+    expect(outcome({...tie,stage:"final"})).toMatchObject({winner:null,reason:"tied",resolved:false});
     expect(outcome({...tie,tiebreakWinner:"t1"})).toMatchObject({winner:"t1",reason:"organizer"});
     expect(outcome({...tie,tiebreakWinner:"t5"}).winner).toBeNull();
+  });
+  it("counts draws for both teams and ranks by 2/1/0 points before game difference",()=>{
+    const draw=encounter([[11,8],[8,11],[11,8],[8,11]]);
+    const win=encounter([[11,0],[11,0],[11,0],[11,0]],{teamAId:"t2",teamBId:"t3"});
+    const rows=standings(teams,[draw,{...draw,teamBId:"t4"},{...draw,teamBId:"t5"},win]);
+    expect(rows[0]).toMatchObject({team:teams[0],wins:0,losses:0,draws:3,played:3,points:3});
+    expect(rows[1]).toMatchObject({team:teams[2],wins:1,draws:0,points:2});
+    const overridden=standings(teams,[{...draw,tiebreakWinner:"t1"}]);
+    expect(overridden.find(r=>r.team.id==="t1")).toMatchObject({wins:1,losses:0,draws:0,points:2});
+    expect(overridden.find(r=>r.team.id==="t0")).toMatchObject({wins:0,losses:1,draws:0,points:0});
+    for(const row of rows) expect(row.played).toBe(row.wins+row.losses+row.draws);
   });
   it("does not resolve missing, duplicate, voided, or invalid games",()=>{
     const tie=encounter([[11,3],[11,3],[11,3],[11,3]]);

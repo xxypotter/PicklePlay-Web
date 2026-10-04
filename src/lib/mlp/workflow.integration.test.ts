@@ -112,16 +112,59 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
       const lose=m.mlpTieId===exact.id && ["mixed1","mixed2"].includes(m.mlpGame!);
       expect(await score(m.id,lose?8:11,lose?11:8)).toEqual({});
     }
-    await expect(addMlpPlayoffAction(id)).rejects.toThrow();
-    await expect(setMlpTiebreakAction(id,exact.id,teams.find(t=>![exact.teamAId,exact.teamBId].includes(t.id))!.id)).rejects.toThrow();
-    await setMlpTiebreakAction(id,exact.id,exact.teamAId);
+    // Exact RR ties resolve automatically; all teams have five counted encounters.
+    const readExact=async()=> (await db.select().from(mlpTies).where(eq(mlpTies.id,exact.id)))[0];
+    const completed=await db.select().from(matches).where(eq(matches.sessionId,id));
+    const encounters=ties.map(t=>({...t,games:completed.filter(g=>g.mlpTieId===t.id).map(g=>({...g,kind:g.mlpGame}))}));
+    expect(outcome(encounters.find(t=>t.id===exact.id)!)).toMatchObject({draw:true,resolved:true});
+    expect(standings(teams,encounters).every(r=>r.played===5&&r.wins+r.losses+r.draws===5)).toBe(true);
     await addMlpPlayoffAction(id);
+    await expect(setMlpTiebreakAction(id,exact.id,exact.teamAId)).rejects.toThrow();
+    await setMlpTiebreakAction(id,exact.id,"draw","No DreamBreaker played");
+    await removeMlpPlayoffsAction(id);
+    const organizer=actor;
+    for(const role of ["player","admin"] as const) {
+      actor={id:personIds[24],role};
+      await expect(setMlpTiebreakAction(id,exact.id,exact.teamAId)).rejects.toThrow();
+    }
+    actor=organizer;
+    await expect(setMlpTiebreakAction(otherId,exact.id,exact.teamAId)).rejects.toThrow();
+    await expect(setMlpTiebreakAction(id,exact.id,"draw","x".repeat(501))).rejects.toThrow();
+    await expect(setMlpTiebreakAction(id,ties[1].id,"draw")).rejects.toThrow();
+    await expect(setMlpTiebreakAction(id,exact.id,teams.find(t=>![exact.teamAId,exact.teamBId].includes(t.id))!.id)).rejects.toThrow();
+    await setMlpTiebreakAction(id,exact.id,exact.teamAId,"  Team A won the DreamBreaker  ");
+    expect(await readExact()).toMatchObject({tiebreakWinner:exact.teamAId,decisionNote:"Team A won the DreamBreaker"});
+    await setMlpTiebreakAction(id,exact.id,"draw","No DreamBreaker played");
+    expect(await readExact()).toMatchObject({tiebreakWinner:null,decisionNote:"No DreamBreaker played"});
+    const first=completed.find(g=>g.mlpTieId===exact.id)!;
+    expect(await score(first.id,0,0)).toEqual({});
+    expect(await readExact()).toMatchObject({tiebreakWinner:null,decisionNote:null});
+    await expect(setMlpTiebreakAction(id,exact.id,"draw")).rejects.toThrow();
+    expect(await score(first.id,first.scoreA!,first.scoreB!)).toEqual({});
+    actor={...organizer,role:"superadmin"};
+    await setMlpTiebreakAction(id,exact.id,exact.teamAId,"DreamBreaker win");
+    await voidMatchAction(first.id);
+    expect(await readExact()).toMatchObject({tiebreakWinner:null,decisionNote:null});
+    await expect(setMlpTiebreakAction(id,exact.id,"draw")).rejects.toThrow();
+    await restoreMatchAction(first.id);
+    actor=organizer;
+    await setMlpTiebreakAction(id,exact.id,exact.teamAId,"DreamBreaker win");
+    await addMlpPlayoffAction(id);
+    await expect(setMlpTiebreakAction(id,exact.id,"draw")).rejects.toThrow();
+    await setMlpTiebreakAction(id,exact.id,exact.teamAId,"DreamBreaker won 21–19");
+    expect((await readExact()).decisionNote).toBe("DreamBreaker won 21–19");
     expect((await score(games[0].id,12,8)).error).toBeTruthy();
     await removeMlpPlayoffsAction(id);
     await addMlpPlayoffAction(id);
     let playoffs=await db.select().from(mlpTies).where(and(eq(mlpTies.sessionId,id),eq(mlpTies.stage,"semifinal")));
     expect(playoffs).toHaveLength(2);
-    for(const m of await db.select().from(matches).where(inArray(matches.mlpTieId,playoffs.map(t=>t.id))))expect(await score(m.id,11,8)).toEqual({});
+    for(const m of await db.select().from(matches).where(inArray(matches.mlpTieId,playoffs.map(t=>t.id)))) {
+      const lose=m.mlpTieId===playoffs[0].id&&["mixed1","mixed2"].includes(m.mlpGame!);
+      expect(await score(m.id,lose?8:11,lose?11:8)).toEqual({});
+    }
+    await expect(setMlpTiebreakAction(id,playoffs[0].id,"draw")).rejects.toThrow();
+    await expect(addMlpPlayoffAction(id)).rejects.toThrow();
+    await setMlpTiebreakAction(id,playoffs[0].id,playoffs[0].teamAId,"Semifinal DreamBreaker win");
     await expect(removeMlpPlayoffsAction(id)).rejects.toThrow();
     await addMlpPlayoffAction(id);
     // Undoing an unplayed final takes the bronze match with it, then redraws both.

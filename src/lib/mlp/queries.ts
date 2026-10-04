@@ -24,7 +24,7 @@ export async function getMlpData(sessionId: string): Promise<MlpData> {
     teams, names: Object.fromEntries(people.map(p => [p.id,p.username])),
     canCorrectOpeningPairs: teams.length>0 && teams.every(t=>!hasExplicitOpeningPairs(t)) && games.length>0 &&
       games.every(g=>g.status==="scheduled" && g.scoreA===null && g.scoreB===null && g.enteredBy===null && g.editedAt===null) &&
-      ties.every(t=>t.stage==="robin" && t.tiebreakWinner===null),
+      ties.every(t=>t.stage==="robin" && t.tiebreakWinner===null && !t.decisionNote),
     ties: ties.map(t => ({ ...t, games: games.filter(g => g.mlpTieId === t.id).map(g => ({
       kind: g.mlpGame, scoreA: g.scoreA, scoreB: g.scoreB, status: g.status,
     })) })),

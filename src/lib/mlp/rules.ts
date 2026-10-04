@@ -32,6 +32,7 @@ export interface Game {
 export interface Encounter {
   id: string; index: number; block: number; stage: Stage;
   teamAId: string; teamBId: string; tiebreakWinner: string | null;
+  decisionNote?: string | null;
   games: Game[];
 }
 
@@ -48,20 +49,21 @@ export function outcome(tie: Encounter) {
   const complete = tie.games.length === 4 && valid.length === 4 &&
     GAME_KINDS.every(k => valid.filter(g => g.kind === k).length === 1);
   let winner: string | null = null;
-  let reason: "games" | "points" | "organizer" | "tied" | "pending" = "pending";
+  let reason: "games" | "points" | "organizer" | "draw" | "tied" | "pending" = "pending";
   if (complete) {
     if (winsA !== winsB) { winner = winsA > winsB ? tie.teamAId : tie.teamBId; reason = "games"; }
     else if (pointsA !== pointsB) { winner = pointsA > pointsB ? tie.teamAId : tie.teamBId; reason = "points"; }
     else if ([tie.teamAId, tie.teamBId].includes(tie.tiebreakWinner ?? "")) {
       winner = tie.tiebreakWinner; reason = "organizer";
-    } else reason = "tied";
+    } else if (tie.stage === "robin") reason = "draw";
+    else reason = "tied";
   }
-  return { complete, winner, reason, winsA, winsB, pointsA, pointsB };
+  return { complete, winner, reason, draw: reason === "draw", resolved: !!winner || reason === "draw", winsA, winsB, pointsA, pointsB };
 }
 
 export function standings(teams: Team[], ties: Encounter[]) {
   const rows = new Map(teams.map(team => [team.id, {
-    team, played: 0, wins: 0, losses: 0, gamesWon: 0, gamesLost: 0, pointsFor: 0, pointsAgainst: 0,
+    team, played: 0, wins: 0, losses: 0, draws: 0, points: 0, gamesWon: 0, gamesLost: 0, pointsFor: 0, pointsAgainst: 0,
   }]));
   for (const tie of ties.filter(t => t.stage === "robin")) {
     const a = rows.get(tie.teamAId), b = rows.get(tie.teamBId);
@@ -71,13 +73,14 @@ export function standings(teams: Team[], ties: Encounter[]) {
     b.gamesWon += result.winsB; b.gamesLost += result.winsA;
     a.pointsFor += result.pointsA; a.pointsAgainst += result.pointsB;
     b.pointsFor += result.pointsB; b.pointsAgainst += result.pointsA;
-    if (result.winner) {
+    if (result.resolved) {
       a.played++; b.played++;
-      if (result.winner === a.team.id) { a.wins++; b.losses++; }
-      else { b.wins++; a.losses++; }
+      if (result.draw) { a.draws++; b.draws++; a.points++; b.points++; }
+      else if (result.winner === a.team.id) { a.wins++; b.losses++; a.points+=2; }
+      else { b.wins++; a.losses++; b.points+=2; }
     }
   }
-  return [...rows.values()].sort((a,b) => b.wins-a.wins ||
+  return [...rows.values()].sort((a,b) => b.points-a.points ||
     (b.gamesWon-b.gamesLost)-(a.gamesWon-a.gamesLost) ||
     (b.pointsFor-b.pointsAgainst)-(a.pointsFor-a.pointsAgainst) ||
     b.pointsFor-a.pointsFor || a.team.slot-b.team.slot);
@@ -171,7 +174,7 @@ export function roundRobinReady(teams: Team[], ties: Encounter[]): boolean {
   if (robin.length !== encounterCount(teams.length)) return false;
   const pairs = new Set<string>();
   for (const tie of robin) {
-    if (!ids.has(tie.teamAId) || !ids.has(tie.teamBId) || tie.teamAId === tie.teamBId || !outcome(tie).winner) return false;
+    if (!ids.has(tie.teamAId) || !ids.has(tie.teamBId) || tie.teamAId === tie.teamBId || !outcome(tie).resolved) return false;
     pairs.add([tie.teamAId, tie.teamBId].sort().join("|"));
   }
   return pairs.size === robin.length;

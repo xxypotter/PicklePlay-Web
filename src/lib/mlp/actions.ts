@@ -64,7 +64,7 @@ export async function correctMlpOpeningPairsAction(sessionId: string, input: unk
       .where(inArray(ratingEvents.matchId,gs.map(g=>g.id))).limit(1) : [];
     if(teams.some(hasExplicitOpeningPairs) || !gs.length || events.length ||
       gs.some(g=>g.status!=="scheduled" || g.scoreA!==null || g.scoreB!==null || g.enteredBy!==null || g.editedAt!==null) ||
-      ties.some(tie=>tie.stage!=="robin" || tie.tiebreakWinner!==null)) throw new Error(t("mlp.error.correction"));
+      ties.some(tie=>tie.stage!=="robin" || tie.tiebreakWinner!==null || tie.decisionNote)) throw new Error(t("mlp.error.correction"));
     if(!validateTeams(input,new Set(teams.flatMap(members)),teamCount) ||
       input.some((team,i)=>(["name","m1","m2","w1","w2"] as const).some(key=>team[key]!==teams[i]?.[key]))) {
       throw new Error(t("mlp.error.correction"));
@@ -194,20 +194,26 @@ export async function addMlpPlayoffAction(sessionId: string): Promise<void> {
   refresh(sessionId);
 }
 
-export async function setMlpTiebreakAction(sessionId: string, tieId: string, winner: string): Promise<void> {
+export async function setMlpTiebreakAction(sessionId: string, tieId: string, decision: string, note: string = ""): Promise<void> {
   const t=await getT();
+  if(typeof note!=="string" || note.trim().length>500) throw new Error(t("mlp.error.note"));
+  const decisionNote=note.trim() || null;
   await organize(sessionId,async (db,{actorId})=>{
     const ties=await readEncounters(db,sessionId);
     const tie=ties.find(t=>t.id===tieId);
-    if (!tie || ![tie.teamAId,tie.teamBId].includes(winner)) throw new Error(t("mlp.error.tie"));
+    if (!tie || ![tie.teamAId,tie.teamBId,"draw"].includes(decision)) throw new Error(t("mlp.error.tie"));
+    const draw=decision==="draw";
+    if(draw && tie.stage!=="robin") throw new Error(t("mlp.error.playoffDraw"));
+    const winner=draw?null:decision;
     const result=outcome({...tie,tiebreakWinner:null});
-    if (result.reason!=="tied") throw new Error(t("mlp.error.tie"));
-    if (ties.some(other=>tie.stage==="robin" ? other.stage!=="robin" : tie.stage==="semifinal" && other.stage==="final")) {
+    if (result.reason!=="tied" && result.reason!=="draw") throw new Error(t("mlp.error.tie"));
+    const changed=tie.tiebreakWinner!==winner;
+    if (changed && ties.some(other=>tie.stage==="robin" ? other.stage!=="robin" : tie.stage==="semifinal" && other.stage==="final")) {
       throw new Error(t("mlp.error.downstream"));
     }
-    await db.update(mlpTies).set({tiebreakWinner:winner}).where(eq(mlpTies.id,tieId));
+    await db.update(mlpTies).set({tiebreakWinner:winner,decisionNote}).where(eq(mlpTies.id,tieId));
     await db.insert(auditLog).values({actorId,action:"mlp.tiebreak",targetType:"mlp_tie",targetId:tieId,
-      detail:JSON.stringify({winner})});
+      detail:JSON.stringify({before:{winner:tie.tiebreakWinner,draw:outcome(tie).draw,note:tie.decisionNote??null},after:{winner,draw,note:decisionNote}})});
   },null);
   refresh(sessionId);
 }

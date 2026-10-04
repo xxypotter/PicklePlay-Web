@@ -28,5 +28,29 @@ v1.7's four-court-only Mini MLP requirement; the apps keep independent data.
 - Other v1.8 UI changes from Claude: Mini MLP appears before Custom in format
   pickers; Matchups displays the signed-in player as "You (username)".
 
-No rating equation, historical result, or web database schema changes. Keep
-release notes at 1.8 in English, Simplified Chinese, and Traditional Chinese.
+## October 3 amendment: draws and result notes
+
+- RR exact ties (four scored games, 2–2, equal total points) automatically count
+  as draws. Standings show W–L–D and points: win 2, draw 1, loss 0. Then use
+  existing game/point difference, points scored and team-slot tiebreakers.
+  Explain the scoring and override path directly on standings.
+- Under Manage matches & players, organizer/superadmin may choose either team
+  after an off-app DreamBreaker or retain/revert to Draw, with a 500-character
+  optional result note. Show the note to all readers. Exact playoff ties still
+  need a winner. No DreamBreaker game is created or separately rated.
+- Web migration 0016 adds nullable mlp_ties.decision_note. Keep existing
+  tiebreak_winner; automatic draws are derived, without a persisted draw flag.
+  Existing sessions work immediately without result backfills or regeneration.
+- Protect any outcome already used by a downstream playoff stage, while
+  allowing note-only edits. Score edits/clear/void/restore clear both override
+  and note. Enforce this atomically with session locks and audit decision edits.
+- All formats: Matchups gets Hide scored matches below the player filter.
+  Default unchecked; checked hides scored/voided cards and empty round sections,
+  preserving original numbering and intersecting selected players. Update as
+  scores refresh. Uncheck to restore the full schedule.
+- Test draw readiness/seeding, W+L+D equal played, permissions, note validation,
+  reversal, score corrections and downstream locking. See PORT.md for details.
+
+No rating equation or individual game records change. Keep release notes at
+1.8 in English, Simplified Chinese, and Traditional Chinese. This amendment
+supersedes the earlier requirement to manually decide every exact RR tie.

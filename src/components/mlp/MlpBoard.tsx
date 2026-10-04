@@ -1,10 +1,11 @@
 "use client";
 import ConfirmAction from "./ConfirmAction";
+import MlpDecision from "./MlpDecision";
 import { useState, useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import type { MlpData } from "@/lib/mlp/queries";
 import { encounterCount, finalsOf, GAME_KINDS, outcome, podium, roundRobinReady, standings, teamLineups, type Encounter } from "@/lib/mlp/rules";
-import { addMlpPlayoffAction, removeMlpPlayoffsAction, setMlpTiebreakAction } from "@/lib/mlp/actions";
+import { addMlpPlayoffAction, removeMlpPlayoffsAction } from "@/lib/mlp/actions";
 
 export default function MlpBoard({data,sessionId,organizer=false,live=false}:{data:MlpData;sessionId:string;organizer?:boolean;live?:boolean}) {
   const t=useT(),[pending,start]=useTransition(),[error,setError]=useState("");
@@ -27,11 +28,10 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
         <span>{name(id)} {result.winner===id?"✓":""}</span><span className="font-mono">{i===0?result.winsA:result.winsB}</span>
       </div>)}
       <p className="hint">{t("mlp.totalPoints",{a:result.pointsA,b:result.pointsB})} · {t(`mlp.result.${result.reason}`)}</p>
-      {organizer&&!downstream&&["tied","organizer"].includes(result.reason)?<div className="mt-2 flex flex-wrap gap-2">
-        {[tie.teamAId,tie.teamBId].map(id=><ConfirmAction key={id} label={t("mlp.chooseWinner",{name:name(id)})}
-          confirmation={t("mlp.winnerConfirm",{name:name(id)})} disabled={pending} className="btn-ghost text-sm"
-          onConfirm={()=>run(()=>setMlpTiebreakAction(sessionId,tie.id,id))} />)}
-      </div>:null}
+      {tie.decisionNote&&["organizer","draw"].includes(result.reason)?<p className="mt-2 whitespace-pre-wrap break-words text-sm">{tie.decisionNote}</p>:null}
+      {organizer&&["tied","organizer","draw"].includes(result.reason)?<MlpDecision
+        key={`${tie.id}:${tie.tiebreakWinner}:${tie.decisionNote}`}
+        sessionId={sessionId} tie={tie} names={[name(tie.teamAId),name(tie.teamBId)]} locked={downstream} />:null}
     </div>;
   };
   return <section className="mt-4 space-y-4">
@@ -51,16 +51,18 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
       </ul>:null}
     </section>:null}
     <section className="card overflow-x-auto">
-      <h2 className="font-semibold">{t("mlp.standings")}</h2><p className="hint">{t("mlp.rankRule")}</p>
+      <h2 className="font-semibold">{t("mlp.standings")}</h2>
+      <p className="hint mt-1">{t("mlp.scoringRule")}</p>
+      <p className="hint mt-1">{t("mlp.rankRule")}</p>
       <table className="mt-3 w-full text-sm"><thead><tr className="text-left text-[var(--muted)]">
-        <th className="py-2">#</th><th>{t("mlp.teamName")}</th><th className="px-2 whitespace-nowrap">{t("mlp.wl")}</th><th className="px-2">{t("mlp.games")}</th><th className="pl-2 whitespace-nowrap">+/−</th>
+        <th className="py-2">#</th><th>{t("mlp.teamName")}</th><th className="px-2 whitespace-nowrap">{t("mlp.wl")}</th><th className="px-2">{t("mlp.points")}</th><th className="px-2">{t("mlp.games")}</th><th className="pl-2 whitespace-nowrap">+/−</th>
       </tr></thead><tbody>{standings(data.teams,data.ties).map((r,i)=><tr key={r.team.id} className="border-t border-[var(--border)] align-top">
         <td className="py-3 pr-2">{i+1}</td><td className="py-3 pr-2"><b>{r.team.name}</b>
           <details className="mt-1"><summary className="cursor-pointer text-xs text-[var(--muted)]">{t("mlp.viewPairs")}</summary>
             {GAME_KINDS.map(kind=><p key={kind} className="hint"><span className="font-medium">{t(`mlp.game.${kind}`)}:</span>{" "}
               {teamLineups(r.team)[kind].map(id=>data.names[id]).join(" + ")}</p>)}
           </details>
-        </td><td className="px-2 py-3 whitespace-nowrap">{r.wins}–{r.losses}</td><td className="px-2 py-3 whitespace-nowrap">{r.gamesWon}–{r.gamesLost}</td><td className="py-3 pl-2">{r.pointsFor-r.pointsAgainst}</td>
+        </td><td className="px-2 py-3 whitespace-nowrap">{r.wins}–{r.losses}–{r.draws}</td><td className="px-2 py-3">{r.points}</td><td className="px-2 py-3 whitespace-nowrap">{r.gamesWon}–{r.gamesLost}</td><td className="py-3 pl-2">{r.pointsFor-r.pointsAgainst}</td>
       </tr>)}</tbody></table>
     </section>
     {organizer&&live&&!gold?<div className="card"><p className="hint">{t("mlp.playoffHint",{count:encounterCount(data.teams.length)})}</p>
@@ -70,6 +72,6 @@ export default function MlpBoard({data,sessionId,organizer=false,live=false}:{da
     {organizer&&removable.length>0&&removable.every(tie=>tie.games.every(g=>g.status==="scheduled"))?
       <ConfirmAction label={t("mlp.removePlayoff")} confirmation={t("mlp.removeConfirm")} disabled={pending}
         className="btn-ghost w-full" onConfirm={()=>run(()=>removeMlpPlayoffsAction(sessionId))} />:null}
-    {robin.length?<details><summary className="mb-2 cursor-pointer font-semibold">{t("mlp.results")}</summary><div className="grid gap-3 sm:grid-cols-2">{robin.map(card)}</div></details>:null}
+    {robin.length?<details open={organizer}><summary className="mb-2 cursor-pointer font-semibold">{t("mlp.results")}</summary><div className="grid gap-3 sm:grid-cols-2">{robin.map(card)}</div></details>:null}
   </section>;
 }

@@ -290,6 +290,8 @@ export const mlpTies = pgTable("mlp_ties", {
   teamBId: uuid("team_b_id").notNull().references(() => mlpTeams.id),
   // Read only for 2–2 with equal total points; cleared on any score change.
   tiebreakWinner: uuid("tiebreak_winner").references(() => mlpTeams.id),
+  /** Optional explanation for an exact tie or organizer override. */
+  decisionNote: text("decision_note"),
 }, (t) => [uniqueIndex("mlp_ties_session_index_idx").on(t.sessionId, t.index)]);
 
 /**

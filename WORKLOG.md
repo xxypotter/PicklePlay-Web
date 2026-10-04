@@ -1,5 +1,47 @@
 # Shared work log
 
+## Releasing: v1.8 automatic Mini MLP draws and result notes — Codex, 2026-10-03
+
+Branch codex/v1.8-mlp-draws from ab284ad. User confirmed 2 points/win, 1/draw,
+0/loss, then explicitly requested automatic exact RR draws and organizer
+overrides in Manage matches & players. Rating review only; no retuning authorized.
+
+- All four valid games, 2–2 and equal total points => automatic RR draw unless
+  an organizer winner is stored. Playoff exact ties still require a winner.
+  Standings show W–L–D/Pts and explain scoring/override rules in all languages.
+  RR readiness accepts draws; 2/1/0 points precede existing tiebreakers.
+- Organizer/superadmin can retain/revert to Draw or pick a DreamBreaker winner
+  and save a trimmed optional note, max 500 characters. Public result cards show
+  the note as escaped text. Session locks and ownership checks protect writes.
+  Downstream playoffs block changed outcomes; note-only edits remain allowed.
+  Score edit/clear/void/restore clear override and note together.
+- Migration 0016_youthful_talisman.sql adds only nullable mlp_ties.decision_note.
+  No stored draw flag, backfill, personal rating change or new DreamBreaker game.
+  Existing sessions work immediately. Current event must remain live for owner.
+- All formats: Matchups Hide scored matches checkbox below avatar filters,
+  unchecked by default; intersects selected players, hides completed/voided
+  cards, preserves round order/numbers, hides empty rounds, handles refreshes.
+- Code: mlp rules/actions/guards/queries; MlpBoard + new MlpDecision; Schedule
+  + schedule-filter; schema/migration; three dictionaries and v1.8 notes.
+  PORT.md, PORT-v1.8.md and PROJECT.md document the independent iOS behavior.
+- Verification so far: 425 standard tests; 20 opt-in development DB workflows;
+  typecheck/lint/build pass. Real DB tests cover draw seeding, permissions,
+  override/revert/note validation, clear/void/restore, playoff winner requirement,
+  downstream locks, court/team matrix, backup and setup flows. Browser confirms
+  override changes standings, restore-to-draw, public note visibility and filter
+  hiding/restoring 60 cards. Final review caught a translation-key collision
+  between tournament draw and tied result; split resultDrawConfirm from existing
+  drawConfirm so schedule creation keeps its original confirmation wording.
+- Read-only production review: today's 60 games/24 players/15 encounters include
+  two exact ties (36–36 and 34–34). Computed W+L+D=5 for every squad. Replay of
+  445 rated games/1,780 player events matches current ratings exactly, max event
+  float difference 1.11e-16. Local-only report .scratch/v18-rating-review.md and
+  JSON details. Main concern for discussion: a self-reseed can reset reliability
+  for a long-time player, retaining high K despite substantial match volume.
+  Personal rating formula, epochs and records remain untouched.
+- Production migration, push and deployment verification pending at this entry;
+  update this status before final handoff. Backup manifest .scratch/v18-draw-backup.json.
+
 ## Completed: October 3 Mini MLP moved from five to six courts — Codex, 2026-10-02
 
 Owner requested updating the already-generated 24-player event. Target remains

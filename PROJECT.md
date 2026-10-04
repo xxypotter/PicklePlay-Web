@@ -29,7 +29,13 @@ the code that depends on them, after backup and development validation.
   every team one sequential four-game encounter on court 5; every player rests
   two waves. Four/five teams use four active courts. Planner: lib/mlp/schedule.ts.
   Setup labels players F/M.
+  Exact RR ties automatically draw (2–2 games and equal total points); standings
+  use W–L–D, win 2/draw 1/loss 0 points. Organizer/superadmin can override with
+  a DreamBreaker winner and note in management. Playoffs require a winner.
+  Result notes: mlp_ties.decision_note (0016); no stored draw flag. Downstream
+  playoffs lock outcomes, not notes. Score changes clear override and note.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
+  Matchups has an optional hide-scored filter, combined with player selection.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.
 - Rating engine: src/lib/rating/engine.ts; tuning epochs: constants.ts;
   database replay/cache publication: service.ts.

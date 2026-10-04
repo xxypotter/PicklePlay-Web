@@ -113,6 +113,13 @@
       "when": 1790531027950,
       "tag": "0015_hot_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791072907568,
+      "tag": "0016_youthful_talisman",
+      "breakpoints": true
     }
   ]
 }

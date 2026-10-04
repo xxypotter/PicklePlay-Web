@@ -1,0 +1,1 @@
+ALTER TABLE "mlp_ties" ADD COLUMN "decision_note" text;

@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import Avatar from "@/components/Avatar";
 import { useT } from "@/lib/i18n/client";
 import type { T } from "@/lib/i18n/translate";
-import type { CurrentRound, RoundMatch, RoundPlayer } from "@/lib/sessions/queries";
+import type { CurrentRound, RoundPlayer } from "@/lib/sessions/queries";
 import MatchCard from "./MatchCard";
+import { filterSchedule } from "@/lib/sessions/schedule-filter";
 
 /**
  * The matchups screen, and the only place scores are entered.
@@ -44,6 +45,7 @@ export default function Schedule({
 }) {
   const t = useT();
   const [picked, setPicked] = useState<string[]>([]);
+  const [hideScored, setHideScored] = useState(false);
 
   const everyone = useMemo(() => rosterOf(rounds), [rounds]);
 
@@ -55,15 +57,7 @@ export default function Schedule({
    * and answer nothing. With one player picked the two are the same thing, so
    * the simple case still reads as "show me my games".
    */
-  const shown = useMemo(() => {
-    if (picked.length === 0) return rounds;
-    return rounds
-      .map((round) => ({
-        ...round,
-        matches: round.matches.filter((m) => picked.every((id) => inMatch(m, id))),
-      }))
-      .filter((round) => round.matches.length > 0);
-  }, [rounds, picked]);
+  const shown = useMemo(() => filterSchedule(rounds,picked,hideScored), [rounds,picked,hideScored]);
 
   const matchCount = shown.reduce((n, r) => n + r.matches.length, 0);
 
@@ -130,11 +124,15 @@ export default function Schedule({
             </button>
           ) : null}
         </div>
+        <label className="mt-3 flex cursor-pointer items-center gap-2 border-t border-[var(--border)] px-1 pt-3 text-sm">
+          <input type="checkbox" checked={hideScored} onChange={e=>setHideScored(e.target.checked)} className="h-4 w-4 accent-[var(--accent)]" />
+          {t("schedule.hideScored")}
+        </label>
       </section>
 
       {matchCount === 0 ? (
         <p className="card py-10 text-center text-sm text-[var(--muted)]">
-          {t("schedule.filterNone")}
+          {t(hideScored?"schedule.noUnscored":"schedule.filterNone")}
         </p>
       ) : null}
 
@@ -219,9 +217,6 @@ export default function Schedule({
     </div>
   );
 }
-
-const inMatch = (m: RoundMatch, id: string) =>
-  m.teamA.some((p) => p.id === id) || m.teamB.some((p) => p.id === id);
 
 /** Everyone who appears anywhere in the schedule, in first-appearance order. */
 function rosterOf(rounds: CurrentRound[]): RoundPlayer[] {
