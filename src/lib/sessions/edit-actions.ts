@@ -10,11 +10,12 @@ import { sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { validMlpConfig } from "@/lib/mlp/rules";
+import { validSwissConfig } from "@/lib/swiss/engine";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 
 import { maxCourtsFor, PLAYERS_PER_COURT } from "./limits";
-const FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
+const FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp", "swiss"] as const;
 type Format = (typeof FORMATS)[number];
 
 /**
@@ -105,6 +106,7 @@ export async function updateSessionAction(
   }
 
   if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
+  if (format === "swiss" && !validSwissConfig(courtCount,maxPlayers)) return { error: t("swiss.error.setup") };
 
   const updated = await db
     .update(sessions)

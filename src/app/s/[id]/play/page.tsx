@@ -17,6 +17,9 @@ import MlpSetup from "@/components/mlp/MlpSetup";
 import MlpCourtHint from "@/components/mlp/MlpCourtHint";
 import MlpBoard from "@/components/mlp/MlpBoard";
 import { getMlpData } from "@/lib/mlp/queries";
+import SwissControls from "@/components/swiss/SwissControls";
+import SwissPanel from "@/components/swiss/SwissPanel";
+import { getSwissView } from "@/lib/swiss/view";
 import ManualRound, { type ManualPlayer } from "./ManualRound";
 import MedalRoundCustom, { type MedalTeam } from "./MedalRoundCustom";
 import MedalBracket from "../MedalBracket";
@@ -76,13 +79,21 @@ export default async function PlayPage({
       .from(signups)
       .innerJoin(players, eq(players.id, signups.playerId))
       .where(and(eq(signups.sessionId, id), eq(signups.state, "in"))),
-    getAllRounds(id, session.courtNames, me.locale),
+    getAllRounds(id, session.courtNames, me.locale, { waitingBeyondCourts: session.format === "swiss" }),
     getSessionStandings(id),
     getAttending(id),
   ]);
 
   const mlp = session.format === "mlp" ? await getMlpData(id) : null;
+  const swiss = session.format === "swiss" ? await getSwissView(id, session.swissSeeded) : null;
   const roster = sortByUsername(rosterRows);
+
+  // Before Swiss round 1: complete mutual pairs among the players here.
+  const hereIds = new Set(roster.filter((r) => r.attended).map((r) => r.playerId));
+  const partnerById = new Map(roster.map((r) => [r.playerId, r.partnerId]));
+  const pairedHere = roster.filter((r) =>
+    r.attended && r.partnerId && hereIds.has(r.partnerId) && partnerById.get(r.partnerId) === r.playerId,
+  ).length;
 
   const signedUpIds = new Set(roster.map((r) => r.playerId));
   const notSignedUp = sortByUsername(
@@ -249,7 +260,7 @@ export default async function PlayPage({
         }
       />
       <main className="screen pt-4">
-      {!(mlp && allRounds.length > 0) ? <section className="card">
+      {!((mlp || swiss) && allRounds.length > 0) ? <section className="card">
         <h2 className="text-sm font-medium text-[var(--muted)]">
           {t("play.whosHere", { here: attendingCount, total: roster.length })}
         </h2>
@@ -275,7 +286,7 @@ export default async function PlayPage({
       {mlp ? <MlpSetup key={`${session.maxPlayers}:${session.mlpRandomMixed}:${JSON.stringify(mlp.teams)}`} teamCount={session.maxPlayers/4} sessionId={id} teams={mlp.teams} randomMixed={session.mlpRandomMixed} roster={sortByUsername(attending)} locked={allRounds.length>0 || session.status==="closed"} live={session.status==="live"} canCorrectOpeningPairs={mlp.canCorrectOpeningPairs} /> : null}
 
 
-      {session.format === "fixed" ? (
+      {session.format === "fixed" || swiss ? (
         /*
           Editable while the night is live, not only before it starts. Two
           latecomers who want to play as a pair have to be paired *after* the
@@ -285,7 +296,8 @@ export default async function PlayPage({
         <PartnerPicker
           sessionId={id}
           players={roster.filter((r) => r.attended)}
-          locked={session.status === "closed"}
+          // A Swiss night tracks its pairs from round 1, so they freeze there.
+          locked={session.status === "closed" || (!!swiss && allRounds.length > 0)}
         />
       ) : null}
 
@@ -313,7 +325,18 @@ export default async function PlayPage({
           </>
         ) : session.status === "live" ? (
           <>
-            {!mlp ? <>
+            {swiss ? (
+              <SwissControls
+                sessionId={id}
+                phase={swiss.phase}
+                open={swiss.open}
+                roundsPlayed={swiss.rounds.length}
+                max={swiss.max}
+                pairsReady={swiss.phase === "setup" ? pairedHere / 2 : swiss.pairCount}
+                unpaired={swiss.phase === "setup" ? hereIds.size - pairedHere : 0}
+              />
+            ) : null}
+            {!mlp && !swiss ? <>
             <GenerateRoundButton
               sessionId={id}
               attendingCount={attendingCount}
@@ -397,7 +420,7 @@ export default async function PlayPage({
 
       {allRounds.length === 0 ? (
         <p className="mt-6 text-center text-sm text-[var(--muted)]">
-          {t("play.noMatchesYet")}
+          {t(swiss ? "swiss.noRoundsYet" : "play.noMatchesYet")}
         </p>
       ) : (
         <section className="mt-6 flex flex-col gap-6">
@@ -417,7 +440,7 @@ export default async function PlayPage({
                   <h2 className="text-lg font-semibold">
                     {round.stage === "robin"
                       ? t("play.roundHeading", { index: round.index })
-                      : t(`schedule.stage.${round.stage}`)}
+                      : round.title ?? t(`schedule.stage.${round.stage}`)}
                   </h2>
                   {!mlp && unplayed && round.index === allRounds.length ? (
                     <DiscardRoundButton sessionId={id} roundId={round.id} />
@@ -447,7 +470,11 @@ export default async function PlayPage({
         <MedalBracket bracket={bracket} meId={me.id} locale={me.locale} />
       ) : null}
 
-      {mlp ? null : isFixed ? (
+      {mlp ? null : swiss ? (
+        <div className="mt-6">
+          <SwissPanel view={swiss} meId={me.id} locale={me.locale} />
+        </div>
+      ) : isFixed ? (
         <TeamStandings rows={teamRows} meId={me.id} locale={me.locale} />
       ) : (
         <Standings rows={standings} meId={me.id} backHere={here} locale={me.locale} />

@@ -91,7 +91,7 @@ export async function loadCopySource(
     });
   }
 
-  if (source.format === "fixed") {
+  if (source.format === "fixed" || source.format === "swiss") {
     // Both rows of a pair point at each other; keep each pair once, in roster order.
     const order = new Map(copy.players.map((pid, i) => [pid, i]));
     const seen = new Set<string>();

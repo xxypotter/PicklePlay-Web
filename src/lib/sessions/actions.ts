@@ -10,6 +10,7 @@ import { mlpTeams, rounds, sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { validMlpConfig } from "@/lib/mlp/rules";
+import { validSwissConfig } from "@/lib/swiss/engine";
 
 import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
 import { requireMutableRoster } from "@/lib/mlp/guards";
@@ -19,7 +20,7 @@ import { loadCopySource } from "./copy-source";
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
 const num = (fd: FormData, key: string) => Number(str(fd, key));
 
-const FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
+const FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp", "swiss"] as const;
 type Format = (typeof FORMATS)[number];
 
 /** Server-side caps; the form mirrors these but is not what enforces them. */
@@ -98,6 +99,7 @@ export async function createSessionAction(
   }
 
   if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
+  if (format === "swiss" && !validSwissConfig(courtCount,maxPlayers)) return { error: t("swiss.error.setup") };
 
   /*
    * Players the organizer picked up front are marked in, not merely invited.
@@ -275,7 +277,8 @@ export async function setPartnerAction(sessionId:string,playerId:string,partnerI
   await inTransaction(async db=>{
     await lockSession(db,sessionId);
     const session=await requireMutableRoster(db,sessionId);
-    if(session.format!=="fixed") throw new Error(t("err.pairsLocked"));
+    // Swiss pairs are set the same way; the roster lock above freezes them at round 1.
+    if(session.format!=="fixed" && session.format!=="swiss") throw new Error(t("err.pairsLocked"));
     const bracket=await db.select().from(rounds).where(and(eq(rounds.sessionId,sessionId),sql`${rounds.stage} <> 'robin'`)).limit(1);
     if(bracket.length) throw new Error(t("err.rebuildAfterMedal"));
     const roster=await db.select().from(signups).where(and(eq(signups.sessionId,sessionId),eq(signups.state,"in"),eq(signups.attended,true)));

@@ -16,6 +16,7 @@ import { requireOrganizer, requireScorer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { inTransaction, lockSession } from "@/lib/db/transaction";
 import { guardMlpResultChange } from "@/lib/mlp/guards";
+import { guardSwissResultChange } from "@/lib/swiss/guards";
 import { recomputeAll } from "@/lib/rating/service";
 
 /**
@@ -118,6 +119,8 @@ async function requireLive(sessionId: string): Promise<void> {
     .limit(1);
 
   if (found[0]?.format === "mlp") throw new Error(t("mlp.error.managed"));
+  // Swiss rounds are drawn from results, by the Swiss controls only.
+  if (found[0]?.format === "swiss") throw new Error(t("swiss.error.managed"));
   if (found[0]?.status !== "live") {
     throw new Error(t("err.startFirst"));
   }
@@ -685,6 +688,7 @@ export async function saveScoreAction(
         if(!scope || !canOrganizeSession(me,scope)) throw new Error(t("schedule.error.tie"));
         if(previous.status!=="completed") return;
         await guardMlpResultChange(tx,previous);
+      await guardSwissResultChange(tx,previous);
         await tx.update(matches).set({scoreA:null,scoreB:null,status:"scheduled",enteredBy:null,editedAt:null})
           .where(eq(matches.id,matchId));
         // The row forgets the score; the log keeps what it was and who cleared it.
@@ -695,6 +699,7 @@ export async function saveScoreAction(
       const changed=previous.status!=="completed" || previous.scoreA!==scoreA || previous.scoreB!==scoreB;
       if(!changed) return;
       await guardMlpResultChange(tx,previous);
+      await guardSwissResultChange(tx,previous);
       await tx.update(matches).set({scoreA,scoreB,status:"completed",enteredBy:me.id,
         ...(previous.status==="completed"?{editedAt:new Date()}:{})}).where(eq(matches.id,matchId));
     });
@@ -739,6 +744,7 @@ async function setMatchVoided(matchId: string, voided: boolean): Promise<void> {
     if(previous.status===(voided?"void":"completed")) return;
     if(previous.scoreA===null || previous.scoreB===null) throw new Error(t("err.roundScored"));
     await guardMlpResultChange(tx,previous);
+    await guardSwissResultChange(tx,previous);
     await tx.update(matches).set({status:voided?"void":"completed",editedAt:new Date()}).where(eq(matches.id,matchId));
     await tx.insert(auditLog).values({actorId:me.id,action:voided?"match.void":"match.restore",targetType:"match",targetId:matchId});
   });

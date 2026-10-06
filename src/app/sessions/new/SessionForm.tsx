@@ -12,7 +12,7 @@ import PlayerSearch from "@/components/PlayerSearch";
 import { matchPlayers } from "@/lib/players/search";
 
 /** Keys only — the labels and descriptions come from the dictionary. */
-const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "mlp", "custom"] as const;
+const FORMAT_KEYS = ["regular", "balanced", "gender", "fixed", "swiss", "mlp", "custom"] as const;
 
 import { maxCourtsFor, PLAYERS_PER_COURT } from "@/lib/sessions/limits";
 
@@ -183,6 +183,7 @@ export default function SessionForm({
 
       <div>
         {format === "mlp" ? <MlpTeamCount courts={courts} players={maxPlayersText} onChange={setMaxPlayersText} /> : null}
+        {format === "swiss" ? <p className="hint mb-2">{t("swiss.formHint")}</p> : null}
         <label className="label" htmlFor="maxPlayers">
           {t("form.maxPlayers")}
         </label>
@@ -225,7 +226,16 @@ export default function SessionForm({
               <button
                 key={key}
                 type="button"
-                onClick={() => { setFormat(key); if (key === "mlp" && format !== "mlp") { setCourts("1, 2, 3, 4"); setMaxPlayersText("24"); } }}
+                onClick={() => {
+                  setFormat(key);
+                  if (key === "mlp" && format !== "mlp") { setCourts("1, 2, 3, 4"); setMaxPlayersText("24"); }
+                  // Swiss needs 4–6 courts and 6–12 pairs; eight pairs is the usual night.
+                  if (key === "swiss" && format !== "swiss") {
+                    if (courtCount < 4) setCourts("1, 2, 3, 4");
+                    const n = Number.parseInt(maxPlayersText, 10);
+                    if (!(n >= 12 && n <= 24)) setMaxPlayersText("16");
+                  }
+                }}
                 aria-pressed={on}
                 className={`rounded-xl border p-3 text-left transition ${
                   on
@@ -344,7 +354,7 @@ export default function SessionForm({
           ) : null}
           {copy?.pairs?.length ? (
             <p className="hint">
-              {format === "fixed"
+              {format === "fixed" || format === "swiss"
                 ? t("form.copyPairsKept", { count: pairsKept, total: copy.pairs.length })
                 : t("form.copyPairsDropped")}
             </p>

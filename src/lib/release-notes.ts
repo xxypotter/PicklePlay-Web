@@ -19,6 +19,7 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  { version: "1.9", date: "2026-10-05", notes: ["notes.v19.swiss", "notes.v19.formats"] },
   { version: "1.8", date: "2026-10-04", notes: ["notes.v18.mlpMixed", "notes.v18.mlpDraws", "notes.v18.hideScored", "notes.v18.mlpCourts", "notes.v18.youNamed", "notes.v18.formats"] },
   { version: "1.7", date: "2026-09-27", notes: ["notes.v17.mlp", "notes.v17.mlpLineups", "notes.v17.mlpScores", "notes.v17.mlpBronze", "notes.v17.playerSearch", "notes.v17.backToSetup", "notes.v17.copyPlayers", "notes.v17.fixed", "notes.v17.gender", "notes.v17.safety"] },
   {

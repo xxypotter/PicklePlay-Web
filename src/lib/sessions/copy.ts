@@ -14,7 +14,7 @@
 import { validateTeams } from "@/lib/mlp/rules";
 
 /** The formats the create form offers. Anything else is an old enum value. */
-export const OFFERED_FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp"] as const;
+export const OFFERED_FORMATS = ["regular", "balanced", "gender", "fixed", "custom", "mlp", "swiss"] as const;
 
 import { maxCourtsFor, PLAYERS_PER_COURT } from "./limits";
 export { MAX_COURTS, PLAYERS_PER_COURT } from "./limits";
@@ -114,7 +114,7 @@ export function pairsCarryOver(
   maxPlayers: number,
   invited: readonly string[],
 ): Array<[string, string]> {
-  if (format !== "fixed" || !pairs) return [];
+  if ((format !== "fixed" && format !== "swiss") || !pairs) return [];
   const confirmed = confirmedOf(invited, maxPlayers);
   const used = new Set<string>();
   const kept: Array<[string, string]> = [];

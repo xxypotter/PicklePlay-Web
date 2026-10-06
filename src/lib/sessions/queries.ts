@@ -1,6 +1,8 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { matches, mlpTies, players, ratingEvents, rounds } from "@/lib/db/schema";
+import { matches, mlpTies, players, ratingEvents, rounds, swissPlayoffGames } from "@/lib/db/schema";
+import { playoffLabel } from "@/lib/swiss/labels";
+import type { PlayoffKind } from "@/lib/swiss/engine";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
 
@@ -42,6 +44,8 @@ export interface RoundMatch {
    * order rather than stored, so the bracket has exactly one description.
    */
   stageLabel: string | null;
+  /** Drawn beyond the last court: it starts on whichever court frees up first. */
+  waiting?: boolean;
 }
 
 export interface CurrentRound {
@@ -50,6 +54,8 @@ export interface CurrentRound {
   matches: RoundMatch[];
   /** `robin` unless this is part of a fixed-partner medal round. */
   stage: "robin" | "semifinal" | "final";
+  /** A heading that replaces the stage's own — "Playoffs · round 1" on a Swiss night. */
+  title?: string | null;
 }
 
 /**
@@ -62,6 +68,12 @@ export async function getAllRounds(
   sessionId: string,
   courtNames: string[],
   locale?: string | null,
+  /**
+   * Swiss only: a round can hold more games than courts, drawn past the last
+   * one, and those games wait for whichever court frees up first. Elsewhere a
+   * court number beyond the names keeps its plain number.
+   */
+  options: { waitingBeyondCourts?: boolean } = {},
 ): Promise<CurrentRound[]> {
   const t = await getT(locale);
   const db = getDb();
@@ -79,6 +91,9 @@ export async function getAllRounds(
         courtNo: matches.courtNo,
         mlpGame: matches.mlpGame,
         mixedCrossed: mlpTies.mixedCrossed,
+        swissKind: swissPlayoffGames.kind,
+        swissPlace: swissPlayoffGames.place,
+        swissLeg: swissPlayoffGames.leg,
         a1: matches.a1,
         a2: matches.a2,
         b1: matches.b1,
@@ -89,6 +104,7 @@ export async function getAllRounds(
       })
       .from(matches)
       .leftJoin(mlpTies, eq(mlpTies.id, matches.mlpTieId))
+      .leftJoin(swissPlayoffGames, eq(swissPlayoffGames.matchId, matches.id))
       .where(eq(matches.sessionId, sessionId))
       .orderBy(asc(matches.courtNo)),
   ]);
@@ -125,27 +141,37 @@ export async function getAllRounds(
     return null;
   };
 
-  return roundRows.map((round) => ({
+  return roundRows.map((round) => {
+    const inRound = matchRows.filter((m) => m.roundId === round.id);
+    const swissPlayoff = inRound.some((m) => m.swissKind);
+    return {
     id: round.id,
     index: round.index,
     stage: round.stage,
-    matches: matchRows
-      .filter((m) => m.roundId === round.id)
-      .map((r, position) => ({
+    title: swissPlayoff ? t("swiss.playoffRound", { n: round.stage === "semifinal" ? 1 : 2 }) : null,
+    matches: inRound
+      .map((r, position) => {
+        const waiting = !!options.waitingBeyondCourts && courtNames.length > 0 && (r.courtNo ?? 0) > courtNames.length;
+        return {
         id: r.id,
         stageLabel: r.mlpGame ? t(r.mixedCrossed && r.mlpGame==="mixed1" ? "mlp.mixed1Crossed" :
           r.mixedCrossed && r.mlpGame==="mixed2" ? "mlp.mixed2Crossed" :
-          `mlp.game.${r.mlpGame as "women"|"men"|"mixed1"|"mixed2"}`) : stageLabel(round.stage, position),
+          `mlp.game.${r.mlpGame as "women"|"men"|"mixed1"|"mixed2"}`)
+          : r.swissKind ? playoffLabel(t, r.swissKind as PlayoffKind, r.swissPlace!, r.swissLeg!)
+          : stageLabel(round.stage, position),
         courtNo: r.courtNo,
-        courtLabel: courtLabel(t, courtNames, r.courtNo),
+        courtLabel: waiting ? t("schedule.nextCourt") : courtLabel(t, courtNames, r.courtNo),
+        waiting,
         teamA: [person(r.a1), person(r.a2)],
         teamB: [person(r.b1), person(r.b2)],
         scoreA: r.scoreA,
         scoreB: r.scoreB,
         completed: r.status === "completed",
         voided: r.status === "void",
-      })),
-  }));
+        };
+      }),
+    };
+  });
 }
 
 export interface StandingRow {

@@ -149,11 +149,11 @@ export default function Schedule({
               says nothing about the fact that the night is being decided.
             */}
             {round.stage === "robin"
-              ? t.plural("schedule.round", round.matches.length, {
+              ? t.plural("schedule.round", round.matches.filter((m) => !m.waiting).length, {
                   index: round.index,
-                  count: round.matches.length,
+                  count: round.matches.filter((m) => !m.waiting).length,
                 })
-              : t(`schedule.stage.${round.stage}`)}
+              : round.title ?? t(`schedule.stage.${round.stage}`)}
           </p>
 
           <div className="mt-3 flex flex-col gap-2.5">

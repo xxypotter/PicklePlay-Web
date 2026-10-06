@@ -67,6 +67,7 @@ export const formatEnum = pgEnum("session_format", [
   "custom",
   "gender",
   "mlp",
+  "swiss",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -191,6 +192,8 @@ export const sessions = pgTable(
     format: formatEnum("format").notNull().default("balanced"),
     /** Mini MLP only: choose mixed opponents per encounter, never new partners. */
     mlpRandomMixed: boolean("mlp_random_mixed").notNull().default(false),
+    /** Swiss only: whether round 1 was seeded by pair rating (else random). */
+    swissSeeded: boolean("swiss_seeded").notNull().default(false),
     /** False for a casual night that shouldn't touch anyone's rating. */
     rated: boolean("rated").notNull().default(true),
     /**
@@ -334,6 +337,41 @@ export const matches = pgTable(
     uniqueIndex("matches_mlp_game_idx").on(t.mlpTieId, t.mlpGame),
   ],
 );
+
+/**
+ * Swiss: the pair that sat out a round, which counts as a win for them.
+ *
+ * A bye is not a match — there is no opponent and no score — so it can't live
+ * in `matches`, and it must be stored rather than inferred: a pair missing from
+ * a round could otherwise just as well be a mistake. One per round at most.
+ * Cascades with its round, so discarding a round or going back to setup
+ * leaves nothing behind.
+ */
+export const swissByes = pgTable("swiss_byes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+  roundId: uuid("round_id").notNull().references(() => rounds.id, { onDelete: "cascade" }),
+  player1: uuid("player1").notNull().references(() => players.id, { onDelete: "cascade" }),
+  player2: uuid("player2").notNull().references(() => players.id, { onDelete: "cascade" }),
+}, (t) => [uniqueIndex("swiss_byes_round_idx").on(t.roundId)]);
+
+/**
+ * Swiss playoffs: what each playoff game decides.
+ *
+ * Fixed-partner medal rounds read their meaning from court order, but a Swiss
+ * night plays placement games for every group of four — and more games than
+ * courts — so the role is stored. `kind`: semi (group of four, first wave),
+ * place (decides `place` and `place`+1), series (two games between the same
+ * two pairs for `place`/`place`+1), ladder (the last three pairs on an odd
+ * night). `leg` orders the two series or ladder games.
+ */
+export const swissPlayoffGames = pgTable("swiss_playoff_games", {
+  matchId: uuid("match_id").primaryKey().references(() => matches.id, { onDelete: "cascade" }),
+  sessionId: uuid("session_id").notNull().references(() => sessions.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  place: integer("place").notNull(),
+  leg: integer("leg").notNull().default(1),
+});
 
 // ---------------------------------------------------------------------------
 // Derived caches — rebuilt wholesale by the recompute. Do not hand-edit.

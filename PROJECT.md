@@ -39,6 +39,13 @@ the code that depends on them, after backup and development validation.
   a DreamBreaker winner and note in management. Playoffs require a winner.
   Result notes: mlp_ties.decision_note (0016); no stored draw flag. Downstream
   playoffs lock outcomes, not notes. Score changes clear override and note.
+- Swiss (v1.9): fixed pairs, 6–12 pairs on 4–6 courts. Rounds drawn one at a
+  time by record (CS-style high v low, no rematch, one-round look-ahead), round
+  1 seeded by rating or random, byes count as wins. Playoffs: every group of
+  four plays semis then placement games; remainders play a two-game series or
+  a ladder of three. Pure rules: src/lib/swiss/engine.ts; actions, history,
+  guards, view; UI src/components/swiss/. Migration 0018: format value,
+  sessions.swiss_seeded, swiss_byes, swiss_playoff_games. PORT.md §4.8.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
   Matchups has an optional hide-scored filter, combined with player selection.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.
@@ -79,4 +86,5 @@ individual games). Margin versus expectation drives personal ratings, so a close
 loss can gain rating. Reliability declarations remain as previously approved;
 changing their policy is not part of v1.7. Automatic closure is 48h after startsAt.
 Player capacity normally follows courts (6 per court), maximum 4 courts.
-Mini MLP alone permits 4–6 courts, still capped at 4/5/6 four-player teams.
+Mini MLP permits 4–6 courts, still capped at 4/5/6 four-player teams; Swiss
+permits 4–6 courts for 12–24 players (6–12 pairs).

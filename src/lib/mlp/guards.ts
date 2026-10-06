@@ -9,9 +9,10 @@ export async function requireMutableRoster(db: Transaction, sessionId: string) {
   const t=await getT();
   if(!session) throw new Error(t("err.sessionGone"));
   if(session.status==="closed") throw new Error(t("err.sessionClosed"));
-  if(session.format==="mlp") {
+  if(session.format==="mlp" || session.format==="swiss") {
     const existing=await db.select({id:rounds.id}).from(rounds).where(eq(rounds.sessionId,sessionId)).limit(1);
-    if(existing.length) throw new Error(t("mlp.error.teamsLocked"));
+    // A Swiss night tracks pairs from round 1 to the last place game: nobody joins or leaves.
+    if(existing.length) throw new Error(t(session.format==="mlp" ? "mlp.error.teamsLocked" : "swiss.error.rosterLocked"));
   }
   return session;
 }

@@ -158,6 +158,7 @@ export async function createAllRounds(
   const session = found[0];
   if (!session) throw new Error(t("err.sessionGone"));
   if (session.format === "mlp") throw new Error(t("mlp.error.setup"));
+  if (session.format === "swiss") throw new Error(t("swiss.error.managed"));
 
   const existing = await db
     .select({ index: rounds.index })
@@ -307,6 +308,7 @@ export async function createNextRound(sessionId: string): Promise<{
   const session = found[0];
   if (!session) throw new Error(t("err.sessionGone"));
   if (session.format === "mlp") throw new Error(t("mlp.error.setup"));
+  if (session.format === "swiss") throw new Error(t("swiss.error.managed"));
 
   const attending = await getAttending(sessionId);
   if (attending.length < 4) {

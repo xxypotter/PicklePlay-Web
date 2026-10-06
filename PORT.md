@@ -72,7 +72,13 @@ One row at signup, plus any later self re-seed or admin correction.
 `title`, `location?`, `starts_at`, `court_names` (text array — the *names*, e.g.
 `["3","4"]`, length is the court count), `court_count`, `max_players`, `format`,
 `rated` (false = casual, no rating change), `is_private`, `status`
-(`draft`\|`open`\|`live`\|`closed`), `notes?`, `created_by`.
+(`draft`\|`open`\|`live`\|`closed`), `notes?`, `created_by`. v1.9 adds
+`swiss_seeded` (Swiss: was round 1 seeded by rating).
+
+### swiss_byes, swiss_playoff_games (v1.9)
+A bye row per Swiss round with one (`round_id` unique, two player ids; cascades
+with its round). A role row per Swiss playoff match (`match_id` primary key,
+`kind`, `place`, `leg`; cascades with its match). See §4.8.
 
 ### signups
 `session_id`, `player_id`, `state` (`in`\|`waitlist`\|`out`), `waitlist_pos?`,
@@ -377,9 +383,10 @@ player's history.
 
 ## 4. Match formats and the generators
 
-Six formats offered: **regular**, **balanced**, **gender**, **fixed**,
-**Mini MLP**, **custom** — in that order in the picker (v1.8 moved Mini MLP
-above custom). Mini MLP uses the dedicated team model in §16.
+Seven formats offered: **regular**, **balanced**, **gender**, **fixed**,
+**Swiss**, **Mini MLP**, **custom** — in that order in the picker (v1.8 moved
+Mini MLP above custom; v1.9 added Swiss above Mini MLP). Mini MLP uses the
+dedicated team model in §16; Swiss is §4.8.
 (`king`, `social`, `manual` exist in the enum for old rows; don't offer them.)
 
 Common shape: a round holds one match per court in use;
@@ -588,6 +595,94 @@ Court order carries the bracket, so the labels players see ("Semi-final 1",
 "Gold final") are derived from stage plus court, not stored.
 
 Medal matches rate exactly like any other game.
+
+### 4.8 Swiss — fixed pairs, the record decides the draw (v1.9)
+
+Modelled on the CS Major Swiss stage, minus the eliminations: every pair plays
+every round. It is an alternative to fixed partners' round robin + medal round,
+for nights where a few close rounds beat a full table.
+
+**Setup.** 6–12 fixed pairs (signups.partner_id, mutual, as §4.3), 4–6 courts,
+capacity 12–24. Round 1 refuses until every player marked present has a mutual
+partner. Pairs, attendance, add/remove and RSVP changes lock once round 1 is
+drawn (Back to setup — §5 — unlocks them while nothing is scored). The ordinary
+generators, rebuild and custom rounds are refused for Swiss; only the Swiss
+controls draw rounds.
+
+**Round 1.** The organizer picks **seeded** or **random**. Seeded orders pairs
+by the mean of their two players' current ratings (unrated players count as
+3.0), ties by pair key; random is a cryptographic shuffle. Top half plays bottom
+half: 1 v 5, 2 v 6, 3 v 7, 4 v 8. With an odd count the last pair in the order
+has the bye. Store the choice (web: sessions.swiss_seeded).
+
+**Standings.** Wins (a bye is a win), then Buchholz = the sum of the current
+wins of every opponent actually played (byes add nothing), then point
+difference, then points scored, then the pair key so the order — and therefore
+the next draw — is deterministic. Voided and unscored games count for nothing.
+
+**Later rounds** need every Swiss game so far to have a result. Search every
+perfect matching of the pairs without a rematch (≤ 10,395 for 12 pairs, under a
+millisecond) and keep the lowest cost, compared in order:
+1. Σ (win difference)² — keep records together;
+2. Σ |rank difference| over games between different records — when someone must
+   move group, move them the shortest way;
+3. Σ rank_a × rank_b over same-record games — inside a group, highest plays
+   lowest (1 v 4, 2 v 3), CS-style.
+Look one round ahead: prefer a draw after which another rematch-free round
+still exists. Without it six pairs can strand after three rounds with two
+unplayed triangles. With it, 6–10 pairs can always complete a full round robin
+in Swiss order and 11–12 pairs reach at least nine rounds. If no draw exists,
+tell the organizer to start the playoffs. Hard cap: pairs − 1 rounds (pairs
+for an odd count, since everyone also has one bye).
+
+**Byes** (odd counts): the lowest-ranked pair that has not had one, moving up
+only if the rest can't then be drawn. Never twice for the same pair. Stored per
+round (web: swiss_byes, cascading with the round).
+
+**Court order** is table order, top pair on court 1. A round may have more games
+than courts (12 pairs on 4 courts): the extra games are drawn past the last
+court and labelled "Next free court"; the round heading counts only real courts.
+This label is Swiss-only — elsewhere a court number past the names keeps its
+number.
+
+**Rounds.** The organizer decides how many: suggested 3 for 6–8 pairs, 4 for
+9–12 (eight pairs over three rounds always ends 3–0, three 2–1, three 1–2, 0–3,
+so the top four are exactly the pairs with two or more wins). Playoffs need at
+least two Swiss rounds. The play console makes "Start playoffs" the primary
+button once the suggested rounds are played.
+
+**Playoffs — nobody sits out.** From the final Swiss order, best first:
+- Groups of four from the top: semi-finals (1 v 4, 2 v 3 within the group),
+  then winners play for the group's first place (gold for places 1–2) and
+  losers for its third (bronze for 3–4).
+- An odd count: the last three play a ladder — the two lowest first, then the
+  winner plays the highest of the three for that group's first place; the
+  first game's loser is last. One pair waits in each playoff wave.
+- A remaining two (6 or 10 pairs, or 9 = 4 + 2 + 3): two games against each
+  other; more games won, then total points, then the higher Swiss seed.
+Shapes: 6 = 4+2, 7 = 4+3, 8 = 4+4, 9 = 4+2+3, 10 = 4+4+2, 11 = 4+4+3,
+12 = 4+4+4. Wave 1 (stage semifinal) holds every group's semis, series game 1
+and ladder game 1; wave 2 (stage final) every placement game, series game 2 and
+the ladder's second game. Each game's role is stored (web: swiss_playoff_games:
+kind semi|place|series|ladder, place, leg) because court order can't carry it.
+Labels: "Semi-final 1/2"; "Places 5–8 · semi-final 1"; Gold / Bronze final;
+"Places 5–6"; "Places 9–10 · game 1 of 2"; "Places 5–7 · ladder game 1".
+Round headings read "Playoffs · round 1/2". Final places appear once all decided.
+
+**Locks.** Swiss results can't change once the playoffs exist (they seeded
+them), and first-wave results can't change once wave 2 exists — score entry,
+0–0 clearing and void/restore all refuse. Discarding the unplayed later round
+(the existing last-round discard) unlocks them. Within the Swiss rounds a
+correction is allowed: rounds already drawn stay as drawn and standings update.
+
+**Screens.** Organizer: a Swiss card (pair readiness, seeded/random, draw next
+round, start playoffs, draw finals — each step says what it waits for). Everyone,
+Standings tab: final places, playoffs, the Swiss table (W–L, Buchholz, ±, bye
+marker), then every round grouped by the record going into it (1–0 games
+together, 0–1 together), a pair that moved groups marked "moved across from
+1–1", byes listed. Games show one pair per line so names fit on a phone.
+
+Swiss games rate exactly like any other game; the format adds no rating rule.
 
 ---
 

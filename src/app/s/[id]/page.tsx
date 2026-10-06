@@ -28,6 +28,8 @@ import RsvpButtons, { type MyState } from "./RsvpButtons";
 import MlpCourtHint from "@/components/mlp/MlpCourtHint";
 import MlpBoard from "@/components/mlp/MlpBoard";
 import { getMlpData } from "@/lib/mlp/queries";
+import SwissPanel from "@/components/swiss/SwissPanel";
+import { getSwissView } from "@/lib/swiss/view";
 import Schedule from "./Schedule";
 import ShareLink from "./ShareLink";
 import MedalBracket from "./MedalBracket";
@@ -155,7 +157,7 @@ export default async function SessionPage({
       .leftJoin(playerStats, eq(playerStats.playerId, signups.playerId))
       .where(eq(signups.sessionId, id))
       .orderBy(asc(signups.createdAt)),
-    getAllRounds(id, session.courtNames),
+    getAllRounds(id, session.courtNames, undefined, { waitingBeyondCourts: session.format === "swiss" }),
     getSessionStandings(id),
     headers(),
     getInviteCode(),
@@ -216,6 +218,7 @@ export default async function SessionPage({
    * opens this tab for and the table alone does not answer it.
    */
   const mlp = session.format === "mlp" ? await getMlpData(id) : null;
+  const swiss = session.format === "swiss" ? await getSwissView(id, session.swissSeeded) : null;
   const isFixed = session.format === "fixed";
   const teamRows = isFixed
     ? teamRowsFrom(allRounds, new Map(standings.map((r) => [r.playerId, r.ratingDelta])))
@@ -264,7 +267,9 @@ export default async function SessionPage({
             {bracket ? (
               <MedalBracket bracket={bracket} meId={me?.id} locale={me?.locale} />
             ) : null}
-            {mlp ? <MlpBoard data={mlp} sessionId={id} /> : isFixed ? (
+            {mlp ? <MlpBoard data={mlp} sessionId={id} /> : swiss ? (
+              <SwissPanel view={swiss} meId={me?.id} locale={me?.locale} />
+            ) : isFixed ? (
               <TeamStandings rows={teamRows} meId={me?.id} locale={me?.locale} />
             ) : (
               <Standings rows={standings} meId={me?.id} backHere={backHere} locale={me?.locale} />

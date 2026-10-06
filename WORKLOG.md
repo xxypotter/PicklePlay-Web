@@ -1,5 +1,56 @@
 # Shared work log
 
+## Released: v1.9 Swiss format — Claude, 2026-10-05
+
+Branch claude/v1.9-swiss from main 6f22afa. Reviewed Codex's v1.8 releases
+(courts 4–6, draws/notes, random mixed, hide-scored filter, ops fixes) first:
+no defects found; all 447 tests incl. dev DB passed on 6f22afa. Codex's open
+rating question (self-service DUPR re-seed resets reliability to 0 for an
+established player, e.g. HUI) was reported to the owner and left untouched.
+
+User decisions: Swiss is for fixed pairs, an alternative to RR + medals.
+Everyone plays every round (no CS eliminations); round 1 seeded by rating or
+random (organizer's choice); 6–12 pairs, 4–6 courts, 8 pairs the norm; odd
+count → one bye per round, counts as a win, never twice; standings wins →
+Buchholz → point difference; CS-style high v low inside a record group; no
+late joins or withdrawals; one game per match; playoffs with nobody sitting
+out (groups of four; remainder 2 = two-game series; remainder 3 = ladder);
+organizer decides the number of rounds; document for the iOS app.
+
+- Pure engine src/lib/swiss/engine.ts: standings, firstRound, nextRound
+  (exhaustive matching ≤10,395, cost: Σ win-diff² → float rank distance →
+  Σ rank products; one-round look-ahead so 6–10 pairs can always finish a full
+  round robin), byes, playoff shape/waves/final places. 37 unit tests incl.
+  property tests over thousands of simulated nights for 6–12 pairs.
+- Server: swiss/actions.ts (draw round, start playoffs, draw finals; organizer,
+  session lock, audit), history.ts, guards.ts (results lock once a later stage
+  exists; wired into score entry, 0–0 clear, void/restore), view.ts.
+  Existing code: generators/rebuild/custom rounds refuse Swiss; roster and
+  partners lock at round 1 (requireMutableRoster); setPartner allows Swiss;
+  create/edit/copy validate 4–6 courts and 12–24 players; copy carries pairs.
+- Migration 0018_sloppy_gorgon: session_format 'swiss', sessions.swiss_seeded,
+  swiss_byes (cascade with round), swiss_playoff_games (cascade with match).
+- UI: SwissControls (play console), SwissPanel (final places, playoffs, table,
+  rounds grouped by record, byes) on play page and Standings tab; Matchups
+  labels each playoff game; "Next free court" for games beyond the courts
+  (Swiss-only flag on getAllRounds — Codex's audit pins the plain court number
+  elsewhere); format order Regular, Balanced, Gender, Fixed, Swiss, Mini MLP,
+  Custom; create/edit defaults (4 courts, 16 players) and limits hint.
+- Strings in all three languages; release notes v1.9 (notes.v19.swiss,
+  notes.v19.formats). PORT.md §4.8 + data model, new PORT-v1.9.md, PROJECT.md.
+- Checks: 488 tests incl. all 24 dev DB workflows (new swiss/
+  workflow.integration.test.ts: 8 seeded pairs end-to-end with every lock,
+  7 random pairs with byes and ladder, 12 pairs on 4 courts with waiting games
+  and Back to setup, create validation). Typecheck, lint, build pass.
+- Browser (dev, dev_ana): create form order/defaults/hint; play console pair
+  readiness, partner picker, seeded round 1 on courts 1–4, roster card hidden,
+  rounds 2–3 grouped 1–0/0–1 and 2–0/1–1/0–2 (1v4, 2v3), playoffs primary after
+  3 rounds, semis and Places 5–8 labels, finals Gold/Bronze/Places 5–6/7–8,
+  final places with medals; 375px no overflow; zh-Hant headings. Game rows
+  changed to one pair per line after names truncated on a phone. Fixture
+  session and four temporary dev_ accounts purged (cascades verified empty).
+- Deployment: recorded in the follow-up commit.
+
 ## Released: v1.8 optional random Mini MLP mixed opponents — Codex, 2026-10-04
 
 Branch codex/v1.8-random-mixed from b6d99a4. User requested matching pair
