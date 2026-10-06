@@ -49,7 +49,19 @@ organizer decides the number of rounds; document for the iOS app.
   final places with medals; 375px no overflow; zh-Hant headings. Game rows
   changed to one pair per line after names truncated on a phone. Fixture
   session and four temporary dev_ accounts purged (cascades verified empty).
-- Deployment: recorded in the follow-up commit.
+- Released. Remote main was 6f22afa; rollback tag backup/v1.9-before-swiss
+  (6f22afa) pushed. Sanitized production backup before migrating:
+  local-backups/v1.9-swiss-backup-1791249615600.json (124 players, 27 sessions,
+  641 matches, 1,908 rating events; no PIN hashes/tokens/settings). Migration
+  0018 applied to production; verify snapshot
+  local-backups/v1.9-swiss-verify-1791249633966.json shows all ten source/cache
+  tables unchanged, swiss_seeded false everywhere, both Swiss tables present and
+  empty, 'swiss' in session_format. Script: .scratch/v19-swiss-release.mjs.
+  8e2e6a4 fast-forwarded to main and pushed; GitHub status success; /notes 200
+  with the v1.9 note ~50 s after push; home 200; /api/dev-login 404; the Oct 3
+  Mini MLP renders on all three tabs. No production Swiss session or test data
+  was created. Rollback: the tag restores code, but the additive migration can
+  stay; inspect for Swiss sessions before any schema rollback.
 
 ## Released: v1.8 optional random Mini MLP mixed opponents — Codex, 2026-10-04
 
