@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useT } from "@/lib/i18n/client";
 import { addPlayerAction, removePlayerAction } from "@/lib/sessions/actions";
+import { ActionError, useServerAction } from "@/components/useServerAction";
 import PlayerSearch from "@/components/PlayerSearch";
 import { matchPlayers } from "@/lib/players/search";
 
@@ -38,15 +39,14 @@ export default function RosterEditor({
   maxPlayers: number;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [query, setQuery] = useState("");
 
-  const remove = (playerId: string) =>
-    start(() => void removePlayerAction(sessionId, playerId));
+  const remove = (playerId: string) => run(() => removePlayerAction(sessionId, playerId));
   // Clearing the search after an add leaves it ready for the next name.
   const add = (playerId: string) => {
     setQuery("");
-    start(() => void addPlayerAction(sessionId, playerId));
+    run(() => addPlayerAction(sessionId, playerId));
   };
   const shown = matchPlayers(candidates, query);
 
@@ -57,6 +57,7 @@ export default function RosterEditor({
       <h2 className="text-sm font-medium text-[var(--muted)]">
         {t("form.whosPlaying", { count: playing.length, max: maxPlayers })}
       </h2>
+      <ActionError error={error} />
 
       {playing.length === 0 ? (
         <p className="hint">{t("roster.empty")}</p>
@@ -122,7 +123,7 @@ export default function RosterEditor({
           <summary className="cursor-pointer text-sm font-semibold text-[var(--accent)]">
             {t("roster.add", { count: candidates.length })}
           </summary>
-          {/* Past capacity people still get added — as waitlist, not as a refusal. */}
+          {/* Past capacity people still get added — straight in, the cap grows. */}
           {full ? (
             <p className="hint">{t("roster.fullNote")}</p>
           ) : null}

@@ -180,6 +180,19 @@ export const RATING = {
    */
   MATCH_HALF_LIFE_DAYS: 90,
 
+  /**
+   * A typed reliability fades too (v2.0).
+   *
+   * The reliability copied from DUPR at signup, or set by an admin, used to be
+   * a permanent floor: a player seeded at 100% stayed 100% forever, so a game
+   * moved them by hundredths however badly the number fit their results — HUI
+   * in September 2026 was the live case. DUPR's own reliability decays as the
+   * results behind it age, and a number typed in months ago is no exception.
+   * So a declared floor now halves every 90 days from the day it was typed,
+   * exactly like a match, and only play here can hold confidence up.
+   */
+  DECLARED_FLOOR_HALF_LIFE_DAYS: 90,
+
   /*
    * Reliability follows DUPR's published doubles waypoints. They state that a
    * reliable (60%) doubles rating needs 2+ unique partners and 6+ unique
@@ -286,6 +299,8 @@ export interface Tuning {
   /** Undefined before v1.2, when volume wasn't part of the calculation. */
   VOLUME_AT_60?: number;
   VOLUME_AT_100?: number;
+  /** Undefined before v2.0, when a declared reliability floor never faded. */
+  DECLARED_FLOOR_HALF_LIFE_DAYS?: number;
 }
 
 /**
@@ -407,6 +422,34 @@ export const TUNING_V1_3: Tuning = {
 };
 
 /**
+ * v1.4 — the group-fitted margin curve, before declared reliability floors
+ * were made to fade. Identical to the current constants except that a typed
+ * reliability was a permanent floor.
+ */
+export const TUNING_V1_4: Tuning = {
+  ALPHA: 1.0,
+  D_POINTS: 2.05,
+  K_LAW: "reliability-power",
+  K_BASE: 0.98,
+  K_EXPONENT: 1.06,
+  K_SETTLED: 0.188,
+  HALF_LIFE_SCALE: 40,
+  K_SEED_FLOOR: 0.15,
+  SEED_FLOOR_MATCHES: 5,
+  CAL_MATCHES: 5,
+  CAL_MULT: 1.0,
+  CAP_PROVISIONAL: 0.6,
+  CAP_RELIABLE: 0.5,
+  PROVISIONAL_FLOOR: 2.5,
+  PARTNERS_AT_60: RATING.PARTNERS_AT_60,
+  PARTNERS_AT_100: RATING.PARTNERS_AT_100,
+  TEAMS_AT_60: RATING.TEAMS_AT_60,
+  TEAMS_AT_100: RATING.TEAMS_AT_100,
+  VOLUME_AT_60: RATING.VOLUME_AT_60,
+  VOLUME_AT_100: RATING.VOLUME_AT_100,
+};
+
+/**
  * Every tuning this engine has used, newest first.
  *
  * A match replays under whichever was in force the day it was played, so
@@ -419,9 +462,12 @@ export const TUNING_V1_3: Tuning = {
  * behind it.
  */
 export const TUNING_EPOCHS: ReadonlyArray<{ from: Date; tuning: Tuning }> = [
+  // v2.0 — declared reliability floors fade (90-day half-life).
+  // Last match under v1.4: 2026-10-17T22:07Z.
+  { from: new Date("2026-10-23T00:00:00.000Z"), tuning: RATING },
   // v1.4 — margin curve fitted to this group (D_POINTS 1.33 -> 2.05).
   // Last match under v1.3: 2026-09-21T00:54Z.
-  { from: new Date("2026-09-21T12:00:00.000Z"), tuning: RATING },
+  { from: new Date("2026-09-21T12:00:00.000Z"), tuning: TUNING_V1_4 },
   // v1.3 — the first-five-matches boost dropped, and a floor under provisional
   // ratings. Last match under v1.2: 2026-08-30T23:59Z.
   { from: new Date("2026-08-31T00:00:00.000Z"), tuning: TUNING_V1_3 },

@@ -46,6 +46,19 @@ the code that depends on them, after backup and development validation.
   a ladder of three. Pure rules: src/lib/swiss/engine.ts; actions, history,
   guards, view; UI src/components/swiss/. Migration 0018: format value,
   sessions.swiss_seeded, swiss_byes, swiss_playoff_games. PORT.md §4.8.
+- v2.0 (2026-10-23): refusals from every action are shown under the button
+  (components/useServerAction.tsx) plus app/error.tsx; raising a cap promotes
+  the waitlist (sessions/roster.ts shared helpers); fixed partners needs two
+  pairs before building; Swiss shows a locked notice after round 1; backup
+  schema 3 includes the Swiss tables; weekly cron prunes expired auth tokens
+  and week-old login attempts (auth/housekeeping.ts). Career counts (played,
+  won) are every scored game here, rated or casual, from profile/queries.ts;
+  the "record from elsewhere" import and players.imported_* were removed
+  (migration 0019). Rating: declared reliability floors fade (90-day half-life,
+  epoch 2026-10-23, TUNING_V1_4 keeps the permanent floor for earlier
+  matches); a self re-seed may carry DUPR reliability, capped at 60%.
+  Full recompute on every score is fine until roughly 5,000 matches (695 at
+  v2.0); revisit with an incremental replay after that.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
   Matchups has an optional hide-scored filter, combined with player selection.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.

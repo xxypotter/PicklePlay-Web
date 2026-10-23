@@ -1,5 +1,58 @@
 # Shared work log
 
+## In progress: v2.0 review fixes — Claude, 2026-10-22
+
+Branch claude/v2.0 from main 5294b16 (v1.9). Full review of the app (Codex's
+work included) produced 15 findings; the owner chose: fix 1–8, 9 with an
+optional reliability on self re-seed, 10(b) fading floors, 11–12 as proposed,
+13 weekly cleanup, 14 no change, 15 invite validation + live-only discard, and
+#6 by removing the imported-record feature entirely ("all games need to be
+played here either rated or casual, no more imported record").
+
+- Errors reach the screen: components/useServerAction.tsx (run/pending/error +
+  ActionError) replaces the fire-and-forget transitions in PlayControls,
+  ManualRound, MedalRoundCustom, RsvpButtons, RosterEditor, LanguageCard;
+  app/error.tsx boundary. Strings err.actionFailed, error.title/body/retry.
+- Edit: raising max_players promotes the waitlist under the session lock
+  (helpers promote/resequence/detach moved to sessions/roster.ts, not a "use
+  server" file). Create validates invite ids (err.inviteUnknown). Discard round
+  only while live (err.sessionClosed). Fixed partners needs two pairs
+  (err.needTwoPairs; createNextRound never stores an empty round); buttons
+  disabled with play.partnersNeedTwo. Swiss shows swiss.locked after round 1.
+  "Unscored" on the session page excludes voided games.
+- Backup schema 3 adds swiss_byes and swiss_playoff_games; weekly cron also
+  prunes expired auth tokens and login attempts older than 7 days
+  (auth/housekeeping.ts; checkOnly flag kept).
+- Career = every completed game here (profile/queries.ts completedMatchesOf,
+  careerOf); Me, My rating, record, rankings and admin agree; only the rating
+  ignores casual nights. Import form, admin clear, actions, 20 strings and the
+  players.imported_* columns removed (migration 0019_volatile_loa, applied to
+  pickleplay_dev; production pending the release below).
+- Rating v2.0: RATING.DECLARED_FLOOR_HALF_LIFE_DAYS = 90, new dated epoch
+  2026-10-23 (last match 2026-10-17); TUNING_V1_4 keeps the permanent floor for
+  earlier matches. Engine State.declaredAtMs; self re-seed with a reliability
+  keeps the books and floors at min(declared, 60%); blank = 0 = back to
+  provisional, as before. Replay against production (read-only, opt-in script)
+  reproduced all 2,124 events and 125 ratings bit-identically; a preview game
+  on 2026-10-25 moves 98 rings (14 reliable -> provisional). Rings change only
+  at a player's first scored game after the epoch.
+- Reseed form takes an optional DUPR reliability (reseed.reliability/Hint);
+  wording updated for fading floors (reseed.hint, auth.duprHint,
+  admin.adjustNote, rating.reliabilityExplained). Release notes v2.0 in three
+  languages. PORT.md §2, §3.6, §3.9, §3.10, §5, §7, §8, §10, §15; PORT-v2.0.md;
+  PROJECT.md (recompute revisit threshold ~5,000 matches).
+- Tests: rating/engine-v2.test.ts (10), setup.integration (+3 dev DB),
+  Codex's independent audit double learns execute() and the players read.
+- Browser (dev, dev_ana): Me shows Version 2.0 and career 26/22/85% with no
+  import card; /notes lists v2.0; rating page has the reliability field and
+  new wording (375px: no overflow); fixed session with 0–1 pairs shows the
+  disabled Create button and hint, and a stale tab pressing Create after a
+  pair was split elsewhere shows the server's refusal under the button; Edit
+  raising 4→6 promoted both waiting players in order. Found and fixed a
+  pre-existing dev hydration mismatch: SVG <title> in RatingChart and
+  MarginChart now takes one string child. Fixtures deleted (0 orphans).
+- Checks: typecheck, lint, 500 tests incl. all dev DB workflows, build.
+
 ## Released: v1.9 Swiss format — Claude, 2026-10-05
 
 Branch claude/v1.9-swiss from main 6f22afa. Reviewed Codex's v1.8 releases

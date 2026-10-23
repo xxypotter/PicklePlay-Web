@@ -7,6 +7,7 @@ import TopBar, { safeFrom } from "@/components/TopBar";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
+import { careerOf } from "@/lib/profile/queries";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
 
@@ -37,10 +38,6 @@ export default async function LeaderboardPage({
         provisional: playerStats.provisional,
         selfDeclared: playerStats.selfDeclared,
         localMatches: playerStats.localMatches,
-        wins: playerStats.wins,
-        losses: playerStats.losses,
-        importedMatches: players.importedMatches,
-        importedWins: players.importedWins,
       })
       .from(playerStats)
       .innerJoin(players, eq(players.id, playerStats.playerId))
@@ -56,7 +53,11 @@ export default async function LeaderboardPage({
    */
   const t = await getT(me?.locale);
 
-  const listed = all.filter((r) => r.gender !== "unspecified");
+  // Played and won count every scored game here, rated or casual (v2.0).
+  const career = await careerOf(all.map((r) => r.id));
+  const withCareer = all.map((r) => ({ ...r, played: career.get(r.id)?.played ?? 0, won: career.get(r.id)?.won ?? 0 }));
+
+  const listed = withCareer.filter((r) => r.gender !== "unspecified");
   const rows = active === "all" ? listed : listed.filter((r) => r.gender === active);
   const meOptedOut = !!me && all.some((r) => r.id === me.id && r.gender === "unspecified");
 
@@ -137,10 +138,8 @@ interface Row {
   provisional: boolean;
   selfDeclared: boolean;
   localMatches: number;
-  wins: number;
-  losses: number;
-  importedMatches: number;
-  importedWins: number;
+  played: number;
+  won: number;
 }
 
 const MEDALS = ["🥇", "🥈", "🥉"];
@@ -167,9 +166,8 @@ function Table({
   return (
     <ul className="card-tight overflow-hidden">
       {rows.map((r, i) => {
-        // Career totals: what they brought with them plus what they've done here.
-        const matches = r.importedMatches + r.wins + r.losses;
-        const wins = r.importedWins + r.wins;
+        const matches = r.played;
+        const wins = r.won;
         const rate = matches > 0 ? Math.round((wins / matches) * 100) : null;
 
         return (
@@ -195,13 +193,6 @@ function Table({
             <div className="min-w-0 flex-1">
               <span className="block truncate font-medium">{r.username}</span>
               <p className="text-xs text-[var(--muted)]">
-                {/*
-                  Career totals only. Where they came from is a detail about
-                  one player, and a ranking table is for comparing players —
-                  "· 162 imported" beside one name and not the next invites a
-                  comparison of provenance rather than of results. The record
-                  screen is where that breakdown belongs.
-                */}
                 {matches === 0
                   ? t("rank.noMatches")
                   : t("rank.summary", { played: matches, rate: rate ?? 0 })}

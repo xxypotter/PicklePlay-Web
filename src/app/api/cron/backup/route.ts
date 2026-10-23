@@ -22,6 +22,7 @@ import { getDb } from "@/lib/db";
 import { makeBackup } from "@/lib/db/backup";
 import { auditLog } from "@/lib/db/schema";
 import { closeStaleSessions } from "@/lib/sessions/auto-close";
+import { pruneAuthTables } from "@/lib/auth/housekeeping";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -57,9 +58,12 @@ export async function GET(request: Request) {
 
   // Backstop for the lazy sweep on page loads: if nobody opens the app for a
   // few days, stale sessions still get closed.
-  const autoClosed = new URL(request.url).searchParams.has("check") ? 0 : await closeStaleSessions();
+  const checkOnly = new URL(request.url).searchParams.has("check");
+  const autoClosed = checkOnly ? 0 : await closeStaleSessions();
+  // Same weekly beat: expired login tokens and stale login attempts go too.
+  const pruned = checkOnly ? { tokens: 0, attempts: 0 } : await pruneAuthTables();
 
-  const payload = { ...(await makeBackup()), autoClosedSessions: autoClosed };
+  const payload = { ...(await makeBackup()), autoClosedSessions: autoClosed, pruned };
 
   // Serialize before the configuration check, so a value that can't be encoded
   // fails loudly on every run rather than only once credentials are added.

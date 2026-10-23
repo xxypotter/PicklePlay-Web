@@ -27,19 +27,35 @@ export default function ReseedCard({
         </p>
       ) : (
         <form action={action} className="mt-4 flex flex-col gap-3">
-          <label className="text-xs text-[var(--muted)]">
-            {t("reseed.dupr")}
-            <input
-              name="rating"
-              className="field mt-1"
-              type="number"
-              step="0.001"
-              min={2}
-              max={8}
-              defaultValue={currentRating.toFixed(3)}
-              required
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs text-[var(--muted)]">
+              {t("reseed.dupr")}
+              <input
+                name="rating"
+                className="field mt-1"
+                type="number"
+                step="0.001"
+                min={2}
+                max={8}
+                defaultValue={currentRating.toFixed(3)}
+                required
+              />
+            </label>
+            <label className="text-xs text-[var(--muted)]">
+              {t("reseed.reliability")}
+              <input
+                name="reliability"
+                className="field mt-1"
+                type="number"
+                inputMode="numeric"
+                step="1"
+                min={0}
+                max={100}
+                placeholder={t("common.optional")}
+              />
+            </label>
+          </div>
+          <p className="hint">{t("reseed.reliabilityHint")}</p>
 
           {state.error ? (
             <p role="alert" className="text-sm font-medium text-[var(--danger)]">

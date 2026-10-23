@@ -343,6 +343,7 @@ export default async function PlayPage({
               courtCount={session.courtNames.length}
               roundsSoFar={allRounds.length}
               format={session.format}
+              pairs={teamCount}
             />
 
             {/*
@@ -357,6 +358,7 @@ export default async function PlayPage({
                 courtCount={session.courtNames.length}
                 playedRounds={playedRounds}
                 format={session.format}
+                pairs={teamCount}
               />
             ) : null}
 

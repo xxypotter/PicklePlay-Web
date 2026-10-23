@@ -1,19 +1,21 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireLogin } from "@/lib/auth/permissions";
 import { canSeeSession, canCreatePrivateSession } from "@/lib/auth/policy";
 import type { FormState } from "@/lib/auth/types";
-import { mlpTeams, rounds, sessions, signups } from "@/lib/db/schema";
+import { getDb } from "@/lib/db";
+import { mlpTeams, players, rounds, sessions, signups } from "@/lib/db/schema";
 import { requireOrganizer } from "./guards";
 import { getT } from "@/lib/i18n/server";
 import { validMlpConfig } from "@/lib/mlp/rules";
 import { validSwissConfig } from "@/lib/swiss/engine";
 
-import { inTransaction, lockSession, type Transaction } from "@/lib/db/transaction";
+import { inTransaction, lockSession } from "@/lib/db/transaction";
 import { requireMutableRoster } from "@/lib/mlp/guards";
+import { detach, occupiedPlaces, promote, resequence } from "./roster";
 import { pairsCarryOver, teamsCarryOver } from "./copy";
 import { loadCopySource } from "./copy-source";
 
@@ -25,23 +27,6 @@ type Format = (typeof FORMATS)[number];
 
 /** Server-side caps; the form mirrors these but is not what enforces them. */
 import { maxCourtsFor, PLAYERS_PER_COURT } from "./limits";
-
-/**
- * How many of a session's places are actually taken.
- *
- * Counts people who are confirmed *and* expected to play. Before the night
- * those are the same set, because `attended` defaults to true — the two only
- * diverge once an organizer marks a no-show, and at that moment the place
- * genuinely is free.
- *
- * Counting raw signups instead is what made the play console lie: a player who
- * never turned up kept their seat, so tapping "+ walk-in" silently filed them
- * on the waitlist and they were never scheduled.
- */
-const occupiedPlaces = (sessionId: string) => sql`(
-  select count(*) from ${signups}
-  where session_id = ${sessionId}::uuid and state = 'in' and attended = true
-)`;
 
 export async function createSessionAction(
   _prev: FormState,
@@ -110,6 +95,15 @@ export async function createSessionAction(
    */
   const invited = [...new Set(formData.getAll("invite").map((v) => String(v)).filter(Boolean))]
     .slice(0, 64);
+  // The form only offers real players, but this is a public endpoint: an id
+  // that isn't one would otherwise fail inside the insert as a bare 500.
+  if (invited.length > 0) {
+    const known = await getDb()
+      .select({ id: players.id })
+      .from(players)
+      .where(and(inArray(players.id, invited), eq(players.active, true)));
+    if (known.length !== invited.length) return { error: t("err.inviteUnknown") };
+  }
 
   /*
    * Copy with players also brings the old Mini MLP teams or fixed pairs. They
@@ -204,22 +198,8 @@ export async function rsvpAction(sessionId: string, going: boolean): Promise<voi
   refreshRoster(sessionId);
 }
 
-async function promote(db:Transaction,id:string,cap:number) {
-  await db.execute(sql`update ${signups} set state='in',waitlist_pos=null where id in
-    (select id from ${signups} where session_id=${id}::uuid and state='waitlist' order by created_at,id
-    limit greatest(0,${cap}-${occupiedPlaces(id)}))`);
-}
-async function resequence(db:Transaction,id:string) {
-  await db.execute(sql`update ${signups} s set waitlist_pos=ranked.pos from
-    (select id,row_number() over(order by created_at,id) as pos from ${signups}
-    where session_id=${id}::uuid and state='waitlist') ranked where s.id=ranked.id`);
-}
 function refreshRoster(id:string) {
   revalidatePath(`/s/${id}`); revalidatePath(`/s/${id}/play`); revalidatePath("/");
-}
-async function detach(db:Transaction,id:string,playerId:string) {
-  await db.execute(sql`update ${signups} set partner_id=null where session_id=${id}::uuid
-    and (player_id=${playerId}::uuid or partner_id=${playerId}::uuid)`);
 }
 
 export async function addPlayerAction(sessionId:string,playerId:string):Promise<void> {

@@ -76,10 +76,8 @@ export default async function MarginChart({
           />
         );
       })}
-      <title>
-        Last {shown.length} matches: {wins} won, {shown.length - wins} lost. Bars
-        show the winning or losing margin.
-      </title>
+      {/* One string child: React hydrates a <title> with several text nodes as a mismatch. */}
+      <title>{`Last ${shown.length} matches: ${wins} won, ${shown.length - wins} lost. Bars show the winning or losing margin.`}</title>
     </svg>
   );
 }

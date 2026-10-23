@@ -58,8 +58,6 @@ Postgres. UUID primary keys throughout. The load-bearing rule:
 | `gender` | enum | `male` \| `female` \| `unspecified` — only decides which ranking table you appear in |
 | `avatar` | text? | `preset:N`, a small data URL, or null → colour derived from the name |
 | `locale` | text? | null means "never chose", which is different from "chose English" |
-| `imported_matches` / `imported_wins` | int | a record carried in from before; display only, never touches the rating |
-| `imported_at` | ts? | its presence closes the one-time import |
 | `active` | bool | |
 
 ### rating_seeds — append-only
@@ -283,13 +281,23 @@ opponent is better evidence, but an unknown one still counts for something, or a
 brand-new group could never bootstrap.
 
 `declaredFloor` is the reliability copied from a real DUPR profile at signup,
-trusted at face value in a small group. An admin correction can set it; a
-**self** re-seed clears it and wipes the partner/team books, because changing
-your own number reopens the question of whether it's right.
+trusted at face value in a small group. An admin correction can set it. A
+**self** re-seed with no reliability given clears it and wipes the partner/team
+books, because changing your own number reopens the question of whether it's
+right; a self re-seed that brings DUPR's reliability along (v2.0) sets the
+floor at `min(declared, RELIABILITY_PASS)` — reliable, never settled, so nobody
+can type 100% and freeze their own number — and keeps the books.
+
+**From v2.0 the floor fades** (`DECLARED_FLOOR_HALF_LIFE_DAYS = 90`, dated
+epoch 2026-10-23): `floor = declaredFloor * 0.5^(daysSinceTyped / 90)`. Before
+that it was permanent, which made an admin-set or signup 100% a rating that
+barely moved however badly it fit the results (HUI, September 2026). Only play
+here can hold confidence up; a typed number is a starting statement, not
+evidence. Matches before the epoch replay with the permanent floor.
 
 > Two caveats on `declaredFloor` that we have chosen to live with and you may
-> not want to inherit unexamined — it is unverified, and it never decays. §15.1
-> and §15.3.
+> not want to inherit unexamined — it is unverified, and until v2.0 it never
+> decayed. §15, items 3 and 4.
 
 ### 3.7 Why ALPHA = 1 — the calibration
 
@@ -351,10 +359,12 @@ instead), so a correction stays on the old tuning.
 Verify after any change that replaying real history reproduces stored ratings
 **bit-identically**. That check has caught real mistakes.
 
-> **Do not copy our epoch table.** It carries three historical entries — the
+> **Do not copy our epoch table.** It carries five historical entries — the
 > original constants superseded on 2026-08-10, diversity-only reliability
-> superseded on 2026-08-16, and the first-matches K boost superseded on
-> 2026-08-31 — which describe *this* app's past, not yours. A fresh install has no history to protect, so ship with the
+> superseded on 2026-08-16, the first-matches K boost superseded on
+> 2026-08-31, the DUPR-fitted margin curve superseded on 2026-09-21, and the
+> permanent declared floor superseded on 2026-10-23 — which describe *this*
+> app's past, not yours. A fresh install has no history to protect, so ship with the
 > constants in §3.2–§3.6 as your v1.0 and a single open-ended epoch. Add a
 > second entry the first time you retune, and from then on the guarantee is
 > yours to keep. The machinery matters; our dates do not.
@@ -377,7 +387,8 @@ pick the middle rung, so putting it too high starts newcomers above established
 members.
 
 Self re-seed is allowed **once every 30 days** and is recorded publicly in the
-player's history.
+player's history. From v2.0 it takes an optional DUPR reliability, stored and
+applied capped at 60% (§3.6); left blank, the rating goes back to provisional.
 
 ---
 
@@ -708,6 +719,13 @@ entry takes the same lock), sets the session back to open and audits
 lineups, and fixed pairs are kept. The button asks for confirmation when a draw
 exists; with results it only explains how to clear them (below).
 
+**Raising the player limit promotes the waitlist** (v2.0): editing `max_players`
+upward moves waiting players in, in join order, under the session lock — the
+same promotion that already ran when someone dropped out. **Fixed partners
+needs two pairs** before any round is built; the request is refused rather than
+stored as an empty round. **Discarding a round** is only offered on a live
+session.
+
 A session auto-closes **48 hours** after its start time, so a night nobody ended
 doesn't linger in Upcoming. It was 24, which was too tight: closing narrows
 scoring to the organizer, so an early auto-close takes the pen out of the hands
@@ -906,6 +924,15 @@ Three separate things were needed, and all three matter:
 Reconcile in place rather than remounting — a full reload courtside loses scroll
 position and any half-entered score.
 
+### Refusals are shown, not swallowed (v2.0)
+
+Every action explains its refusals; until v2.0 almost none of those sentences
+reached the screen — a button that fired its action and forgot the promise did
+nothing, and one that awaited it threw the page to the framework's blank error
+screen. Every button now runs its action through one helper that shows the
+message under the control, and an `error.tsx` boundary offers "Try again" and
+Home. A native app should do the same: the server's message is the UI.
+
 ### Two-tap confirmation
 Used instead of modal dialogs. First tap arms and relabels the button
 ("Tap again to delete X"), second acts, and it **disarms after acting** — else
@@ -919,7 +946,11 @@ Read from `matches`, **not** from rating events: rating events only exist for
 rated sessions, so reading history from them silently drops every casual night.
 If it was played and scored, it counts here.
 
-Career totals = imported + played here. Shown: played, won, lost, win rate.
+Career totals = every scored game played here, rated or casual (v2.0; the
+same figure on Me, My rating, Rankings and the record — only the rating
+ignores casual nights). Shown: played, won, lost, win rate. The v1.x "record
+from elsewhere" import was removed in v2.0; nothing counts that wasn't played
+here.
 
 **Fun facts**, each needing **at least 3 games together** so one lucky night
 doesn't decide it: best partner (highest win rate with), owns the head-to-head
@@ -953,9 +984,7 @@ showing a misleading 0.000.
 One list, sorted by rating descending. Tabs All / Boy / Girl — gender only
 decides which table you appear in; "Not listed" keeps you out entirely.
 
-Shows career played and win rate. **Not** the imported breakdown — a ranking
-table is for comparing players, and a provenance note beside one name and not
-the next invites the wrong comparison. That belongs on the record page.
+Shows career played and win rate — every scored game here, rated or casual.
 
 A `?` after the rating means still settling (reliability < 60%), with a footnote
 explaining it. It returns on every self re-seed.
@@ -1124,19 +1153,25 @@ A player's *first ever* session left them at **2.063** against a `MIN` of 2.000,
 on eight games of evidence. `PROVISIONAL_FLOOR = 2.5` now catches that; see
 §3.5. Replaying the same night under the new tuning puts them at 2.500 instead.
 
-### Still open — leave them alone unless asked
+### Answered later, in v2.0
 
 **3. An admin rating correction can also grant 100% reliability, permanently.**
 One form does two very different things: correcting someone's number, and
 declaring them fully settled. Three players were re-seeded to 100% this way.
-Because `declaredFloor` never decays, their K drops to ~0.157 and results can
+Because `declaredFloor` never decayed, their K dropped to ~0.157 and results could
 barely move them again; in one case a re-seed also superseded eight matches of
 contrary evidence. Consider separating the two fields, or capping an
 admin-granted floor below 100% so results always retain some pull.
 
 **4. A declared reliability can never be earned back down.** It is a free-text
-field at signup, unverified, and `max(declaredFloor, …)` makes it permanent.
-Nine players sit at 100%. Even DUPR decays reliability when you stop playing.
+field at signup, unverified, and `max(declaredFloor, …)` made it permanent.
+Nine players sat at 100%. Even DUPR decays reliability when you stop playing.
+
+**v2.0 (2026-10-23) answered 3 and 4 the same way:** the declared floor fades
+with a 90-day half-life from the day it was typed (§3.6), so a typed 100% is
+worth 50% after three months and about 6% after a year unless play here holds
+the number up. Admin corrections keep the full range; a self re-seed may carry
+DUPR's reliability, capped at 60%. Matches before the epoch replay unchanged.
 
 ### The one that was never a bug
 

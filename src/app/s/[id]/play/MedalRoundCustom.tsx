@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import Avatar from "@/components/Avatar";
 import { useT } from "@/lib/i18n/client";
 import { createCustomMedalRoundAction } from "@/lib/sessions/play-actions";
+import { ActionError, useServerAction } from "@/components/useServerAction";
 
 export interface MedalTeam {
   /** Both player ids, sorted — the same key the standings use. */
@@ -34,7 +35,7 @@ export default function MedalRoundCustom({
   teams: MedalTeam[];
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [open, setOpen] = useState(false);
   const [armed, setArmed] = useState(false);
 
@@ -100,8 +101,7 @@ export default function MedalRoundCustom({
         string,
       ];
     });
-    start(async () => {
-      await createCustomMedalRoundAction(sessionId, stage, pairings);
+    run(() => createCustomMedalRoundAction(sessionId, stage, pairings), () => {
       reset();
       setOpen(false);
     });
@@ -179,6 +179,7 @@ export default function MedalRoundCustom({
         })}
       </div>
 
+      <ActionError error={error} />
       <div className="mt-3 flex gap-2">
         <button
           type="button"

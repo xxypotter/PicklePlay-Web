@@ -4,7 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import Avatar, { PRESET_COLORS, initialsOf } from "@/components/Avatar";
 import type { FormState } from "@/lib/auth/types";
 import { useT } from "@/lib/i18n/client";
-import { importRecordAction, setAvatarAction, setGenderAction } from "@/lib/profile/actions";
+import { setAvatarAction, setGenderAction } from "@/lib/profile/actions";
 import type { T } from "@/lib/i18n/translate";
 
 /**
@@ -209,107 +209,6 @@ export function GenderCard({ gender }: { gender: string }) {
       <button type="submit" disabled={pending} className="btn-primary mt-4">
         {pending ? t("common.saving") : t("common.save")}
       </button>
-    </form>
-  );
-}
-
-export function ImportRecordCard({
-  importedMatches,
-  importedWins,
-  locked,
-  playedHere,
-}: {
-  importedMatches: number;
-  importedWins: number;
-  locked: boolean;
-  playedHere: number;
-}) {
-  const t = useT();
-  const [state, action, pending] = useActionState(importRecordAction, {} as FormState);
-
-  if (locked) {
-    const losses = importedMatches - importedWins;
-    const rate = importedMatches > 0 ? Math.round((importedWins / importedMatches) * 100) : 0;
-    return (
-      <section className="card mt-3">
-        <h2 className="text-sm text-[var(--muted)]">{t("import.title")}</h2>
-        <p className="mt-2 text-lg font-bold">
-          {t.rich("import.summary", {
-            matches: (
-              <span key="m" className="text-[var(--accent)]">
-                {importedMatches}
-              </span>
-            ),
-            rate: (
-              <span key="r" className="text-[var(--accent)]">
-                {rate}
-              </span>
-            ),
-          })}
-        </p>
-        <p className="hint">
-          {t("import.detail", {
-            won: importedWins,
-            lost: losses,
-          })}
-        </p>
-      </section>
-    );
-  }
-
-  if (playedHere > 0) {
-    return (
-      <section className="card mt-3">
-        <h2 className="text-sm text-[var(--muted)]">{t("import.title")}</h2>
-        <p className="hint mt-2">{t("import.playedHere")}</p>
-      </section>
-    );
-  }
-
-  return (
-    <form action={action} className="card mt-3">
-      <h2 className="text-sm text-[var(--muted)]">{t("import.formTitle")}</h2>
-      <p className="hint">{t("import.formHint")}</p>
-
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <label className="text-xs text-[var(--muted)]">
-          {t("import.matches")}
-          <input
-            name="matches"
-            className="field mt-1"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={10000}
-            placeholder="162"
-            required
-          />
-        </label>
-        <label className="text-xs text-[var(--muted)]">
-          {t("import.winRatePercent")}
-          <input
-            name="winRate"
-            className="field mt-1"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={100}
-            placeholder="59"
-            required
-          />
-        </label>
-      </div>
-
-      {state.error ? (
-        <p role="alert" className="mt-3 text-sm font-medium text-[var(--danger)]">
-          {state.error}
-        </p>
-      ) : null}
-
-      <button type="submit" disabled={pending} className="btn-primary mt-4">
-        {pending ? t("common.saving") : t("import.save")}
-      </button>
-      <p className="hint text-center">{t("import.onceOnly")}</p>
     </form>
   );
 }

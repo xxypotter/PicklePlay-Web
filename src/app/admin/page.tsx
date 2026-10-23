@@ -16,6 +16,7 @@ import { sortByUsername } from "@/lib/players/sort";
 import { auditLog, players, playerStats } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import { getInviteCode } from "@/lib/invite";
+import { careerOf } from "@/lib/profile/queries";
 import BackupCard from "./BackupCard";
 import DeletedSessions, { type DeletionEntry } from "./DeletedSessions";
 import InviteCard from "./InviteCard";
@@ -66,8 +67,6 @@ export default async function AdminPage() {
         provisional: playerStats.provisional,
         selfDeclared: playerStats.selfDeclared,
         localMatches: playerStats.localMatches,
-        importedMatches: players.importedMatches,
-        importedWins: players.importedWins,
       })
       .from(players)
       .leftJoin(playerStats, eq(playerStats.playerId, players.id))
@@ -89,7 +88,8 @@ export default async function AdminPage() {
    * for someone under a rule you don't know. Same ordering as every other
    * player list in the app.
    */
-  const roster = sortByUsername(rosterRows);
+  const career = await careerOf(rosterRows.map((p) => p.id));
+  const roster = sortByUsername(rosterRows.map((p) => ({ ...p, played: career.get(p.id)?.played ?? 0 })));
 
   const lastBackup = lastBackupRow[0]
     ? {

@@ -11,6 +11,8 @@ import { matches, players, playerStats, ratingEvents, ratingSeeds } from "@/lib/
 import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { getT } from "@/lib/i18n/server";
 import { RESEED_COOLDOWN_DAYS } from "@/lib/rating/constants";
+import { summariseRecord } from "@/lib/profile/record";
+import { completedMatchesOf } from "@/lib/profile/queries";
 import ReseedCard from "./ReseedCard";
 
 import { titleFor } from "@/lib/i18n/metadata";
@@ -55,8 +57,6 @@ export default async function ProfilePage({
       displayName: players.displayName,
       role: players.role,
       createdAt: players.createdAt,
-      importedMatches: players.importedMatches,
-      importedWins: players.importedWins,
     })
     .from(players)
     .where(eq(players.usernameLower, decodeURIComponent(username).toLowerCase()))
@@ -65,7 +65,7 @@ export default async function ProfilePage({
   const player = found[0];
   if (!player) notFound();
 
-  const [me, statsRow, history, seeds] = await Promise.all([
+  const [me, statsRow, history, seeds, played] = await Promise.all([
     getCurrentPlayer(),
     db.select().from(playerStats).where(eq(playerStats.playerId, player.id)).limit(1),
     db
@@ -97,10 +97,13 @@ export default async function ProfilePage({
       .from(ratingSeeds)
       .where(eq(ratingSeeds.playerId, player.id))
       .orderBy(desc(ratingSeeds.effectiveAt)),
+    completedMatchesOf(player.id),
   ]);
 
   const t = await getT(me?.locale);
   const stats = statsRow[0];
+  // Every game played here, rated or casual. Only the rating ignores casual nights.
+  const career = summariseRecord(player.id, played);
   const isMe = me?.id === player.id;
 
   const chartPoints = history.map((h) => h.ratingAfter);
@@ -141,11 +144,8 @@ export default async function ProfilePage({
   const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
   const avgPartner = mean(partnerRatings);
   const avgOpponent = mean(opponentRatings);
-  // Career = what they brought with them plus what they've done here, matching
-  // how the leaderboard and Me both count it.
-  const careerMatches =
-    player.importedMatches + (stats?.wins ?? 0) + (stats?.losses ?? 0);
-  const careerWins = player.importedWins + (stats?.wins ?? 0);
+  const careerMatches = career.played;
+  const careerWins = career.won;
   const careerRate =
     careerMatches > 0 ? Math.round((careerWins / careerMatches) * 100) : null;
 
@@ -214,16 +214,6 @@ export default async function ProfilePage({
             <p className="hint">{t("rating.reliable")}</p>
           ) : null}
 
-          {player.importedMatches > 0 ? (
-            <p className="hint">
-              {t("rating.importedNote", {
-                imported: player.importedMatches,
-                wins: player.importedWins,
-                here: stats?.localMatches ?? 0,
-              })}
-            </p>
-          ) : null}
-
           {/*
             Reliability needs saying in words somewhere, and this is the screen
             that owns it. The ring alone reads as a fourth performance stat, and
@@ -237,16 +227,16 @@ export default async function ProfilePage({
 
           <p className="hint">{t("rating.winRateCaveat")}</p>
 
-          {stats && stats.localMatches > 0 ? (
+          {career.played > 0 ? (
             <p className="hint">
-              {stats.streak > 0
-                ? t("rating.streakWin", { count: stats.streak })
-                : stats.streak < 0
-                  ? t("rating.streakLoss", { count: -stats.streak })
+              {career.currentStreak > 0
+                ? t("rating.streakWin", { count: career.currentStreak })
+                : career.currentStreak < 0
+                  ? t("rating.streakLoss", { count: -career.currentStreak })
                   : ""}{" "}
               {t("rating.pointDiff", {
-                diff: `${stats.pointsFor - stats.pointsAgainst >= 0 ? "+" : ""}${
-                  stats.pointsFor - stats.pointsAgainst
+                diff: `${career.pointsFor - career.pointsAgainst >= 0 ? "+" : ""}${
+                  career.pointsFor - career.pointsAgainst
                 }`,
               })}
             </p>

@@ -53,6 +53,8 @@ export interface RecordSummary {
   biggestWin: MyMatch | null;
   heaviestLoss: MyMatch | null;
   longestWinStreak: number;
+  /** Positive for a run of wins, negative for a run of losses, as of the last game. */
+  currentStreak: number;
   partners: HeadToHead[];
   opponents: HeadToHead[];
 }
@@ -145,6 +147,7 @@ export function summariseRecord(playerId: string, all: PlayedMatch[]): RecordSum
       ? losses.reduce((worst, m) => (m.margin < worst.margin ? m : worst))
       : null,
     longestWinStreak,
+    currentStreak: streak,
     partners: toList(partners),
     opponents: toList(opponents),
   };

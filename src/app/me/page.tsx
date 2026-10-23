@@ -13,7 +13,9 @@ import LanguageCard from "@/components/LanguageCard";
 import { CURRENT_VERSION } from "@/lib/release-notes";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
-import { AvatarCard, GenderCard, ImportRecordCard } from "./ProfileCards";
+import { summariseRecord } from "@/lib/profile/record";
+import { completedMatchesOf } from "@/lib/profile/queries";
+import { AvatarCard, GenderCard } from "./ProfileCards";
 
 import { titleFor } from "@/lib/i18n/metadata";
 
@@ -26,29 +28,23 @@ export default async function MePage() {
   const t = await getT(me.locale);
   const locale = await getLocale(me.locale);
   const db = getDb();
-  const [statsRow, profileRow] = await Promise.all([
+  const [statsRow, profileRow, played] = await Promise.all([
     db.select().from(playerStats).where(eq(playerStats.playerId, me.id)).limit(1),
     db
-      .select({
-        avatar: players.avatar,
-        gender: players.gender,
-        importedMatches: players.importedMatches,
-        importedWins: players.importedWins,
-        importedAt: players.importedAt,
-      })
+      .select({ avatar: players.avatar, gender: players.gender })
       .from(players)
       .where(eq(players.id, me.id))
       .limit(1),
+    completedMatchesOf(me.id),
   ]);
 
   const stats = statsRow[0];
   const profile = profileRow[0];
 
-  // Career = what they brought with them plus what they've done here.
-  const localWins = stats?.wins ?? 0;
-  const localDecided = localWins + (stats?.losses ?? 0);
-  const careerMatches = (profile?.importedMatches ?? 0) + localDecided;
-  const careerWins = (profile?.importedWins ?? 0) + localWins;
+  // Every game played here, rated or casual — the same count as on My record.
+  const career = summariseRecord(me.id, played);
+  const careerMatches = career.played;
+  const careerWins = career.won;
   const winRate = careerMatches > 0 ? Math.round((careerWins / careerMatches) * 100) : 0;
 
   return (
@@ -58,7 +54,7 @@ export default async function MePage() {
       <main className="screen pt-4">
         {/*
           Name and rating on one line, then the four numbers. Everything that
-          needs a sentence to explain it — imported counts, what provisional
+          needs a sentence to explain it — casual nights, what provisional
           means, where the rating came from — lives on My rating instead. This
           screen is the one you glance at.
         */}
@@ -117,12 +113,6 @@ export default async function MePage() {
         <LanguageCard current={locale} />
         <AvatarCard username={me.username} avatar={profile?.avatar ?? null} />
         <GenderCard gender={profile?.gender ?? "unspecified"} />
-        <ImportRecordCard
-          importedMatches={profile?.importedMatches ?? 0}
-          importedWins={profile?.importedWins ?? 0}
-          locked={!!profile?.importedAt}
-          playedHere={stats?.localMatches ?? 0}
-        />
 
         {/*
           The version sits with Log out rather than in the shortcut grid: it is

@@ -99,15 +99,8 @@ export const players = pgTable(
      * lets the browser's own preference decide.
      */
     locale: text("locale"),
-    /**
-     * Record carried over from wherever they played before. Display only — it
-     * never touches the rating engine, which knows about matches played here
-     * and nothing else. Losses are derived as matches minus wins.
-     */
-    importedMatches: integer("imported_matches").notNull().default(0),
-    importedWins: integer("imported_wins").notNull().default(0),
-    /** Set the first time a record is imported; its presence closes the door. */
-    importedAt: timestamp("imported_at", { withTimezone: true }),
+    // v2.0 removed the "record from elsewhere" (imported_matches/wins/at):
+    // every game that counts here was played here, rated or casual.
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

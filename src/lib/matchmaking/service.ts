@@ -178,6 +178,11 @@ export async function createAllRounds(
    * the whole point of the format, and quietly inventing a partner for them
    * would be a worse surprise than leaving them out.
    */
+  // Fixed partners plays pairs, so it needs two of them, not four players.
+  // Without this the generator returned no courts and the rounds were stored
+  // empty — "7 rounds" of nothing.
+  if (format === "fixed" && pairsFrom(attending).length < 2) throw new Error(t("err.needTwoPairs"));
+
   if (format === "fixed" && existing.length === 0) {
     const pairs = pairsFrom(attending);
     if (pairs.length >= 2) {
@@ -319,6 +324,11 @@ export async function createNextRound(sessionId: string): Promise<{
   const round = session.format === "fixed" ? fixedRound(attending, session.courtCount, history) : generateRound(attending, session.courtCount, history, {
     format: toGeneratorFormat(session.format),
   });
+  // A round with no courts is not a round. Fixed partners gets here with fewer
+  // than two pairs; nothing else can, but an empty row is never worth storing.
+  if (round.courts.length === 0) {
+    throw new Error(t(session.format === "fixed" ? "err.needTwoPairs" : "err.needFourPresent"));
+  }
 
   const last = await db
     .select({ index: rounds.index })

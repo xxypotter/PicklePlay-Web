@@ -1,6 +1,6 @@
 import { asc, getTableColumns, sql } from "drizzle-orm";
 import { inTransaction } from "./transaction";
-import { matches, mlpTeams, mlpTies, players, ratingSeeds, rounds, sessions, signups } from "./schema";
+import { matches, mlpTeams, mlpTies, players, ratingSeeds, rounds, sessions, signups, swissByes, swissPlayoffGames } from "./schema";
 
 /** Consistent recovery snapshot; excludes authentication and invite secrets. */
 export async function makeBackup() {
@@ -18,8 +18,12 @@ export async function makeBackup() {
       mlpTeams:await db.select().from(mlpTeams).orderBy(asc(mlpTeams.slot)),
       mlpTies:await db.select().from(mlpTies).orderBy(asc(mlpTies.index)),
       matches:await db.select().from(matches).orderBy(asc(matches.playedAt)),
+      // Swiss nights keep their byes and playoff roles outside `matches`;
+      // without these a restore would lose who sat out and who played for what.
+      swissByes:await db.select().from(swissByes).orderBy(asc(swissByes.sessionId)),
+      swissPlayoffGames:await db.select().from(swissPlayoffGames).orderBy(asc(swissPlayoffGames.sessionId)),
     };
-    return {schema:2,takenAt:new Date().toISOString(),
+    return {schema:3,takenAt:new Date().toISOString(),
       note:"Restore sources in dependency order, reset PINs and invite code, then recompute rating caches. Auth tokens, PIN hashes, settings, login attempts and audit details are intentionally excluded.",
       counts:Object.fromEntries(Object.entries(data).map(([k,v])=>[k,v.length])),...data};
   });

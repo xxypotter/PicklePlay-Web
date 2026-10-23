@@ -24,8 +24,11 @@ export interface SeedEvent {
   /** Declared rating — a real DUPR, a skill-picker value, or an admin override. */
   rating: number;
   /**
-   * Declared reliability, 0-100, copied from the player's real DUPR profile at
-   * signup. Trusted on the initial seed and ignored on any later one (§5.7).
+   * Declared reliability, 0-100, copied from the player's real DUPR profile.
+   * Trusted on the initial seed and on an admin correction. On a self re-seed
+   * (v2.0) it is accepted up to RELIABILITY_PASS — enough to say "DUPR already
+   * knows this player", never enough to freeze the number — and zero means
+   * the player gave none, which puts them back to provisional.
    */
   declaredReliability: number;
   /** True for the signup seed, false for any later re-seed (§5.8). */
@@ -225,8 +228,9 @@ interface State {
    */
   partners: Map<string, Encounter>;
   teams: Map<string, Encounter>;
-  /** Trusted declared reliability from signup, 0-1. Zero once self-re-seeded. */
+  /** Trusted declared reliability, 0-1, and when it was typed (for fading). */
   declaredFloor: number;
+  declaredAtMs: number | null;
   localMatches: number;
   wins: number;
   losses: number;
@@ -337,7 +341,17 @@ function reliabilityAt(state: State, nowMs: number, tuning: Tuning): number {
       ? 1
       : waypoint(halfLifeAt(state, nowMs), tuning.VOLUME_AT_60, tuning.VOLUME_AT_100);
 
-  return Math.max(state.declaredFloor, Math.min(partners, teams, volume));
+  /*
+   * The typed floor fades from the day it was typed (v2.0, epoch-gated so
+   * earlier matches replay exactly as they were scored). Before that it was
+   * permanent — see §3.6 of PORT.md for why that was wrong.
+   */
+  const floor =
+    tuning.DECLARED_FLOOR_HALF_LIFE_DAYS !== undefined && state.declaredAtMs !== null
+      ? state.declaredFloor * decayFactor(state.declaredAtMs, nowMs, tuning.DECLARED_FLOOR_HALF_LIFE_DAYS)
+      : state.declaredFloor;
+
+  return Math.max(floor, Math.min(partners, teams, volume));
 }
 
 const isProvisional = (reliability: number) => reliability < RATING.RELIABILITY_PASS;
@@ -368,6 +382,7 @@ function newState(rating: number): State {
     partners: new Map(),
     teams: new Map(),
     declaredFloor: 0,
+    declaredAtMs: null,
     localMatches: 0,
     wins: 0,
     losses: 0,
@@ -408,6 +423,7 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
          * means they start unproven rather than penalised.
          */
         s.declaredFloor = clamp(event.declaredReliability, 0, 100) / 100;
+        s.declaredAtMs = atMs;
       } else if (!event.selfInitiated) {
         /*
          * An admin correction. Someone else vouched for the number, so it
@@ -417,17 +433,29 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
          */
         if (event.declaredReliability > 0) {
           s.declaredFloor = clamp(event.declaredReliability, 0, 100) / 100;
+          s.declaredAtMs = atMs;
         }
+      } else if (event.declaredReliability > 0) {
+        /*
+         * A self re-seed that brings DUPR's reliability along (v2.0). DUPR has
+         * results behind that number, so it counts as a floor — but only up to
+         * "reliable", never "settled": a player must not be able to type 100%
+         * and freeze their own rating. Evidence earned here is kept.
+         */
+        s.declaredFloor = Math.min(clamp(event.declaredReliability, 0, 100) / 100, RATING.RELIABILITY_PASS);
+        s.declaredAtMs = atMs;
       } else {
         /*
-         * Changing your own rating puts a new, unverified number on the board,
-         * so it goes back to provisional and has to be earned again — however
-         * much play stood behind the *previous* number.
+         * Changing your own rating with no reliability behind it puts a new,
+         * unverified number on the board, so it goes back to provisional and
+         * has to be earned again — however much play stood behind the
+         * *previous* number.
          *
          * The match record is untouched: those games really happened. Only the
          * evidence that this particular figure is right is reset.
          */
         s.declaredFloor = 0;
+        s.declaredAtMs = null;
         s.partners.clear();
         s.teams.clear();
       }

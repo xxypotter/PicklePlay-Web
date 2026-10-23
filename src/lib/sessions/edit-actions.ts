@@ -1,6 +1,8 @@
 "use server";
 
 import { and, eq, sql } from "drizzle-orm";
+import { inTransaction, lockSession } from "@/lib/db/transaction";
+import { promote, resequence } from "./roster";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -108,22 +110,35 @@ export async function updateSessionAction(
   if (format === "mlp" && !validMlpConfig(courtCount,maxPlayers)) return { error: t("mlp.error.setup") };
   if (format === "swiss" && !validSwissConfig(courtCount,maxPlayers)) return { error: t("swiss.error.setup") };
 
-  const updated = await db
-    .update(sessions)
-    .set({
-      title,
-      location: str(formData, "location") || null,
-      startsAt,
-      courtNames,
-      courtCount,
-      maxPlayers,
-      format,
-      rated: formData.get("rated") !== null,
-      notes: str(formData, "notes") || null,
-    })
-    .where(and(eq(sessions.id, sessionId), eq(sessions.status, "open")))
-    .returning({ id: sessions.id });
-  // Starting from another screen must not let a stale edit change drawn courts.
+  /*
+   * Under the session lock, like every other roster write: raising the cap
+   * frees places, and the people waiting for them should get them now rather
+   * than when somebody else happens to drop out. The conditional UPDATE still
+   * guards against a Start from another screen changing drawn courts.
+   */
+  const updated = await inTransaction(async (tx) => {
+    await lockSession(tx, sessionId);
+    const rows = await tx
+      .update(sessions)
+      .set({
+        title,
+        location: str(formData, "location") || null,
+        startsAt,
+        courtNames,
+        courtCount,
+        maxPlayers,
+        format,
+        rated: formData.get("rated") !== null,
+        notes: str(formData, "notes") || null,
+      })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.status, "open")))
+      .returning({ id: sessions.id });
+    if (rows.length) {
+      await promote(tx, sessionId, maxPlayers);
+      await resequence(tx, sessionId);
+    }
+    return rows;
+  });
   if (!updated.length) return { error: t("err.sessionStarted") };
 
   revalidatePath(`/s/${sessionId}`);

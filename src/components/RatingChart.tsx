@@ -63,9 +63,8 @@ export default async function RatingChart({
         vectorEffect="non-scaling-stroke"
       />
       <circle cx={x(points.length - 1)} cy={y(last)} r="3.5" fill="var(--accent)" />
-      <title>
-        {rising ? "Up" : "Down"} from {points[0].toFixed(3)} to {last.toFixed(3)}
-      </title>
+      {/* One string child: React hydrates a <title> with several text nodes as a mismatch. */}
+      <title>{`${rising ? "Up" : "Down"} from ${points[0].toFixed(3)} to ${last.toFixed(3)}`}</title>
     </svg>
   );
 }

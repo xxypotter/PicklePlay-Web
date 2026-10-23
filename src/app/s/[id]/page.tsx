@@ -209,7 +209,8 @@ export default async function SessionPage({
   const canScoreMine = !!me && canScoreMatch(me, session, true);
   const spotsLeft = Math.max(0, session.maxPlayers - playing.length);
 
-  const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed).length;
+  // A voided match isn't waiting for a score; it has been taken out.
+  const unscored = allRounds.flatMap((r) => r.matches).filter((m) => !m.completed && !m.voided).length;
 
   /*
    * Fixed partners is read as teams — the pair is the competitor, so the table
@@ -328,7 +329,7 @@ export default async function SessionPage({
                   <p className="card text-center text-sm text-[var(--muted)]">
                     {t("session.finished")}
                   </p>
-                ) : mlp && allRounds.length>0 ? <p className="card hint">{t("mlp.locked")}</p> : (
+                ) : (mlp || swiss) && allRounds.length>0 ? <p className="card hint">{t(mlp ? "mlp.locked" : "swiss.locked")}</p> : (
                   <RsvpButtons
                     sessionId={id}
                     state={myState}

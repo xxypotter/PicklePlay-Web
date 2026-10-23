@@ -367,7 +367,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION!=="1")("v1.7 development workflo
   },120000);
   it("backs up complete session structure and publishes concurrent rating replays atomically",async()=>{
     const db=getDb(),backup=await makeBackup();
-    expect(backup.schema).toBe(2);expect(backup.mlpTies.filter(t=>t.sessionId===id)).toHaveLength(19);
+    expect(backup.schema).toBe(3);expect(backup.mlpTies.filter(t=>t.sessionId===id)).toHaveLength(19);
     // Five courts: 12 RR waves + 2 semifinal + 2 gold/bronze.
     expect(backup.rounds.filter(r=>r.sessionId===id)).toHaveLength(16);
     expect(backup.players[0]).not.toHaveProperty("pinHash");expect(backup.players[0]).toHaveProperty("gender");

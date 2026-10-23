@@ -217,6 +217,9 @@ export const en = {
   "play.addRoundConfirm": "Yes, add round {index}",
   "play.addRoundHint": "Builds a new round of matches on top of the {count} already scheduled.",
   "common.nevermind": "Never mind",
+  "error.title": "Something went wrong",
+  "error.body": "The page hit an error. Nothing is lost — try again, or go back home.",
+  "error.retry": "Try again",
   "play.regenerate": "Regenerate",
   "play.noMatchesYet": "No matches yet. Confirm who's here, then create them all at once.",
   "play.seats": "Court {names} · seats {seats}",
@@ -322,7 +325,7 @@ export const en = {
   "roster.removeLabel": "Remove {name}",
   "roster.empty": "Nobody yet. Add people below, or let them RSVP themselves.",
   "roster.add": "Add players ({count})",
-  "roster.fullNote": "This session is full, so anyone you add now joins the waitlist.",
+  "roster.fullNote": "Anyone you add goes straight in. If the session is full, its capacity grows to fit them.",
   "search.players": "Search players",
   "search.clear": "Clear search",
   "search.none": "No player matches “{query}”.",
@@ -432,23 +435,6 @@ export const en = {
   "notes.v10.initial":
     "First release: sessions, sign-ups, automatic matchups, score keeping, ratings and rankings.",
 
-  // --- imported record ----------------------------------------------------
-  "import.title": "Record before PicklePlay",
-  "import.summary": "{matches} matches · {rate}% win rate",
-  "import.detail":
-    "{won} won, {lost} lost. Counts toward your career totals but not your PicklePlay rating, which only follows matches played here.",
-  "import.matches": "Matches played",
-  "import.wins": "Matches won",
-  "import.save": "Save my record",
-  "import.locked": "Set once, before you play here. Ask an admin if it needs changing.",
-  "import.playedHere":
-    "You've already played here, so your record now comes from real results. Importing is only available before your first match.",
-  "import.formTitle": "Bring your record across",
-  "import.formHint":
-    "Played elsewhere? Enter your totals once, before your first match here. Shown on your profile; it doesn't affect your PicklePlay rating.",
-  "import.winRatePercent": "Win rate %",
-  "import.onceOnly": "You can only do this once.",
-
   // --- rating page --------------------------------------------------------
   "rating.title": "My rating",
   "player.title": "Player",
@@ -461,8 +447,7 @@ export const en = {
   "rating.whoTheyHave": "they have",
   "rating.whoYouAre": "you are",
   "rating.whoTheyAre": "they are",
-  "rating.reliabilityExplained":
-    "Reliability is how well-established the rating is, not how good {who}. It climbs by playing different partners and opponents rather than by playing a lot, so the fastest way to fill the ring is a mixed session — and a beginner who turns up every week is more reliable than a strong player who came twice.",
+  "rating.reliabilityExplained": "Reliability is how well-established the rating is, not how good {who}. It climbs by playing different partners and opponents rather than by playing a lot, so the fastest way to fill the ring is a mixed session — and a beginner who turns up every week is more reliable than a strong player who came twice. A reliability brought over from DUPR counts at first and fades over a few months unless you play here.",
   "rating.howTitle": "How the rating works",
   "rating.howScore":
     "Only the score matters, not who won. Every match has an expected score based on the four ratings on court; beat it and you go up, fall short and you go down — even in a win.",
@@ -472,10 +457,8 @@ export const en = {
     "Once you reach 100% reliability, how much you've played takes over: the longer your record, the steadier your rating.",
   "rating.howCalibrated":
     "The numbers behind this are calibrated against DUPR's own forecast, so a result here moves you by about what DUPR would.",
-  "rating.importedNote":
-    "{imported} of those matches were brought in from before PicklePlay, with {wins} won. {here} were played here. Only the ones played here move the rating.",
   "rating.winRateCaveat":
-    "Win rate and rating don't track each other, and they aren't meant to. Imported matches count toward the record but not the rating, casual sessions count toward neither, and beating stronger opponents moves the rating far more than beating weaker ones — so a modest win rate against tough opposition can outrank a high one.",
+    "Win rate and rating don't track each other, and they aren't meant to. Casual sessions count toward the record but not the rating, and beating stronger opponents moves the rating far more than beating weaker ones — so a modest win rate against tough opposition can outrank a high one.",
   "rating.streakWin": "On a {count}-match win streak.",
   "rating.streakLoss": "Lost the last {count}.",
   "rating.pointDiff": "Point differential {diff}.",
@@ -502,9 +485,10 @@ export const en = {
 
   // --- reseed -------------------------------------------------------------
   "reseed.title": "Update from your real DUPR",
-  "reseed.hint":
-    "Played elsewhere and your DUPR moved? Bring it across. Once every 30 days, and it's recorded publicly in your history below.",
+  "reseed.hint": "Played elsewhere and your DUPR moved? Bring it across — the rating, and its reliability if you like. Once every 30 days, and it's recorded publicly in your history below.",
   "reseed.dupr": "DUPR",
+  "reseed.reliability": "DUPR reliability % (optional)",
+  "reseed.reliabilityHint": "Leave reliability blank and your rating goes back to provisional until you've played here again. A number counts up to 60%; the rest is earned here, and it fades over the following months like any other evidence.",
   "reseed.submit": "Update my rating",
   "reseed.updating": "Updating…",
   "reseed.locked": "You can do this again in {days} day.",
@@ -513,8 +497,6 @@ export const en = {
   // --- record page --------------------------------------------------------
   "record.title": "My record",
   "record.titleOther": "{name}'s record",
-  "record.importedNote":
-    "Includes {imported} brought in from before PicklePlay. {here} played here.",
   "record.marginHint":
     "How the results were won and lost, oldest first — tall bars are comfortable, short ones went to the wire.",
   "record.marginEmpty": "Play a few matches and the shape of your results shows up here.",
@@ -569,8 +551,7 @@ export const en = {
   "auth.notYet": "Not yet",
   "auth.yourDupr": "Your DUPR",
   "auth.reliabilityPercent": "Reliability %",
-  "auth.duprHint":
-    "Both are on your DUPR profile. Nothing connects to DUPR — this is a one-time starting point, replaced by your real results here as you play. Leave reliability blank if you'd rather not say; your rating then carries a ? until you've played a session or two here.",
+  "auth.duprHint": "Both are on your DUPR profile. Nothing connects to DUPR — this is a one-time starting point, replaced by your real results here as you play. Leave reliability blank if you'd rather not say; your rating then carries a ? until you've played a session or two here. A typed reliability fades over the following months unless you play here.",
   "auth.skillLevel": "Where are you roughly?",
   "auth.skillHint": "A rough guess is fine. Your first handful of games will correct it.",
   "auth.alreadyHaveName": "Already have a name?",
@@ -640,8 +621,7 @@ export const en = {
   "admin.reliabilityPlaceholder": "Leave blank to keep",
   "admin.whyOptional": "Why? (optional, kept in the log)",
   "admin.overrideRating": "Override rating",
-  "admin.adjustNote":
-    "Sets where their rating sits — win/loss comes from real matches and can't be typed in. Reliability is normally earned by playing; set it here only to enter a real DUPR reliability for someone who joined before the field existed. Recorded as a dated correction in their history, not a silent edit.",
+  "admin.adjustNote": "Sets where their rating sits — win/loss comes from real matches and can't be typed in. Reliability is normally earned by playing; set it here only to enter a real DUPR reliability for someone who joined before the field existed. Recorded as a dated correction in their history, not a silent edit. A typed reliability fades over the following months; only play here keeps it up.",
   "admin.makeAdmin": "+ admin",
   "admin.removeAdmin": "− admin",
   "admin.you": " · you",
@@ -649,7 +629,6 @@ export const en = {
   "admin.resetPin": "Reset PIN",
   "admin.newPin": "New PIN",
   "admin.setPin": "Set",
-  "admin.clearImported": "Clear imported record",
   "admin.deleteAccount": "Delete account",
   "admin.deleteConfirm": "Tap again to delete {name}",
   "admin.deleteHint":
@@ -660,8 +639,6 @@ export const en = {
   "err.deleteMlpTeam": "This player belongs to a Mini MLP team. Replace them in team setup before deleting the account.",
   "err.deletePlayed":
     "{name} has played {count} matches, so deleting the account would tear holes in other players' records. Reset their PIN instead, or clear the matches first.",
-  "admin.importedLine": "Imported {wins}/{matches} ({rate}%)",
-  "admin.clear": "Clear",
   "admin.newPinPlaceholder": "New 4–6 digit PIN",
   "admin.pinResetNote": "Signs them out everywhere. Tell them the new PIN in person.",
   "admin.roleNote":
@@ -689,10 +666,6 @@ export const en = {
   "err.imageTooLarge": "That image is too large. Try a smaller photo.",
   "err.notAnImage": "That doesn't look like an image.",
   "err.pickOption": "Pick one of the options.",
-  "err.matchesRange": "Matches must be a whole number between 1 and 10,000.",
-  "err.winRateRange": "Win rate must be between 0 and 100.",
-  "err.alreadyImported": "You've already imported a record. Ask the owner if it needs fixing.",
-  "err.alreadyPlayed": "You've already played here, so your record is set from real results.",
   "err.ratingRange": "Rating must be between {min} and {max}.",
   "err.titleRequired": "Give the session a title (80 characters or fewer).",
   "err.pickDateTime": "Pick a date and time.",
@@ -725,6 +698,9 @@ export const en = {
   "err.sessionClosed": "That session is closed.",
   "err.matchGone": "That match no longer exists.",
   "err.needFourPresent": "Need at least 4 players marked present to build a round.",
+  "err.actionFailed": "That didn't work. Please try again.",
+  "err.needTwoPairs": "Pair up at least four players — two teams — before building matches.",
+  "err.inviteUnknown": "One of the selected players no longer exists. Reload and pick again.",
   "err.resultsExist": "A game already has a score, so the draw can't be undone. Clear it first: enter 0–0 on that match and tap Clear score.",
   "err.startFirst": "Start the session before creating matches.",
   "play.rebuild": "Rebuild matchups",
@@ -914,6 +890,7 @@ export const en = {
   "swiss.error.managed": "Swiss rounds are drawn with the Swiss controls on the play page.",
   "swiss.error.rosterLocked": "Swiss pairs and players lock once round 1 is drawn. Use Back to setup, while nothing is scored, to change them.",
   "swiss.error.setup": "Swiss needs 4–6 courts and 12–24 players.",
+  "swiss.locked": "Pairs and players are locked for this Swiss night.",
   "mlp.fiveCourtsHint": "Follow the listed rounds: the matchup on court {court} plays its four games one at a time. Every team takes one turn there; partners stay fixed.",
   "mlp.spareCourtsHint": "With four or five teams, games use the first four courts. Extra courts stay free so each team faces only one opponent at a time.",
   "mlp.result.draw": "Draw · 1 point each",
@@ -997,6 +974,12 @@ export const en = {
   "mlp.error.managed": "Use the Mini MLP team setup and playoff controls for this session.",
   "err.scoreVoided": "This match is voided. It must be restored before its score can be edited.",
   "notes.v18.formats": "Mini MLP now sits above Custom in the format list.",
+  "notes.v20.errors": "When something can't be done — a round not yet fully scored, players still unpaired, a player no longer available — the reason now appears right under the button instead of nothing happening. A page that hits an error shows a retry button instead of a blank screen.",
+  "notes.v20.career": "Played, won and win rate now count every scored game here, casual nights included, on every screen — Me, My rating, My record and Rankings all agree. Only the rating ignores casual games. The old “record from before PicklePlay” import is gone: your record is what you play here.",
+  "notes.v20.reliability": "A reliability typed in from DUPR — at signup, by an admin, or when you update your DUPR — now fades over the following months, halving every 90 days, like any other evidence. Playing here is what keeps the ring full. Games already played are scored exactly as before.",
+  "notes.v20.reseed": "Updating from your real DUPR can bring its reliability along (counted up to 60%). Leave it blank and your rating goes back to provisional, as before.",
+  "notes.v20.waitlist": "Raising a session's player limit moves waiting players in straight away, in the order they joined.",
+  "notes.v20.fixed": "Fixed partners won't build matches until at least two pairs are set, and a Swiss night shows the locked notice instead of RSVP buttons once round 1 is drawn.",
   "notes.v19.swiss": "New format: Swiss, for fixed pairs. Each round matches pairs with the same record (2–0 meets 2–0) and never repeats an opponent, so games stay close all night. Round 1 is seeded by rating or drawn at random, and the organizer decides how many rounds to play. Then every pair plays two playoff games for a final place — semi-finals then gold and bronze for the top four, and the same for each group of four below — so nobody sits out. 6–12 pairs on 4–6 courts; an odd number of pairs gives one bye a round, counted as a win.",
   "notes.v19.formats": "Swiss sits between Fixed partners and Mini MLP in the format list.",
   "notes.v18.youNamed": "In Matchups, your own games now say “You (your name)”, so a screenshot or a shared phone still shows who you are.",

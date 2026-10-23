@@ -15,6 +15,7 @@ import {
   setPartnerAction,
 } from "@/lib/sessions/actions";
 import PlayerSearch from "@/components/PlayerSearch";
+import { ActionError, useServerAction } from "@/components/useServerAction";
 import { matchPlayers } from "@/lib/players/search";
 import {
   addFinalsAction,
@@ -35,17 +36,22 @@ export function GenerateRoundButton({
   courtCount,
   roundsSoFar,
   format,
+  pairs = Infinity,
 }: {
   sessionId: string;
   attendingCount: number;
   courtCount: number;
   roundsSoFar: number;
   format: string;
+  /** Fixed partners: complete pairs among the players here. Two are needed. */
+  pairs?: number;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [armed, setArmed] = useState(false);
   const tooFew = attendingCount < 4;
+  // Fixed partners plays pairs: four unpaired people are not two teams.
+  const needPairs = format === "fixed" && pairs < 2;
 
   // A round robin has an exact right length; other formats get a rule of
   // thumb. Either way the organizer can override it.
@@ -90,19 +96,22 @@ export function GenerateRoundButton({
           />
           <button
             type="button"
-            disabled={pending || !roundsValid}
-            onClick={() => start(() => void generateAllRoundsAction(sessionId, rounds))}
+            disabled={pending || !roundsValid || needPairs}
+            onClick={() => run(() => generateAllRoundsAction(sessionId, rounds))}
             className="btn-primary flex-1 disabled:opacity-40"
           >
             {pending ? t("play.building") : t("play.createAll")}
           </button>
         </div>
+        <ActionError error={error} />
         <p
           className={`hint ${
-            !roundsValid ? "text-[var(--danger)]" : uneven ? "text-[var(--accent)]" : ""
+            !roundsValid || needPairs ? "text-[var(--danger)]" : uneven ? "text-[var(--accent)]" : ""
           }`}
         >
-          {!roundsValid ? (
+          {needPairs ? (
+            t("play.partnersNeedTwo")
+          ) : !roundsValid ? (
             t("play.rounds.invalid")
           ) : uneven ? (
             <>
@@ -142,7 +151,7 @@ export function GenerateRoundButton({
     <div className="mt-4">
       <button
         type="button"
-        disabled={pending}
+        disabled={pending || needPairs}
         onClick={() => {
           if (!armed) {
             setArmed(true);
@@ -150,10 +159,7 @@ export function GenerateRoundButton({
           }
           // Disarm after it lands, or the button sits in its confirmed state
           // and the *next* stray tap adds another round with no second chance.
-          start(async () => {
-            await generateRoundAction(sessionId);
-            setArmed(false);
-          });
+          run(() => generateRoundAction(sessionId), () => setArmed(false));
         }}
         className={`w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 ${
           armed
@@ -167,6 +173,8 @@ export function GenerateRoundButton({
             ? t("play.addRoundConfirm", { index: roundsSoFar + 1 })
             : t("play.addRound")}
       </button>
+      <ActionError error={error} />
+      {needPairs ? <p className="hint text-[var(--danger)]">{t("play.partnersNeedTwo")}</p> : null}
 
       {armed && !pending ? (
         <>
@@ -203,6 +211,7 @@ export function RebuildMatchupsButton({
   courtCount,
   playedRounds,
   format,
+  pairs = Infinity,
 }: {
   sessionId: string;
   attendingCount: number;
@@ -210,10 +219,12 @@ export function RebuildMatchupsButton({
   /** Rounds with a score or a void in them. These are never touched. */
   playedRounds: number;
   format: string;
+  pairs?: number;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [armed, setArmed] = useState(false);
+  const needPairs = format === "fixed" && pairs < 2;
 
   const plan =
     format === "regular" || format === "gender"
@@ -248,16 +259,13 @@ export function RebuildMatchupsButton({
 
       <button
         type="button"
-        disabled={pending || (armed && !roundsValid)}
+        disabled={pending || (armed && !roundsValid) || needPairs}
         onClick={() => {
           if (!armed) {
             setArmed(true);
             return;
           }
-          start(async () => {
-            await rebuildMatchupsAction(sessionId, rounds);
-            setArmed(false);
-          });
+          run(() => rebuildMatchupsAction(sessionId, rounds), () => setArmed(false));
         }}
         className={`w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 ${
           armed ? "bg-[var(--accent)] text-white" : "border border-[var(--border)]"
@@ -265,6 +273,8 @@ export function RebuildMatchupsButton({
       >
         {pending ? t("play.building") : armed ? t("play.rebuildConfirm") : t("play.rebuild")}
       </button>
+      <ActionError error={error} />
+      {needPairs ? <p className="hint text-[var(--danger)]">{t("play.partnersNeedTwo")}</p> : null}
 
       {armed && !pending ? (
         <>
@@ -308,7 +318,7 @@ export function MedalRoundButton({
   teamCount: number;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [armed, setArmed] = useState(false);
 
   if (stage === "done" || teamCount < 4) return null;
@@ -325,10 +335,7 @@ export function MedalRoundButton({
             setArmed(true);
             return;
           }
-          start(async () => {
-            await (semis ? addMedalRoundAction(sessionId) : addFinalsAction(sessionId));
-            setArmed(false);
-          });
+          run(() => (semis ? addMedalRoundAction(sessionId) : addFinalsAction(sessionId)), () => setArmed(false));
         }}
         className={`w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-40 ${
           armed && ready ? "bg-[var(--accent)] text-white" : "border border-[var(--border)]"
@@ -340,6 +347,7 @@ export function MedalRoundButton({
             ? t(semis ? "play.medalConfirm" : "play.finalsConfirm")
             : t(semis ? "play.medalAuto" : "play.finals")}
       </button>
+      <ActionError error={error} />
 
       {/* Say why it's greyed out. A disabled button with no reason is a dead end. */}
       {!ready ? (
@@ -366,7 +374,7 @@ export function MedalRoundButton({
 
 export function DeleteSessionButton({ sessionId }: { sessionId: string }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [armed, setArmed] = useState(false);
 
   // Two taps rather than a confirm() dialog: this destroys the night's matches
@@ -376,7 +384,7 @@ export function DeleteSessionButton({ sessionId }: { sessionId: string }) {
       <button
         type="button"
         disabled={pending}
-        onClick={() => (armed ? start(() => void deleteSessionAction(sessionId)) : setArmed(true))}
+        onClick={() => (armed ? run(() => deleteSessionAction(sessionId)) : setArmed(true))}
         className={`w-full rounded-xl px-4 py-3 text-sm font-medium disabled:opacity-50 ${
           armed
             ? "bg-[var(--danger)] text-white"
@@ -389,6 +397,7 @@ export function DeleteSessionButton({ sessionId }: { sessionId: string }) {
             ? t("play.deleteConfirm")
             : t("play.delete")}
       </button>
+      <ActionError error={error} />
       {armed ? (
         <p className="hint text-center">{t("play.deleteHint")}</p>
       ) : null}
@@ -404,16 +413,19 @@ export function DiscardRoundButton({
   roundId: string;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() => start(() => void discardRoundAction(sessionId, roundId))}
-      className="text-xs font-semibold text-[var(--muted)] underline disabled:opacity-50"
-    >
-      {pending ? "…" : t("play.regenerate")}
-    </button>
+    <span className="flex flex-col items-end">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => run(() => discardRoundAction(sessionId, roundId))}
+        className="text-xs font-semibold text-[var(--muted)] underline disabled:opacity-50"
+      >
+        {pending ? "…" : t("play.regenerate")}
+      </button>
+      <ActionError error={error} className="mt-1 text-xs" />
+    </span>
   );
 }
 
@@ -439,16 +451,16 @@ export function AttendanceToggle({
   attended: boolean;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
-  const [dropping, startDrop] = useTransition();
-  const busy = pending || dropping;
+  const { run, pending, error } = useServerAction();
+  const busy = pending;
 
   return (
+    <div className="flex flex-col">
     <div className="flex items-stretch gap-1.5">
       <button
         type="button"
         disabled={busy}
-        onClick={() => start(() => void setAttendanceAction(sessionId, playerId, !attended))}
+        onClick={() => run(() => setAttendanceAction(sessionId, playerId, !attended))}
         className={`flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border
           px-3 py-2.5 text-left text-sm transition disabled:opacity-50 ${
             attended
@@ -464,7 +476,7 @@ export function AttendanceToggle({
         <button
           type="button"
           disabled={busy}
-          onClick={() => startDrop(() => void removePlayerAction(sessionId, playerId))}
+          onClick={() => run(() => removePlayerAction(sessionId, playerId))}
           aria-label={t("play.dropLabel", { name: username })}
           className="shrink-0 rounded-xl border border-[var(--border)] px-3 text-sm
             text-[var(--muted)] transition active:bg-[var(--surface-2)] disabled:opacity-50"
@@ -472,6 +484,8 @@ export function AttendanceToggle({
           ✕
         </button>
       )}
+    </div>
+    <ActionError error={error} className="mt-1 text-xs" />
     </div>
   );
 }
@@ -484,14 +498,14 @@ export function AddPlayers({
   candidates: { id: string; username: string }[];
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [query, setQuery] = useState("");
   if (candidates.length === 0) return null;
 
   // Same as Edit's Add players: an add clears the search for the next name.
   const add = (playerId: string) => {
     setQuery("");
-    start(() => void addPlayerAction(sessionId, playerId));
+    run(() => addPlayerAction(sessionId, playerId));
   };
   const shown = matchPlayers(candidates, query);
 
@@ -512,6 +526,7 @@ export function AddPlayers({
       {shown.length === 0 ? (
         <p className="hint">{t("search.none", { query: query.trim() })}</p>
       ) : null}
+      <ActionError error={error} />
       <div className="mt-2 grid grid-cols-2 gap-2">
         {shown.map((c) => (
           <button
@@ -545,7 +560,7 @@ export function StartSessionButton({
   attendingCount: number;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const tooFew = attendingCount < 4;
 
   return (
@@ -553,11 +568,12 @@ export function StartSessionButton({
       <button
         type="button"
         disabled={pending || tooFew}
-        onClick={() => start(() => void startSessionAction(sessionId))}
+        onClick={() => run(() => startSessionAction(sessionId))}
         className="btn-primary disabled:opacity-40"
       >
         {pending ? t("play.starting") : t("play.start")}
       </button>
+      <ActionError error={error} />
       <p className="hint">
         {tooFew ? t("play.tooFewToStart") : t("play.startHint")}
       </p>
@@ -667,7 +683,7 @@ export function EndSessionButton({
   className?: string;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [armed, setArmed] = useState(false);
 
   if (!armed) {
@@ -706,13 +722,14 @@ export function EndSessionButton({
         <button
           type="button"
           disabled={pending}
-          onClick={() => start(() => void endSessionAction(sessionId))}
+          onClick={() => run(() => endSessionAction(sessionId))}
           className="flex-1 rounded-full bg-[var(--danger)] px-4 py-3 text-base font-semibold
             text-white disabled:opacity-50"
         >
           {pending ? t("play.ending") : t("play.endConfirm")}
         </button>
       </div>
+      <ActionError error={error} />
     </div>
   );
 }
@@ -744,7 +761,7 @@ export function PartnerPicker({
   locked: boolean;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
   const [holding, setHolding] = useState<string | null>(null);
 
   const nameOf = new Map(players.map((p) => [p.playerId, p.username]));
@@ -767,7 +784,7 @@ export function PartnerPicker({
     }
     const first = holding;
     setHolding(null);
-    start(() => void setPartnerAction(sessionId, first, id));
+    run(() => setPartnerAction(sessionId, first, id));
   };
 
   return (
@@ -782,7 +799,7 @@ export function PartnerPicker({
               <button
                 type="button"
                 disabled={locked || pending}
-                onClick={() => start(() => void setPartnerAction(sessionId, p.playerId, null))}
+                onClick={() => run(() => setPartnerAction(sessionId, p.playerId, null))}
                 aria-label={t("play.unpair", {
                   a: p.username,
                   b: nameOf.get(p.partnerId!) ?? "",
@@ -822,6 +839,7 @@ export function PartnerPicker({
         </div>
       ) : null}
 
+      <ActionError error={error} />
       <p className="hint">
         {t.plural("play.partnersReady", pairs.length, { count: pairs.length })}
         {single.length > 0 ? ` · ${t("play.partnersUnpaired", { count: single.length })}` : ""}

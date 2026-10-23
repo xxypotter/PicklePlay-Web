@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
 import { LOCALE_NAMES, LOCALES, type Locale } from "@/lib/i18n/config";
+import { ActionError, useServerAction } from "@/components/useServerAction";
 import { setLocaleAction } from "@/lib/i18n/actions";
 import { useT } from "@/lib/i18n/client";
 
@@ -44,9 +44,10 @@ export function LanguageSwitch({ current }: { current: Locale }) {
 }
 
 function Choices({ current }: { current: Locale }) {
-  const [pending, start] = useTransition();
+  const { run, pending, error } = useServerAction();
 
   return (
+    <div>
     <div className="grid grid-cols-3 gap-2">
       {LOCALES.map((code) => (
         <button
@@ -54,7 +55,7 @@ function Choices({ current }: { current: Locale }) {
           type="button"
           aria-pressed={code === current}
           disabled={pending}
-          onClick={() => start(() => void setLocaleAction(code))}
+          onClick={() => run(() => setLocaleAction(code))}
           className={`rounded-xl border px-3 py-3 text-sm font-medium transition disabled:opacity-50 ${
             code === current
               ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
@@ -64,6 +65,8 @@ function Choices({ current }: { current: Locale }) {
           {LOCALE_NAMES[code]}
         </button>
       ))}
+    </div>
+    <ActionError error={error} />
     </div>
   );
 }

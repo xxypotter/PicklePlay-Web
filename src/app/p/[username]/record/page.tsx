@@ -40,8 +40,6 @@ export default async function RecordPage({
       id: players.id,
       username: players.username,
       displayName: players.displayName,
-      importedMatches: players.importedMatches,
-      importedWins: players.importedWins,
     })
     .from(players)
     .where(eq(players.usernameLower, decodeURIComponent(username).toLowerCase()))
@@ -186,9 +184,9 @@ export default async function RecordPage({
     };
   });
 
-  // Career = brought with them plus played here, matching Me and the rankings.
-  const careerPlayed = player.importedMatches + record.played;
-  const careerWon = player.importedWins + record.won;
+  // The same count Me and the rankings show: every scored game played here.
+  const careerPlayed = record.played;
+  const careerWon = record.won;
   const careerRate = careerPlayed > 0 ? Math.round((careerWon / careerPlayed) * 100) : null;
 
   const facts = [
@@ -224,15 +222,6 @@ export default async function RecordPage({
               value={careerRate === null ? t("common.none") : `${careerRate}%`}
             />
           </dl>
-
-          {player.importedMatches > 0 ? (
-            <p className="hint mt-3">
-              {t("record.importedNote", {
-                imported: player.importedMatches,
-                here: record.played,
-              })}
-            </p>
-          ) : null}
 
           <div className="mt-4">
             <MarginChart margins={record.matches.map((m) => m.margin)} locale={me?.locale} />

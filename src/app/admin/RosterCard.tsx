@@ -1,11 +1,11 @@
 "use client";
 
-import { startTransition, useActionState, useState, useTransition } from "react";
+import { startTransition, useActionState, useState } from "react";
+import { ActionError, useServerAction } from "@/components/useServerAction";
 import type { RecomputeSummary } from "@/lib/rating/service";
 import type { FormState, Role } from "@/lib/auth/types";
 import type { DictKey } from "@/lib/i18n/dictionaries/en";
 import { useT } from "@/lib/i18n/client";
-import { clearImportedRecordAction } from "@/lib/profile/actions";
 import {
   adjustRatingAction,
   deletePlayerAction,
@@ -23,8 +23,8 @@ export interface RosterEntry {
   provisional: boolean | null;
   selfDeclared: boolean | null;
   localMatches: number | null;
-  importedMatches: number;
-  importedWins: number;
+  /** Every scored game played here, rated or casual. */
+  played: number;
 }
 
 export default function RosterCard({
@@ -64,9 +64,8 @@ export default function RosterCard({
   const [delState, delAction, delPending] = useActionState(deletePlayerAction, {} as FormState);
   /* Which row is armed. One at a time, so arming a second disarms the first. */
   const [armedDelete, setArmedDelete] = useState<string | null>(null);
-  const [recomputing, startRecompute] = useTransition();
+  const { run: runRecompute, pending: recomputing, error: recomputeError } = useServerAction();
   const [recomputed, setRecomputed] = useState<RecomputeSummary | null>(null);
-  const [clearing, startClear] = useTransition();
 
   return (
     <section className="card mt-5">
@@ -77,12 +76,7 @@ export default function RosterCard({
         {canRecompute ? (
           <button
             type="button"
-            onClick={() =>
-              startRecompute(async () => {
-                const summary = await recomputeAction();
-                setRecomputed(summary);
-              })
-            }
+            onClick={() => runRecompute(async () => setRecomputed(await recomputeAction()))}
             disabled={recomputing}
             className="text-xs font-semibold text-[var(--accent)] underline disabled:opacity-50"
           >
@@ -117,6 +111,7 @@ export default function RosterCard({
         </p>
       ) : null}
 
+      <ActionError error={recomputeError} />
       {canRecompute ? (
         recomputed ? (
           <p className="mt-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs">
@@ -150,9 +145,7 @@ export default function RosterCard({
                   <p className="text-xs text-[var(--muted)]">
                     {t(`role.${p.role}` as DictKey)}
                     {isMe ? t("admin.you") : ""}
-                    {p.localMatches !== null
-                      ? t("admin.matchCount", { count: p.localMatches })
-                      : ""}
+                    {t("admin.matchCount", { count: p.played })}
                   </p>
                 </div>
 
@@ -231,33 +224,6 @@ export default function RosterCard({
                   <p className="text-xs text-[var(--muted)]">{t("admin.adjustNote")}</p>
                 </form>
               </details>
-              ) : null}
-
-              {/*
-                Clearing, not editing. The super admin can wipe an imported
-                record so the player can enter it again — nobody can type a
-                number *into* someone else's history, which is the property
-                that keeps the record trustworthy.
-              */}
-              {canManageRoles && p.importedMatches > 0 ? (
-                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-2)] px-3 py-2">
-                  <span className="text-xs text-[var(--muted)]">
-                    {t("admin.importedLine", {
-                      wins: p.importedWins,
-                      matches: p.importedMatches,
-                      rate: Math.round((p.importedWins / p.importedMatches) * 100),
-                    })}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={clearing}
-                    onClick={() => startClear(() => void clearImportedRecordAction(p.id))}
-                    className="shrink-0 text-xs font-semibold text-[var(--danger)] underline
-                      disabled:opacity-50"
-                  >
-                    {clearing ? "…" : t("admin.clear")}
-                  </button>
-                </div>
               ) : null}
 
               {canDelete && p.id !== meId && p.role !== "superadmin" ? (

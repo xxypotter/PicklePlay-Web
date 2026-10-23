@@ -219,6 +219,8 @@ class MemoryWrites {
   reads: Array<{ table: unknown; rows: Row[] }> = [];
   writes: Array<{ table: unknown; rows: Row[] }> = [];
   updates: Array<{ table: unknown; values: Row; predicate: SQL }> = [];
+  /** Raw statements (v2.0: the edit action promotes the waitlist after raising the cap). */
+  executes: SQL[] = [];
   updateResult: Row[] = [{ id: "audit-session" }];
   serial = 0;
   queue(table: unknown, rows: Row[]) { this.reads.push({ table, rows }); }
@@ -242,6 +244,7 @@ class MemoryWrites {
       return { returning: async () => structuredClone([...rows].reverse()), then: result.then.bind(result) };
     } };
   }
+  execute(query: SQL) { this.executes.push(query); return Promise.resolve({ rows: [] }); }
   update(table: unknown) {
     return { set: (values: Row) => ({ where: (predicate: SQL) => {
       this.updates.push({ table, values, predicate }); return { returning: async () => this.updateResult };
@@ -401,6 +404,10 @@ describe("court-label, create/edit/copy and UI boundaries", () => {
     expect(db.updates[0].values).toMatchObject({ courtNames: original.courtNames, courtCount: courts, maxPlayers: count * 4 });
     const query = new PgDialect().sqlToQuery(db.updates[0].predicate);
     expect(query.sql).toContain('"sessions"."status"'); expect(query.params).toContain("open");
+    // v2.0: the new cap promotes the waitlist, then renumbers it, in the same transaction.
+    expect(db.executes).toHaveLength(2);
+    const promoted = new PgDialect().sqlToQuery(db.executes[0]);
+    expect(promoted.sql).toContain("state='waitlist'"); expect(promoted.params).toContain(count * 4);
   });
 
   it("copies six-court legacy squads with explicit equivalent lineups and keeps the waitlist outside teams", async () => {
@@ -409,6 +416,7 @@ describe("court-label, create/edit/copy and UI boundaries", () => {
     const invited = [...rosterOf(legacy), "waiting-player"];
     const sourceId = "00000000-0000-4000-8000-000000000001";
     const fd = form(labels); fd.set("copyFrom", sourceId); invited.forEach(id => fd.append("invite", id));
+    db.queue(players, invited.map(id => ({ id }))); // v2.0: invited ids are checked against real players first
     db.queue(sessions, [{ ...source(6, 6), createdBy: "audit-organizer" }]); db.queue(signups, []);
     db.queue(signups, invited.map((playerId, i) => ({ playerId, state: i < 24 ? "in" : "waitlist", waitlistPos: i < 24 ? null : 1, createdAt: new Date(i), partnerId: null })));
     db.queue(mlpTeams, legacy);

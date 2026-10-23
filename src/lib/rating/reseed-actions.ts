@@ -60,7 +60,13 @@ export async function reseedAction(_prev: FormState, formData: FormData): Promis
   await db.insert(ratingSeeds).values({
     playerId: me.id,
     rating,
-    declaredReliability: reliability,
+    /*
+     * v2.0: the player may bring DUPR's reliability along. Stored capped at
+     * "reliable" — the engine caps a self-declared floor there too, but the
+     * history card reads this column, and it should show what will count.
+     * Zero (left blank) keeps the old meaning: back to provisional.
+     */
+    declaredReliability: Math.min(reliability, RATING.RELIABILITY_PASS * 100),
     source: "dupr",
     createdBy: me.id,
   });

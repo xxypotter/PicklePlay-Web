@@ -262,6 +262,8 @@ export async function discardRoundAction(sessionId: string, roundId: string): Pr
     await lockSession(db,sessionId);
     const [session]=await db.select().from(sessions).where(eq(sessions.id,sessionId));
     if(session?.format==="mlp") throw new Error(t("mlp.error.managed"));
+    // A finished night is a record; its last round is not a draft to redo.
+    if(session?.status!=="live") throw new Error(t("err.sessionClosed"));
     const [last]=await db.select().from(rounds).where(eq(rounds.sessionId,sessionId)).orderBy(desc(rounds.index)).limit(1);
     if(!last || last.id!==roundId) throw new Error(t("err.roundScored"));
     const settled=await db.select({id:matches.id}).from(matches).where(and(eq(matches.roundId,roundId),ne(matches.status,"scheduled"))).limit(1);

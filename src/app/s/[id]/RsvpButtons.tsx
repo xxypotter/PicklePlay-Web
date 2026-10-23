@@ -1,8 +1,8 @@
 "use client";
 
-import { useTransition } from "react";
 import { useT } from "@/lib/i18n/client";
 import { rsvpAction } from "@/lib/sessions/actions";
+import { ActionError, useServerAction } from "@/components/useServerAction";
 
 export type MyState = "in" | "waitlist" | "out";
 
@@ -18,19 +18,22 @@ export default function RsvpButtons({
   addedByOrganizer?: boolean;
 }) {
   const t = useT();
-  const [pending, start] = useTransition();
-  const go = (going: boolean) => start(() => void rsvpAction(sessionId, going));
+  const { run, pending, error } = useServerAction();
+  const go = (going: boolean) => run(() => rsvpAction(sessionId, going));
 
   if (state === "out") {
     return (
-      <button
-        type="button"
-        onClick={() => go(true)}
-        disabled={pending}
-        className="btn-primary"
-      >
-        {pending ? "…" : full ? t("rsvp.joinWaitlist") : t("rsvp.in")}
-      </button>
+      <div>
+        <button
+          type="button"
+          onClick={() => go(true)}
+          disabled={pending}
+          className="btn-primary"
+        >
+          {pending ? "…" : full ? t("rsvp.joinWaitlist") : t("rsvp.in")}
+        </button>
+        <ActionError error={error} />
+      </div>
     );
   }
 
@@ -62,6 +65,7 @@ export default function RsvpButtons({
       >
         {pending ? "…" : t("rsvp.out")}
       </button>
+      <ActionError error={error} />
     </div>
   );
 }

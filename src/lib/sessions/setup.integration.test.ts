@@ -9,8 +9,8 @@ import { makeT } from "@/lib/i18n/translate";
 import type { Actor } from "@/lib/auth/policy";
 import { createMlpScheduleAction, saveMlpTeamsAction } from "@/lib/mlp/actions";
 import type { TeamInput } from "@/lib/mlp/rules";
-import { generateAllRoundsAction, reopenSessionAction, saveScoreAction, startSessionAction } from "./play-actions";
-import { createSessionAction } from "./actions";
+import { discardRoundAction, generateAllRoundsAction, reopenSessionAction, saveScoreAction, startSessionAction } from "./play-actions";
+import { createSessionAction, setPartnerAction } from "./actions";
 import { updateSessionAction } from "./edit-actions";
 import { loadCopySource } from "./copy-source";
 
@@ -215,4 +215,53 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v1.7 back to setup, cl
     expect(await db().select().from(mlpTeams).where(eq(mlpTeams.sessionId, blind))).toHaveLength(0);
     actor = { id: organizer, role: "admin" };
   }, 180000);
+
+  it("v2.0: raising the player limit on Edit promotes the waitlist in join order", async () => {
+    actor = { id: organizer, role: "admin" };
+    const roster = ids.slice(2, 6);
+    const id = await newSession({ status: "open", maxPlayers: 4 }, roster);
+    await db().insert(signups).values([
+      { sessionId: id, playerId: ids[6], state: "waitlist", waitlistPos: 1, createdAt: new Date(Date.now() + 10_000) },
+      { sessionId: id, playerId: ids[7], state: "waitlist", waitlistPos: 2, createdAt: new Date(Date.now() + 11_000) },
+      { sessionId: id, playerId: ids[8], state: "waitlist", waitlistPos: 3, createdAt: new Date(Date.now() + 12_000) },
+    ]);
+    const fd = new FormData();
+    for (const [k, v] of Object.entries({ sessionId: id, title: "Raised", startsAt: new Date().toISOString(), courtNames: "1, 2", format: "regular", maxPlayers: "6" })) fd.set(k, v);
+    await expect(updateSessionAction({}, fd)).rejects.toBeInstanceOf(Redirected);
+    const rows = await db().select().from(signups).where(eq(signups.sessionId, id));
+    const state = new Map(rows.map((r) => [r.playerId, [r.state, r.waitlistPos] as const]));
+    expect(state.get(ids[6])).toEqual(["in", null]);
+    expect(state.get(ids[7])).toEqual(["in", null]);
+    expect(state.get(ids[8])).toEqual(["waitlist", 1]);
+  }, 60000);
+
+  it("v2.0: fixed partners refuses to build rounds until two pairs exist, and never stores an empty round", async () => {
+    actor = { id: organizer, role: "admin" };
+    const roster = ids.slice(2, 10);
+    const id = await newSession({ format: "fixed" }, roster);
+    await expect(generateAllRoundsAction(id, 3)).rejects.toThrow(t("err.needTwoPairs"));
+    await setPartnerAction(id, roster[0], roster[1]);
+    await expect(generateAllRoundsAction(id, 3)).rejects.toThrow(t("err.needTwoPairs"));
+    expect(await db().select().from(rounds).where(eq(rounds.sessionId, id))).toHaveLength(0);
+    await setPartnerAction(id, roster[2], roster[3]);
+    await generateAllRoundsAction(id, 3);
+    const rs = await db().select().from(rounds).where(eq(rounds.sessionId, id));
+    expect(rs).toHaveLength(3);
+    for (const r of rs) expect(await db().select().from(matches).where(eq(matches.roundId, r.id))).toHaveLength(1);
+  }, 60000);
+
+  it("v2.0: a closed session's last round cannot be discarded; an unknown invite is a form error", async () => {
+    actor = { id: organizer, role: "admin" };
+    const id = await newSession({}, ids.slice(2, 10));
+    await generateAllRoundsAction(id, 1);
+    const [round] = await db().select().from(rounds).where(eq(rounds.sessionId, id));
+    await db().update(sessions).set({ status: "closed" }).where(eq(sessions.id, id));
+    await expect(discardRoundAction(id, round.id)).rejects.toThrow(t("err.sessionClosed"));
+    expect(await db().select().from(rounds).where(eq(rounds.sessionId, id))).toHaveLength(1);
+
+    const fd = new FormData();
+    for (const [k, v] of Object.entries({ title: "Bad invite", startsAt: new Date().toISOString(), courtNames: "1, 2", format: "regular", maxPlayers: "8" })) fd.set(k, v);
+    fd.append("invite", ids[2]); fd.append("invite", randomUUID());
+    expect(await createSessionAction({}, fd)).toEqual({ error: t("err.inviteUnknown") });
+  }, 60000);
 });
