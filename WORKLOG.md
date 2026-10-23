@@ -1,6 +1,24 @@
 # Shared work log
 
-## In progress: v2.0 review fixes — Claude, 2026-10-22
+## Released: v2.0 review fixes — Claude, 2026-10-22
+
+Released as f837d3c (fast-forwarded to main, pushed 2026-10-22 evening). Order
+was deploy first, then migrate: the new code never reads players.imported_*,
+so dropping the columns after the build went live left no window where the
+running code could fail. Rollback tag backup/v2.0-before (5294b16) pushed.
+Sanitized production backup before migrating:
+local-backups/v2.0-backup-1792718304361.json (125 players, 30 sessions, 695
+matches, 2,124 rating events, 133 seeds; no PIN hashes/tokens/settings) — it
+keeps the four imported records that the migration removed: Jason 162/96,
+Gideon 236/158, JudyH 55/36, Hao 35/18. /notes served "Version 2.0" 45 s after
+the push; then migration 0019 applied to production; verify snapshot
+local-backups/v2.0-verify-1792718441658.json shows all twelve source/cache
+tables unchanged and the three columns gone. Home, /notes, /leaderboard,
+/p/Jason and the record page 200; /me 307 to login; /api/dev-login 404.
+Script: .scratch/v20-release.mjs. No rating cache was touched: ratings and
+reliability rings change only at each player's first scored game after the
+2026-10-23 epoch. Rollback: the tag restores code; the imported_* values exist
+only in the backup JSON, so a schema rollback would need a manual restore.
 
 Branch claude/v2.0 from main 5294b16 (v1.9). Full review of the app (Codex's
 work included) produced 15 findings; the owner chose: fix 1–8, 9 with an
