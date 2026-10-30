@@ -20,6 +20,9 @@ ratings without a `?`. Branch claude/v2.1 from main 8cd5d4f.
   dev DB; it also moved dev_ana to 44%, the v2.0 fade applying at the first
   post-epoch event, as designed.)
 - Checks: typecheck, lint, 473 unit tests, build.
+- Released as 80c4aa4, fast-forwarded to main and pushed 2026-10-30; /notes
+  served "Version 2.1" 45 s later. No migration. Production rankings now list
+  34 players on All (21 Boy, 13 Girl) with 88 still settling; home 200.
 
 ## Released: v2.0 review fixes — Claude, 2026-10-22
 
