@@ -352,8 +352,9 @@ export const en = {
     "You've chosen Not listed, so you don't appear in these tables. Change it under Me.",
   "rank.noMatches": "No matches yet",
   "rank.summary": "{played} played · {rate}% won",
-  "rank.questionMark":
-    "? means the rating is still settling — not enough matches here yet for it to be dependable. It clears after a full session or two.",
+  "rank.settling": "{count} more player is still settling in and isn't ranked yet — a rating is listed once it's 60% reliable.",
+  "rank.settling.plural": "{count} more players are still settling in and aren't ranked yet — a rating is listed once it's 60% reliable.",
+  "rank.meSettling": "You're not ranked yet — your rating is {reliability}% reliable, and the table lists ratings from 60%. Playing a mixed session gets you there fastest.",
 
   // --- me -----------------------------------------------------------------
   "me.title": "Me",
@@ -974,6 +975,7 @@ export const en = {
   "mlp.error.managed": "Use the Mini MLP team setup and playoff controls for this session.",
   "err.scoreVoided": "This match is voided. It must be restored before its score can be edited.",
   "notes.v18.formats": "Mini MLP now sits above Custom in the format list.",
+  "notes.v21.rankings": "Rankings now list established ratings only — the ones without a ?. A rating that's still settling, below 60% reliability, waits off the table until you've played here enough. The page says how many players are on their way and, if you're one of them, how far along you are.",
   "notes.v20.errors": "When something can't be done — a round not yet fully scored, players still unpaired, a player no longer available — the reason now appears right under the button instead of nothing happening. A page that hits an error shows a retry button instead of a blank screen.",
   "notes.v20.career": "Played, won and win rate now count every scored game here, casual nights included, on every screen — Me, My rating, My record and Rankings all agree. Only the rating ignores casual games. The old “record from before PicklePlay” import is gone: your record is what you play here.",
   "notes.v20.reliability": "A reliability typed in from DUPR — at signup, by an admin, or when you update your DUPR — now fades over the following months, halving every 90 days, like any other evidence. Playing here is what keeps the ring full. Games already played are scored exactly as before.",

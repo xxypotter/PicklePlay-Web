@@ -58,18 +58,25 @@ export default async function LeaderboardPage({
   const withCareer = all.map((r) => ({ ...r, played: career.get(r.id)?.played ?? 0, won: career.get(r.id)?.won ?? 0 }));
 
   const listed = withCareer.filter((r) => r.gender !== "unspecified");
-  const rows = active === "all" ? listed : listed.filter((r) => r.gender === active);
-  const meOptedOut = !!me && all.some((r) => r.id === me.id && r.gender === "unspecified");
+  const inTab = (r: { gender: string }) => active === "all" || r.gender === active;
 
   /*
-   * One list, everyone in it.
+   * Established ratings only (v2.1).
    *
-   * Splitting settled players from provisional ones answered a real worry — a
-   * self-declared 4.8 outranking people who have actually played — but it cost
-   * more than it fixed: half the group sat under a second heading that read
-   * like a waiting room, and on a young group the main table was empty. A `?`
-   * on the number says the same thing without breaking the list in two.
+   * Until v2.0 a `?` on the number was the compromise: one list, everyone in
+   * it, provisional ratings marked rather than split off into a second table
+   * that read like a waiting room. Now that a typed reliability fades, the `?`
+   * is a verdict rather than a label — the group has not yet seen enough of
+   * this player for the number to mean anything — and ranking numbers nobody
+   * can lean on next to ones they can is the wrong comparison. So the table
+   * lists ratings that have reached "reliable" (§3.6) and says how many are
+   * still on their way, so an absence has an explanation instead of a gap.
    */
+  const rows = listed.filter((r) => !r.provisional && inTab(r));
+  const settling = listed.filter((r) => r.provisional && inTab(r)).length;
+  const meRow = me ? all.find((r) => r.id === me.id) : undefined;
+  const meOptedOut = !!meRow && meRow.gender === "unspecified";
+  const meSettling = !!meRow && !meOptedOut && meRow.provisional;
 
   const base = "/leaderboard";
   // Rankings hangs off both Home and Me, so where back goes depends on which
@@ -108,19 +115,27 @@ export default async function LeaderboardPage({
         {meOptedOut ? (
           <p className="card mb-3 text-sm text-[var(--muted)]">{t("rank.optedOut")}</p>
         ) : null}
+        {/* Same courtesy for the other absence: say where they stand and how to get in. */}
+        {meSettling ? (
+          <p className="card mb-3 text-sm text-[var(--muted)]">
+            {t("rank.meSettling", { reliability: Math.round(meRow!.reliability * 100) })}
+          </p>
+        ) : null}
 
         {rows.length === 0 ? (
           <div className="card py-12 text-center">
             <p className="text-[var(--muted)]">{t("rank.empty")}</p>
-            <p className="hint">{t("rank.emptyHint")}</p>
+            <p className="hint">
+              {settling > 0 ? t.plural("rank.settling", settling, { count: settling }) : t("rank.emptyHint")}
+            </p>
           </div>
         ) : (
           <>
             <Table rows={rows} meId={me?.id} startRank={1} backHere={backHere} t={t} />
 
-            {rows.some((r) => r.provisional) ? (
+            {settling > 0 ? (
               <p className="mt-3 px-1 text-xs text-[var(--muted)]">
-                {t("rank.questionMark")}
+                {t.plural("rank.settling", settling, { count: settling })}
               </p>
             ) : null}
           </>
@@ -201,9 +216,6 @@ function Table({
 
             <span className="shrink-0 font-mono text-lg font-semibold tabular-nums text-[var(--accent)]">
               {r.rating.toFixed(3)}
-              {r.provisional ? (
-                <span className="text-[var(--muted)]">?</span>
-              ) : null}
             </span>
           </Link>
           </li>

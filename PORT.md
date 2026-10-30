@@ -986,8 +986,18 @@ decides which table you appear in; "Not listed" keeps you out entirely.
 
 Shows career played and win rate — every scored game here, rated or casual.
 
-A `?` after the rating means still settling (reliability < 60%), with a footnote
-explaining it. It returns on every self re-seed.
+**Established ratings only** (v2.1). Until v2.0 every active player was listed
+and a `?` after the number marked a provisional rating (reliability < 60%),
+the compromise between one honest list and a second table that read like a
+waiting room. Once typed reliability fades (§3.6) the `?` is a verdict — the
+group has not seen enough of this player — and ranking such a number beside
+ones people can lean on is the wrong comparison. So the table lists only
+ratings at or above `RELIABILITY_PASS`, per tab. Two courtesies keep an
+absence from being a mystery: a footnote (or, on an empty tab, the hint) says
+how many players in that tab are still settling, and a card at the top tells
+a provisional viewer their own reliability and that 60% is the bar. A self
+re-seed with no reliability still drops a player off the table until they
+have played here again; "Not listed" still keeps them out entirely.
 
 ---
 

@@ -1,5 +1,26 @@
 # Shared work log
 
+## Released: v2.1 rankings list established ratings only — Claude, 2026-10-30
+
+Owner's request: with the v2.0 decay in place, Rankings should show only
+ratings without a `?`. Branch claude/v2.1 from main 8cd5d4f.
+
+- app/leaderboard/page.tsx: rows are listed players with provisional=false,
+  per tab; a footnote (or the empty-state hint) counts players in that tab
+  still settling (rank.settling / .plural); a card tells a provisional viewer
+  their reliability and the 60% bar (rank.meSettling). The `?` suffix and
+  rank.questionMark are gone from this page (Me and the rating page keep it).
+- Strings in three languages; release notes v2.1 (notes.v21.rankings);
+  PORT.md §10; PROJECT.md.
+- Browser (dev, dev_ana): with every dev player provisional, All shows the
+  "not ranked yet — 47% reliable" card, "Nobody in this list yet" and "12 more
+  players are still settling in"; Girl tab counts 6. After an admin
+  correction gave dev_kit 100% reliability, All lists dev_kit at 🥇 with no ?
+  and the footnote counts 11. No console errors. (The correction stays in the
+  dev DB; it also moved dev_ana to 44%, the v2.0 fade applying at the first
+  post-epoch event, as designed.)
+- Checks: typecheck, lint, 473 unit tests, build.
+
 ## Released: v2.0 review fixes — Claude, 2026-10-22
 
 Released as f837d3c (fast-forwarded to main, pushed 2026-10-22 evening). Order
