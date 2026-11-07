@@ -1,6 +1,6 @@
 # Shared work log
 
-## Released: v2.2 admin PIN reset — Claude, 2026-11-07
+## Released: admin PIN reset fix (no version bump) — Claude, 2026-11-07
 
 Owner report: ProfWu forgot his PIN; HUI reset it in Admin and the player
 still could not sign in. Read-only audit of production: account active,
@@ -26,8 +26,10 @@ because the old failed attempts were kept.
   resetPinAction; the reset also deletes the player's login_attempts and
   returns `ok`; admin/RosterCard.tsx ResetPinForm gives each row its own
   state so the refusal or confirmation shows under the typed PIN. Strings
-  (placeholder, note, admin.pinResetDone, notes.v22.pinReset) in three
-  languages; release notes v2.2; PORT permission table and §auth; PROJECT.
+  (placeholder, note, admin.pinResetDone) in three languages; PORT
+  permission table and §auth; PROJECT. Shipped first as v2.2 with a release
+  note (2053917); the owner asked for no note, so the note and the 2.2 entry
+  were removed and the version shown stays 2.1.
 - Tests: new auth/pin.test.ts (hash/verify, full-width digits, malformed
   hashes, both rule sets).
 - Browser (dev): reproduced ProfWu's state on dev_jo — five wrong PINs on

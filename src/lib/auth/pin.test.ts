@@ -32,7 +32,7 @@ describe("PIN rules", () => {
     expect(validatePin("12a4")).toEqual({ ok: false, error: "err.pinDigits" });
   });
 
-  it("an admin's temporary PIN only has to be 4–6 digits (v2.2)", () => {
+  it("an admin's temporary PIN only has to be 4–6 digits (2026-11-07)", () => {
     // The admin hands it over in person and the player is meant to change it;
     // refusing 1111 here is what left a player with a PIN that was never saved.
     expect(validatePinDigits("1111")).toEqual({ ok: true });

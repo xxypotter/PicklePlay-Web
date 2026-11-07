@@ -976,7 +976,6 @@ export const en = {
   "mlp.error.managed": "Use the Mini MLP team setup and playoff controls for this session.",
   "err.scoreVoided": "This match is voided. It must be restored before its score can be edited.",
   "notes.v18.formats": "Mini MLP now sits above Custom in the format list.",
-  "notes.v22.pinReset": "Forgot your PIN? An admin can now set you a simple temporary one, and your earlier failed attempts are cleared so you can sign in straight away — they'll tell you the PIN in person.",
   "notes.v21.rankings": "Rankings now list established ratings only — the ones without a ?. A rating that's still settling, below 60% reliability, waits off the table until you've played here enough. The page says how many players are on their way and, if you're one of them, how far along you are.",
   "notes.v20.errors": "When something can't be done — a round not yet fully scored, players still unpaired, a player no longer available — the reason now appears right under the button instead of nothing happening. A page that hits an error shows a retry button instead of a blank screen.",
   "notes.v20.career": "Played, won and win rate now count every scored game here, casual nights included, on every screen — Me, My rating, My record and Rankings all agree. Only the rating ignores casual games. The old “record from before PicklePlay” import is gone: your record is what you play here.",

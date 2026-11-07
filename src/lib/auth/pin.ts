@@ -61,7 +61,7 @@ type PinCheck = { ok: true } | { ok: false; error: DictKey };
 
 /**
  * 4–6 digits, nothing more. The bar for a PIN an admin sets *for* someone
- * (v2.2): it is temporary, handed over in person, and the admin picks it —
+ * (2026-11-07): it is temporary, handed over in person, and the admin picks it —
  * usually 1111, which is exactly what the guessability rule below refuses.
  * Refusing it left a player with a PIN that was never saved, twice (BoRong
  * 2026-10-02, ProfWu 2026-11-07). The rate limit is what protects a PIN; the

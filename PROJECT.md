@@ -62,7 +62,7 @@ the code that depends on them, after backup and development validation.
 - v2.1 (2026-10-30): Rankings list established ratings only (reliability ≥
   60%), with a count of players still settling and a card telling a
   provisional viewer their own reliability. app/leaderboard/page.tsx; PORT §10.
-- v2.2 (2026-11-07): an admin PIN reset accepts any 4–6 digits (temporary PIN,
+- 2026-11-07 (no release note, version stays 2.1): an admin PIN reset accepts any 4–6 digits (temporary PIN,
   auth/pin.ts validatePinDigits), clears the player's login attempts, and
   reports success or refusal under the row (admin/RosterCard.tsx ResetPinForm).
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
