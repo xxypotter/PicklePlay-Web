@@ -44,6 +44,8 @@ because the old failed attempts were kept.
   served "Version 2.2" 45 s later. No migration. Home, /login, /notes 200.
   Post-release read-only check of ProfWu: active, 0 login attempts, 0 tokens,
   one `player.reset_pin` audit row (Jason, 17:59Z).
+- Note removed at the owner's request (e942cc6, pushed and live within a
+  minute): /notes shows 2.1 as current again; the fix itself is unchanged.
 
 ## Released: v2.1 rankings list established ratings only — Claude, 2026-10-30
 
