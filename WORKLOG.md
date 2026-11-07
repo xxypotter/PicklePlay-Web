@@ -38,6 +38,10 @@ because the old failed attempts were kept.
   at once: redirected home, Me shows dev_jo. No console errors. (dev_jo's
   dev PIN is now the temporary one.)
 - Checks: typecheck, lint, 478 unit tests, build.
+- Released as 2053917, fast-forwarded to main and pushed 2026-11-07; /notes
+  served "Version 2.2" 45 s later. No migration. Home, /login, /notes 200.
+  Post-release read-only check of ProfWu: active, 0 login attempts, 0 tokens,
+  one `player.reset_pin` audit row (Jason, 17:59Z).
 
 ## Released: v2.1 rankings list established ratings only — Claude, 2026-10-30
 
