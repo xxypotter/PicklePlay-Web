@@ -1028,9 +1028,11 @@ Byte order puts every capital before every lowercase, which files `Zeng` before
 Listed so nothing is assumed, not specified.
 
 1. **Authentication.** Web uses username + 4–6 digit PIN with a group invite
-   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes. An admin
-   reset accepts any 4–6 digits and clears the player's failed attempts
-   (2026-11-07), since a reset is how a locked-out, forgetful player gets back in.
+   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes. Any 4–6
+   digits are accepted — the "too easy to guess" rule was dropped on
+   2026-11-07 because it kept defeating admin resets; the rate limit is the
+   protection. An admin reset also clears the player's failed attempts,
+   since a reset is how a locked-out, forgetful player gets back in.
    Native will use email or phone — replace wholesale. Keep `players.role` and the
    permission table.
 2. **Admin as in-app purchase.** No equivalent here; admin is granted by the

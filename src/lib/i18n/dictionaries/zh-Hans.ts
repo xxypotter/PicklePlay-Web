@@ -578,7 +578,6 @@ export const zhHans: Dict = {
   "err.tooManyAttempts": "尝试次数过多。请在 {minutes} 分钟后再试。",
   "err.tooManyAttempts.plural": "尝试次数过多。请在 {minutes} 分钟后再试。",
   "err.pinDigits": "PIN 必须是 4 到 6 位数字。",
-  "err.pinGuessable": "这个 PIN 太容易被猜到，换一个。",
   "err.nameShort": "名字至少要 3 个字符。",
   "err.nameLong": "名字不能超过 20 个字符。",
   "err.nameChars": "只能使用字母、数字、连字符和下划线，并以字母或数字开头。",

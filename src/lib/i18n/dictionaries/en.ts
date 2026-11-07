@@ -659,7 +659,6 @@ export const en = {
   "err.tooManyAttempts": "Too many attempts. Try again in {minutes} minute.",
   "err.tooManyAttempts.plural": "Too many attempts. Try again in {minutes} minutes.",
   "err.pinDigits": "PIN must be 4 to 6 digits.",
-  "err.pinGuessable": "That PIN is too easy to guess. Try another.",
   "err.nameShort": "Name must be at least 3 characters.",
   "err.nameLong": "Name must be 20 characters or fewer.",
   "err.nameChars":

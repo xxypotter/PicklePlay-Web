@@ -46,6 +46,11 @@ because the old failed attempts were kept.
   one `player.reset_pin` audit row (Jason, 17:59Z).
 - Note removed at the owner's request (e942cc6, pushed and live within a
   minute): /notes shows 2.1 as current again; the fix itself is unchanged.
+- Follow-up at the owner's request: the "too easy to guess" rule is removed
+  for everyone (signup too) — validatePin is 4–6 digits only; the separate
+  validatePinDigits and err.pinGuessable (three languages) are gone. Lockout
+  clearing on reset was already in place for any admin or superadmin reset
+  (resetPinAction deletes the player's login_attempts). PORT §auth, PROJECT.
 
 ## Released: v2.1 rankings list established ratings only — Claude, 2026-10-30
 

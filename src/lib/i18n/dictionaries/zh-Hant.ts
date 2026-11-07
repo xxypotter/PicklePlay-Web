@@ -576,7 +576,6 @@ export const zhHant: Dict = {
   "err.tooManyAttempts": "嘗試次數過多。請在 {minutes} 分鐘後再試。",
   "err.tooManyAttempts.plural": "嘗試次數過多。請在 {minutes} 分鐘後再試。",
   "err.pinDigits": "PIN 必須是 4 到 6 位數字。",
-  "err.pinGuessable": "這個 PIN 太容易被猜到，換一個。",
   "err.nameShort": "名字至少要 3 個字元。",
   "err.nameLong": "名字不能超過 20 個字元。",
   "err.nameChars": "只能使用字母、數字、連字號和底線，並以字母或數字開頭。",

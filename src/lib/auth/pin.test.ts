@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashPin, validatePin, validatePinDigits, verifyPin } from "./pin";
+import { hashPin, validatePin, verifyPin } from "./pin";
 
 describe("PIN hashing", () => {
   it("verifies the PIN it hashed and nothing else", async () => {
@@ -22,23 +22,17 @@ describe("PIN hashing", () => {
   });
 });
 
-describe("PIN rules", () => {
-  it("a player choosing their own PIN may not pick a guessable one", () => {
+describe("PIN rule", () => {
+  it("is 4–6 digits and nothing else — simple PINs are allowed since 2026-11-07", () => {
+    // Refusing 1111 is what left a player with a PIN that was never saved;
+    // the rate limit, not the digits, is what protects a PIN here.
+    expect(validatePin("1111")).toEqual({ ok: true });
+    expect(validatePin("1234")).toEqual({ ok: true });
     expect(validatePin("1357")).toEqual({ ok: true });
-    expect(validatePin("1111")).toEqual({ ok: false, error: "err.pinGuessable" });
-    expect(validatePin("1234")).toEqual({ ok: false, error: "err.pinGuessable" });
-    expect(validatePin("4321")).toEqual({ ok: false, error: "err.pinGuessable" });
-    expect(validatePin("12")).toEqual({ ok: false, error: "err.pinDigits" });
+    expect(validatePin("123456")).toEqual({ ok: true });
+    expect(validatePin("123")).toEqual({ ok: false, error: "err.pinDigits" });
+    expect(validatePin("1234567")).toEqual({ ok: false, error: "err.pinDigits" });
     expect(validatePin("12a4")).toEqual({ ok: false, error: "err.pinDigits" });
-  });
-
-  it("an admin's temporary PIN only has to be 4–6 digits (2026-11-07)", () => {
-    // The admin hands it over in person and the player is meant to change it;
-    // refusing 1111 here is what left a player with a PIN that was never saved.
-    expect(validatePinDigits("1111")).toEqual({ ok: true });
-    expect(validatePinDigits("123456")).toEqual({ ok: true });
-    expect(validatePinDigits("123")).toEqual({ ok: false, error: "err.pinDigits" });
-    expect(validatePinDigits("1234567")).toEqual({ ok: false, error: "err.pinDigits" });
-    expect(validatePinDigits("11 11")).toEqual({ ok: false, error: "err.pinDigits" });
+    expect(validatePin("11 11")).toEqual({ ok: false, error: "err.pinDigits" });
   });
 });

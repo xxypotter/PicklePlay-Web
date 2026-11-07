@@ -3,7 +3,7 @@
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth/permissions";
-import { hashPin, validatePinDigits } from "@/lib/auth/pin";
+import { hashPin, validatePin } from "@/lib/auth/pin";
 import { getT } from "@/lib/i18n/server";
 import { canAdjustRating } from "@/lib/auth/policy";
 import { revokeAllSessions } from "@/lib/auth/session";
@@ -184,9 +184,8 @@ export async function resetPinAction(_prev: FormState, formData: FormData): Prom
   const targetId = String(formData.get("playerId") ?? "");
   const pin = String(formData.get("pin") ?? "").trim();
 
-  // Any 4–6 digits: a temporary PIN the admin hands over in person. See
-  // validatePinDigits for why the guessability rule does not apply here.
-  const valid = validatePinDigits(pin);
+  // Any 4–6 digits: a temporary PIN the admin hands over in person.
+  const valid = validatePin(pin);
   if (!valid.ok) return { error: t(valid.error), field: "pin" };
 
   const db = getDb();
