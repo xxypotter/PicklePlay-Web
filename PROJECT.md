@@ -62,9 +62,9 @@ the code that depends on them, after backup and development validation.
 - v2.1 (2026-10-30): Rankings list established ratings only (reliability ≥
   60%), with a count of players still settling and a card telling a
   provisional viewer their own reliability. app/leaderboard/page.tsx; PORT §10.
-- 2026-11-07 (no release note, version stays 2.1): any 4–6 digit PIN is accepted everywhere — the
-  "too easy to guess" rule is gone; an admin PIN reset
-  auth/pin.ts validatePin), clears the player's login attempts, and
+- 2026-11-07 (no release note, version stays 2.1): any 4–6 digit PIN is
+  accepted everywhere — the "too easy to guess" rule is gone (auth/pin.ts
+  validatePin); an admin PIN reset clears the player's login attempts and
   reports success or refusal under the row (admin/RosterCard.tsx ResetPinForm).
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
   Matchups has an optional hide-scored filter, combined with player selection.

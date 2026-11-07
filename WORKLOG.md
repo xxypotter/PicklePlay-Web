@@ -51,6 +51,9 @@ because the old failed attempts were kept.
   validatePinDigits and err.pinGuessable (three languages) are gone. Lockout
   clearing on reset was already in place for any admin or superadmin reset
   (resetPinAction deletes the player's login_attempts). PORT §auth, PROJECT.
+  Released as b4ea568 (typecheck, lint, 477 tests, build); Vercel's GitHub
+  status for the commit is success; /login and /register 200, /notes still
+  shows 2.1. Unit tests cover the rule (1111 and 1234 accepted, 123 refused).
 
 ## Released: v2.1 rankings list established ratings only — Claude, 2026-10-30
 
