@@ -1,5 +1,44 @@
 # Shared work log
 
+## Released: v2.2 admin PIN reset — Claude, 2026-11-07
+
+Owner report: ProfWu forgot his PIN; HUI reset it in Admin and the player
+still could not sign in. Read-only audit of production: account active,
+scrypt hash present, no `player.reset_pin` audit row (the reset never
+happened), 11 failed attempts today with 5 inside the last 15 minutes (rate
+limit in force), and his only sign-in token had expired that morning — the
+90-day session ending is why he suddenly needed the PIN.
+
+Cause, the same as BoRong on 2026-10-02: the admin form ran the player
+guessability rule, so the requested all-same-digit PIN was refused, and the
+refusal rendered at the top of the 125-row roster card where it went unseen.
+Even a successful reset would have left him locked out for up to 15 minutes,
+because the old failed attempts were kept.
+
+- Recovery (owner-requested, applied 2026-11-07 ~18:05Z through the app's own
+  scrypt implementation, .scratch/profwu-recover.mjs, dry-run then apply in
+  one transaction): PIN set to the requested temporary value, 1 token
+  revoked, 11 attempts cleared, audit row `player.reset_pin` attributed to
+  Jason, stored hash verified against the PIN and against a wrong one. No
+  credentials in this log; nothing else changed. Verification was hash and
+  state checks, not a sign-in as the player.
+- Fix: auth/pin.ts validatePinDigits (4–6 digits only) used by
+  resetPinAction; the reset also deletes the player's login_attempts and
+  returns `ok`; admin/RosterCard.tsx ResetPinForm gives each row its own
+  state so the refusal or confirmation shows under the typed PIN. Strings
+  (placeholder, note, admin.pinResetDone, notes.v22.pinReset) in three
+  languages; release notes v2.2; PORT permission table and §auth; PROJECT.
+- Tests: new auth/pin.test.ts (hash/verify, full-width digits, malformed
+  hashes, both rule sets).
+- Browser (dev): reproduced ProfWu's state on dev_jo — five wrong PINs on
+  /login, sixth refused with "Too many attempts. Try again in 13 minutes."
+  As dev_ana, Admin → dev_jo → Reset PIN 1111 → "PIN set. dev_jo can sign in
+  with it now." shown in green under that row; login_attempts for dev_jo 0,
+  one audit row. Logged out, signed in on /login as dev_jo with the new PIN
+  at once: redirected home, Me shows dev_jo. No console errors. (dev_jo's
+  dev PIN is now the temporary one.)
+- Checks: typecheck, lint, 478 unit tests, build.
+
 ## Released: v2.1 rankings list established ratings only — Claude, 2026-10-30
 
 Owner's request: with the v2.0 decay in place, Rankings should show only

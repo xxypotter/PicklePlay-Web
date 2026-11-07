@@ -57,11 +57,25 @@ export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+type PinCheck = { ok: true } | { ok: false; error: DictKey };
+
+/**
+ * 4–6 digits, nothing more. The bar for a PIN an admin sets *for* someone
+ * (v2.2): it is temporary, handed over in person, and the admin picks it —
+ * usually 1111, which is exactly what the guessability rule below refuses.
+ * Refusing it left a player with a PIN that was never saved, twice (BoRong
+ * 2026-10-02, ProfWu 2026-11-07). The rate limit is what protects a PIN; the
+ * guessability rule is for people choosing their own.
+ */
+export function validatePinDigits(pin: string): PinCheck {
+  if (!/^\d{4,6}$/.test(pin)) return { ok: false, error: "err.pinDigits" };
+  return { ok: true };
+}
+
 /** 4-6 digits. Rejects trivially guessable PINs before they're ever hashed. */
-export function validatePin(pin: string): { ok: true } | { ok: false; error: DictKey } {
-  if (!/^\d{4,6}$/.test(pin)) {
-    return { ok: false, error: "err.pinDigits" };
-  }
+export function validatePin(pin: string): PinCheck {
+  const digits = validatePinDigits(pin);
+  if (!digits.ok) return digits;
   if (/^(\d)\1*$/.test(pin)) {
     return { ok: false, error: "err.pinGuessable" };
   }

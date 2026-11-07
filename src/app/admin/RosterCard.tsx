@@ -60,7 +60,6 @@ export default function RosterCard({
     adjustRatingAction,
     {} as FormState,
   );
-  const [pinState, pinAction, pinPending] = useActionState(resetPinAction, {} as FormState);
   const [delState, delAction, delPending] = useActionState(deletePlayerAction, {} as FormState);
   /* Which row is armed. One at a time, so arming a second disarms the first. */
   const [armedDelete, setArmedDelete] = useState<string | null>(null);
@@ -126,9 +125,9 @@ export default function RosterCard({
         )
       ) : null}
 
-      {roleState.error || adjustState.error || pinState.error ? (
+      {roleState.error || adjustState.error ? (
         <p role="alert" className="mt-3 text-sm font-medium text-[var(--danger)]">
-          {roleState.error ?? adjustState.error ?? pinState.error}
+          {roleState.error ?? adjustState.error}
         </p>
       ) : null}
 
@@ -257,35 +256,7 @@ export default function RosterCard({
                 </div>
               ) : null}
 
-              {canResetPin(p.role) ? (
-                <details className="mt-1.5">
-                  <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
-                    {t("admin.resetPin")}
-                  </summary>
-                  <form action={pinAction} className="mt-3 flex gap-2">
-                    <input type="hidden" name="playerId" value={p.id} />
-                    <input
-                      name="pin"
-                      className="field py-2 text-sm"
-                      inputMode="numeric"
-                      pattern="\d{4,6}"
-                      placeholder={t("admin.newPinPlaceholder")}
-                      required
-                    />
-                    <button
-                      type="submit"
-                      disabled={pinPending}
-                      className="shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs
-                        font-semibold disabled:opacity-50"
-                    >
-                      {t("admin.setPin")}
-                    </button>
-                  </form>
-                  <p className="mt-1.5 text-xs text-[var(--muted)]">
-                    {t("admin.pinResetNote")}
-                  </p>
-                </details>
-              ) : null}
+              {canResetPin(p.role) ? <ResetPinForm playerId={p.id} /> : null}
             </li>
           );
         })}
@@ -295,5 +266,49 @@ export default function RosterCard({
         <p className="hint mt-4">{t("admin.roleNote")}</p>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * One form per row, with its own state, so the outcome lands under the PIN
+ * that was just typed. One state shared by every row showed the refusal at the
+ * top of a 120-player list, where nobody looked: an admin would set 1111, see
+ * nothing, and tell the player a PIN that had never been saved.
+ */
+function ResetPinForm({ playerId }: { playerId: string }) {
+  const t = useT();
+  const [state, action, pending] = useActionState(resetPinAction, {} as FormState);
+  return (
+    <details className="mt-1.5">
+      <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
+        {t("admin.resetPin")}
+      </summary>
+      <form action={action} className="mt-3 flex gap-2">
+        <input type="hidden" name="playerId" value={playerId} />
+        <input
+          name="pin"
+          className="field py-2 text-sm"
+          inputMode="numeric"
+          pattern="\d{4,6}"
+          placeholder={t("admin.newPinPlaceholder")}
+          required
+        />
+        <button
+          type="submit"
+          disabled={pending}
+          className="shrink-0 rounded-lg border border-[var(--border)] px-3 text-xs
+            font-semibold disabled:opacity-50"
+        >
+          {t("admin.setPin")}
+        </button>
+      </form>
+      {state.error ? (
+        <p role="alert" className="mt-1.5 text-xs font-medium text-[var(--danger)]">{state.error}</p>
+      ) : null}
+      {state.ok ? (
+        <p role="status" className="mt-1.5 text-xs font-medium text-[var(--success)]">{state.ok}</p>
+      ) : null}
+      <p className="mt-1.5 text-xs text-[var(--muted)]">{t("admin.pinResetNote")}</p>
+    </details>
   );
 }

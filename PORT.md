@@ -812,7 +812,7 @@ each has the same permissions. The ordinary role picker only grants player/admin
 | Restore a voided match | **superadmin only** |
 | Adjust another player's rating | admin, but only players and themselves |
 | Adjust an admin's or the superadmin's rating | superadmin only |
-| Reset a PIN | admin for players; superadmin for admins |
+| Reset a PIN | admin for players; superadmin for admins. Any 4–6 digits — a temporary PIN handed over in person (v2.2); it signs the player out everywhere and clears their failed attempts |
 | Invite code, recompute, backup, delete account, private sessions | superadmin |
 
 Being an admin is not permission to rewrite a peer's rating: that turns every
@@ -1028,8 +1028,10 @@ Byte order puts every capital before every lowercase, which files `Zeng` before
 Listed so nothing is assumed, not specified.
 
 1. **Authentication.** Web uses username + 4–6 digit PIN with a group invite
-   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes. Native will
-   use email or phone — replace wholesale. Keep `players.role` and the
+   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes. An admin
+   reset accepts any 4–6 digits and clears the player's failed attempts
+   (v2.2), since a reset is how a locked-out, forgetful player gets back in.
+   Native will use email or phone — replace wholesale. Keep `players.role` and the
    permission table.
 2. **Admin as in-app purchase.** No equivalent here; admin is granted by the
    superadmin. Decide how that interacts with the role hierarchy — particularly

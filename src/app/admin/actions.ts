@@ -3,13 +3,13 @@
 import { eq, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth/permissions";
-import { hashPin, validatePin } from "@/lib/auth/pin";
+import { hashPin, validatePinDigits } from "@/lib/auth/pin";
 import { getT } from "@/lib/i18n/server";
 import { canAdjustRating } from "@/lib/auth/policy";
 import { revokeAllSessions } from "@/lib/auth/session";
 import type { FormState } from "@/lib/auth/types";
 import { getDb } from "@/lib/db";
-import { auditLog, matches, mlpTeams, players, ratingSeeds } from "@/lib/db/schema";
+import { auditLog, loginAttempts, matches, mlpTeams, players, ratingSeeds } from "@/lib/db/schema";
 import { generateInviteCode, setInviteCode } from "@/lib/invite";
 import { RATING } from "@/lib/rating/constants";
 import { recomputeAll, type RecomputeSummary } from "@/lib/rating/service";
@@ -184,12 +184,14 @@ export async function resetPinAction(_prev: FormState, formData: FormData): Prom
   const targetId = String(formData.get("playerId") ?? "");
   const pin = String(formData.get("pin") ?? "").trim();
 
-  const valid = validatePin(pin);
+  // Any 4–6 digits: a temporary PIN the admin hands over in person. See
+  // validatePinDigits for why the guessability rule does not apply here.
+  const valid = validatePinDigits(pin);
   if (!valid.ok) return { error: t(valid.error), field: "pin" };
 
   const db = getDb();
   const rows = await db
-    .select({ id: players.id, username: players.username, role: players.role })
+    .select({ id: players.id, username: players.username, usernameLower: players.usernameLower, role: players.role })
     .from(players)
     .where(eq(players.id, targetId))
     .limit(1);
@@ -208,6 +210,9 @@ export async function resetPinAction(_prev: FormState, formData: FormData): Prom
 
   // Whoever was signed in as them is signed out.
   await revokeAllSessions(targetId);
+  // Their guesses at the old PIN are no longer evidence of anything; left in
+  // place they would lock the new PIN out for up to fifteen minutes.
+  await db.delete(loginAttempts).where(eq(loginAttempts.usernameLower, target.usernameLower));
 
   await db.insert(auditLog).values({
     actorId: me.id,
@@ -218,7 +223,7 @@ export async function resetPinAction(_prev: FormState, formData: FormData): Prom
   });
 
   revalidatePath("/admin");
-  return {};
+  return { ok: t("admin.pinResetDone", { name: target.username }) };
 }
 
 /**
