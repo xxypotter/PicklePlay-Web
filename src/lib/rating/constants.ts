@@ -450,18 +450,6 @@ export const TUNING_V1_4: Tuning = {
 };
 
 /**
- * Every tuning this engine has used, newest first.
- *
- * A match replays under whichever was in force the day it was played, so
- * results already shown to players never move. Each cutover sits after the
- * last match played under the previous tuning and before anything since.
- * Editing an old score keeps it on its original tuning, because saving a
- * correction updates `editedAt` and leaves `playedAt` alone.
- *
- * Add to the front when you retune. Never edit an entry that has matches
- * behind it.
- */
-/**
  * Who appears on Rankings (display only — not a tuning, so no epoch).
  *
  * Listing reads reliability *earned here* — the lowest of the partner, team
@@ -475,6 +463,18 @@ export const RANKINGS = {
   HOLD: 0.5,
 } as const;
 
+/**
+ * Every tuning this engine has used, newest first.
+ *
+ * A match replays under whichever was in force the day it was played, so
+ * results already shown to players never move. Each cutover sits after the
+ * last match played under the previous tuning and before anything since.
+ * Editing an old score keeps it on its original tuning, because saving a
+ * correction updates `editedAt` and leaves `playedAt` alone.
+ *
+ * Add to the front when you retune. Never edit an entry that has matches
+ * behind it.
+ */
 export const TUNING_EPOCHS: ReadonlyArray<{ from: Date; tuning: Tuning }> = [
   // v2.0 — declared reliability floors fade (90-day half-life).
   // Last match under v1.4: 2026-10-17T22:07Z.

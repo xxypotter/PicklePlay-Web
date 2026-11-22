@@ -1,5 +1,59 @@
 # Shared work log
 
+## v2.3 follow-up: sign-in, PINs, Rankings, cleanup — Claude, 2026-11-22
+
+Owner's decisions on the review recommendations: (1) sliding sign-in yes;
+(2) "reset Bryant and zhuqiang to their original PINs" — not possible, PINs
+are one-way hashes and nobody can read them; their original PINs are still
+in place and they are not locked out, so nothing was changed (see below);
+(3) Change PIN, "Username" label, forgotten-PIN hint yes; (4) group-wide cap
+yes; (5) list by earned reliability yes; (6) delete the three test sessions
+yes; (7) hold at 50%, view-time listing, "3–4 sessions" copy yes;
+(8) co-organizers no. Version stays 2.3: the coed change released as 2.4
+earlier today was folded into 2.3 (2.4 entry removed, notes.v24.coed renamed
+notes.v23.coed, PORT-v2.4.md merged into PORT-v2.3.md).
+Branch claude/v2.3-followup (local rename of claude/v2.4).
+
+- Sign-in: auth/session.ts renews the token to a fresh 90 days on any visit
+  more than a day after the last renewal (renewSession via SessionRenewer in
+  the root layout, since Server Components can't set cookies); only a valid
+  token of an active player. A signed pp_device cookie (~400 days) marks
+  browsers that have signed in as a player.
+- PINs: auth/actions.ts changePinAction (current PIN + new twice; wrong
+  current PIN counts against the per-name limit; other devices signed out;
+  audit player.change_pin); ChangePinCard on Me; login label "Username" and
+  "use your username" wording; forgotten-PIN hint only after a wrong PIN.
+- Sign-in budget (auth/rate-limit.ts reserveLoginAttempt): each attempt is
+  reserved as a failure under advisory lock 72417002 before the scrypt check;
+  per name 5/15 min; group budget 30/15 min or 60/day over real usernames
+  only; known devices exempt; Change PIN skips the group budget; one
+  auth.busy audit row per window. Dev test: 10 simultaneous reservations at
+  26/30 let exactly 4 through.
+- Rankings: engine outputs evidence totals at the timeline end and a
+  rank_hold flag (enter 60 / hold 50) without touching any rating;
+  rating/listing.ts evaluates earned reliability at view time; leaderboard
+  uses it, falls back to v2.1 while evidence_at is null; card shows earned %
+  (floored) with a "dropped off after a break" variant for players with 24+
+  games. Migration 0020_groovy_loki adds the five player_stats columns.
+  Production replay (read-only): 2,548 events and 132 ratings bit-identical;
+  listing today 30 → 27 (out: Shannen, Alex, King, Chinda, Claire, Ben; back
+  under the hold: 18birdies, Eunice, Jennifer).
+- Copy (three languages): reliability help text, "?" text and settling
+  footnote now say about 3–4 rated sessions; admin reset note mentions Change
+  PIN; release notes 2.3 gain coed, sign-in, PIN and Rankings lines.
+- Pre-release review workflow (4 reviewers + 4 skeptics): renewal and Change
+  PIN clean; fixed the confirmed findings — group cap DoS (real names only +
+  known-device exemption), check-then-act race (reservation), hint during the
+  pause, card fallback, RANKINGS placement, PORT §2 columns, PORT-v2.3 intro.
+  Release order taken from it: backup → migrate → push → Ready → backfill →
+  delete tests → verify. Full results: .scratch/v23b-review.json.
+- Signed out already (need their PIN, renewal can't help): Bryant (admin),
+  Chinda, Daniel (admin), Hao (admin), Heyang, Liang, Zeng, ikun, zhuqiang.
+- Checks: typecheck, lint, 520 tests incl. all dev DB workflows, build.
+  Browser (dev): Rankings card 20% earned for dev_ana and dev_kit (typed 100%,
+  0 games) no longer listed; Change PIN refuses a wrong current PIN; login
+  shows "Username" and the hint; a 10-day sign-in renewed to 90 on one visit.
+
 ## Released: v2.4 coed rule for the regular round robin — Claude, 2026-11-22
 
 Owner approved the review recommendation: apply the no-men-vs-women rule to

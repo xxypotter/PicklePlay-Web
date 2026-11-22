@@ -57,7 +57,8 @@ export default function LoginForm({ next = "" }: { next?: string }) {
           </p>
           {/*
             A forgotten PIN used to dead-end here, and people made a second
-            account instead. Say what to do.
+            account instead. Say what to do — but not during a group-wide pause
+            (field "busy"), when the PIN is not the problem and a reset can't help.
           */}
           {state.field === "pin" ? <p className="hint">{t("auth.forgotPin")}</p> : null}
         </div>

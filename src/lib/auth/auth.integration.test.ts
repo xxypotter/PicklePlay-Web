@@ -105,21 +105,48 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v2.3 sign-in: change P
     expect(still.expiresAt.getTime()).toBeLessThan(Date.now());
   }, 30000);
 
-  it("pauses all sign-ins after 30 failures group-wide in 15 minutes, and logs it once", async () => {
-    const { checkGlobalLoginRate } = await import("./rate-limit");
-    const since = new Date(Date.now() - 15 * 60_000);
-    const [{ n }] = await db().select({ n: sql<number>`count(*)::int` }).from(loginAttempts)
-      .where(and(eq(loginAttempts.succeeded, false), gte(loginAttempts.attemptedAt, since)));
-    expect((await checkGlobalLoginRate()).allowed).toBe(n < 30);
-    await db().insert(loginAttempts).values(Array.from({ length: Math.max(0, 30 - n) }, (_, i) => ({ usernameLower: `v23auth_guess${i}`, succeeded: false })));
-
-    expect((await checkGlobalLoginRate()).allowed).toBe(false);
-    expect((await checkGlobalLoginRate()).allowed).toBe(false);
-    const logged = await db().select().from(auditLog).where(and(eq(auditLog.action, "auth.busy"), gte(auditLog.createdAt, since)));
-    expect(logged).toHaveLength(1);
-
+  it("group budget: reserved before the PIN check, real names only, logged once, known phones exempt", async () => {
+    const { reserveLoginAttempt } = await import("./rate-limit");
+    const { hashPin } = await import("./pin");
+    const { createSession } = await import("./session");
     const { loginAction } = await import("./actions");
-    const r = await loginAction({}, form({ username, pin: "1111" }));
-    expect(r).toEqual({ error: t("err.signInBusy"), field: "pin" });
-  }, 30000);
+    const extras = Array.from({ length: 6 }, (_, i) => ({ id: randomUUID(), username: `v23auth_x${i}_${id.slice(0, 6)}` }));
+    const pinHash = await hashPin("1357");
+    await db().insert(players).values(extras.map((x) => ({ id: x.id, username: x.username, usernameLower: x.username.toLowerCase(), pinHash, role: "player" as const })));
+    try {
+      const since = new Date(Date.now() - 15 * 60_000);
+      const groupNow = async () => (await db().select({ n: sql<number>`count(*)::int` }).from(loginAttempts)
+        .innerJoin(players, eq(players.usernameLower, loginAttempts.usernameLower))
+        .where(and(eq(loginAttempts.succeeded, false), gte(loginAttempts.attemptedAt, since))))[0].n;
+
+      // Typos and made-up names never count toward the group budget.
+      await db().insert(loginAttempts).values(Array.from({ length: 40 }, (_, i) => ({ usernameLower: `v23auth_nobody${i}`, succeeded: false })));
+      const base = await groupNow();
+      expect(base).toBeLessThan(26);
+
+      // Bring real-name failures to 26, then fire ten at once: exactly four may pass.
+      await db().insert(loginAttempts).values(Array.from({ length: 26 - base }, () => ({ usernameLower: username.toLowerCase(), succeeded: false })));
+      const burst = await Promise.all(Array.from({ length: 10 }, (_, i) =>
+        reserveLoginAttempt(extras[i % 6].username.toLowerCase(), { groupCheck: true })));
+      expect(burst.filter((r) => r.ok)).toHaveLength(4);
+      expect(burst.filter((r) => !r.ok && r.reason === "busy")).toHaveLength(6);
+      expect(await groupNow()).toBe(30);
+
+      const logged = await db().select().from(auditLog).where(and(eq(auditLog.action, "auth.busy"), gte(auditLog.createdAt, since)));
+      expect(logged).toHaveLength(1);
+
+      // Signed-in actions skip the group budget; a new browser is paused.
+      expect(await reserveLoginAttempt(extras[5].username.toLowerCase(), { groupCheck: false })).toEqual({ ok: true });
+      jar.clear();
+      const paused = await loginAction({}, form({ username: extras[4].username, pin: "1357" }));
+      expect(paused).toEqual({ error: t("err.signInBusy"), field: "busy" });
+
+      // A phone that has signed in as that player before still gets in.
+      await createSession(extras[4].id);
+      jar.delete("pp_session");
+      await expect(loginAction({}, form({ username: extras[4].username, pin: "1357" }))).rejects.toThrow("redirect:/");
+    } finally {
+      await db().delete(players).where(inArray(players.id, extras.map((x) => x.id)));
+    }
+  }, 60000);
 });

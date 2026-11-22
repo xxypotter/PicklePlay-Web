@@ -351,6 +351,7 @@ export const en = {
   "rank.settling": "{count} more player isn't ranked yet — players are listed once their reliability from games here reaches 60%, and stay listed until it drops below 50%.",
   "rank.settling.plural": "{count} more players aren't ranked yet — players are listed once their reliability from games here reaches 60%, and stay listed until it drops below 50%.",
   "rank.meSettling": "You're not ranked yet — your reliability from games here is {reliability}%, and the table lists players from 60%. It usually takes about 3–4 rated sessions.",
+  "rank.meLapsed": "You've dropped off the table after a break — your reliability from games here is {reliability}%. A rated session or two usually brings it back to 60%.",
 
   // --- me -----------------------------------------------------------------
   "me.title": "Me",
@@ -436,7 +437,7 @@ export const en = {
   "rating.title": "My rating",
   "player.title": "Player",
   "rating.peak": "Career peak",
-  "rating.provisional": "The ? means this rating is still settling — there aren't enough matches here yet for it to be dependable. It usually clears once {who} played about 3–4 rated sessions here.",
+  "rating.provisional": "The ? means there isn't enough recent play here for this rating to be dependable yet. It usually clears once {who} played about 3–4 rated sessions here — fewer for a regular coming back after a break.",
   "rating.reliable":
     "This rating is reliable — enough recent matches against enough different people for the number to mean something.",
   "rating.whoYouHave": "you have",
@@ -557,7 +558,7 @@ export const en = {
   "auth.loginTitle": "Welcome back",
   "auth.loginLead": "Log in with your username and PIN.",
   "auth.forgotPin": "Forgot your PIN? Ask an organizer to reset it for you — please don't create a second account.",
-  "err.signInBusy": "Too many sign-in attempts right now. Please try again in a few minutes.",
+  "err.signInBusy": "Sign-ins are paused for a few minutes because of too many wrong PINs across the group. Your PIN isn't the problem — please try again shortly.",
   "err.currentPinWrong": "That's not your current PIN.",
   "pin.title": "Change your PIN",
   "pin.hint": "4–6 digits. Any other phone signed in as you will be signed out.",

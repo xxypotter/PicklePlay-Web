@@ -111,6 +111,13 @@ skips anything that isn't `completed`.
 `local_matches`, `wins`, `losses`, `points_for`, `points_against`, `streak`,
 `provisional`, `self_declared`, `last_played_at`, `recomputed_at`.
 
+v2.3 (migration 0020, display only) adds `evidence_partners`,
+`evidence_teams`, `evidence_volume` — each player's decayed evidence totals —
+plus `evidence_at` (the replay's timeline end they are measured at) and
+`rank_hold` (listed under the enter-60% / hold-50% rule then). Rankings
+re-evaluates them at view time (§10). `evidence_at` is null until the first
+recompute after the migration, and Rankings then uses the v2.1 rule.
+
 ---
 
 ## 3. The rating engine
@@ -1080,9 +1087,15 @@ Byte order puts every capital before every lowercase, which files `Zeng` before
 Listed so nothing is assumed, not specified.
 
 1. **Authentication.** Web uses username + 4–6 digit PIN with a group invite
-   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes per name and
-   30 failures per 15 minutes across all names (v2.3; the group-wide cap pauses
-   every sign-in and writes one `auth.busy` audit row per window). Sign-ins
+   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes per name and,
+   since v2.3, a group budget of 30 failures per 15 minutes or 60 per day
+   counted over real usernames only. Each attempt is reserved (recorded as a
+   failure) under an advisory lock before the PIN is checked, so a burst cannot
+   all pass the count; a correct PIN clears the name's rows. When the budget is
+   spent, sign-ins pause with one `auth.busy` audit row per window — except from
+   a browser that has signed in as that player before (an HMAC-signed device
+   cookie, ~400 days), so a deliberate flood cannot lock the regulars out.
+   Signed-in actions (Change PIN) skip the group budget. Sign-ins
    slide (v2.3): a visit more than a day after the last renewal extends the
    token to a fresh 90 days, through a Server Action, since a Server Component
    cannot set cookies; only a valid token of an active player is extended.

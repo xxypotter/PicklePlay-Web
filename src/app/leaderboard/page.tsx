@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
 import { careerOf } from "@/lib/profile/queries";
 import { earnedNow, isRanked } from "@/lib/rating/listing";
+import { RATING } from "@/lib/rating/constants";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
 
@@ -110,8 +111,13 @@ export default async function LeaderboardPage({
   const meRow = me ? all.find((r) => r.id === me.id) : undefined;
   const meOptedOut = !!meRow && meRow.gender === "unspecified";
   const meSettling = !!meRow && !meOptedOut && !ranked(meRow);
-  // Floored, so 59.9% never reads as the 60% the table asks for.
-  const meEarned = meRow ? Math.floor(earnedNow(evidence(meRow), nowMs) * 100) : 0;
+  // Floored, so 59.9% never reads as the 60% the table asks for. Until the
+  // first recompute fills evidence_at, show the cached reliability instead.
+  const meEarned = !meRow
+    ? 0
+    : Math.floor((meRow.evidenceAt ? earnedNow(evidence(meRow), nowMs) : meRow.reliability) * 100);
+  // A regular who dropped off after a break needs a session or two, not 3–4.
+  const meLapsed = !!meRow && meRow.localMatches >= RATING.VOLUME_AT_60;
 
   const base = "/leaderboard";
   // Rankings hangs off both Home and Me, so where back goes depends on which
@@ -153,7 +159,7 @@ export default async function LeaderboardPage({
         {/* Same courtesy for the other absence: say where they stand and how to get in. */}
         {meSettling ? (
           <p className="card mb-3 text-sm text-[var(--muted)]">
-            {t("rank.meSettling", { reliability: meEarned })}
+            {t(meLapsed ? "rank.meLapsed" : "rank.meSettling", { reliability: meEarned })}
           </p>
         ) : null}
 

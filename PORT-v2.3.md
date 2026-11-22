@@ -1,7 +1,10 @@
 # PicklePlay v2.3 — independent iOS app handoff
 
-Read PORT.md (updated in place: layout notes on "Your own name"). One display
-change; no data, rating or permission changes.
+Read PORT.md (updated in place: layout notes on "Your own name", §2
+player_stats, §4.1, §4.4, §10 and the authentication note). v2.3 covers the
+names display, the coed rule for the regular round robin, sliding sign-ins,
+Change PIN, the sign-in budget, and the Rankings listing rule (migration 0020
+adds derived player_stats columns). Ratings and rating events are unchanged.
 
 - Matchups no longer prints "You (username)". The signed-in player's username
   is shown as is, bold in the accent colour, on score cards, voided rows and
@@ -39,8 +42,9 @@ Sign-in and PINs (PORT.md §auth note):
   the point is that nobody should be signed out while still playing.
 - Change PIN on Me: current PIN, new PIN twice; a wrong current PIN counts
   against the same 5-per-15-minutes limit; other devices are signed out.
-- Group-wide cap: 30 failed sign-ins across all names in 15 minutes pauses all
-  sign-ins until the window clears.
+- Sign-in budget: attempts are reserved before the PIN check; 30 failures in
+  15 minutes or 60 in a day, counted over real usernames, pause sign-ins from
+  browsers that have not signed in as that player before.
 - Login copy: "Username", and a forgotten-PIN hint pointing to an organizer.
 
 Rankings (PORT.md §10):

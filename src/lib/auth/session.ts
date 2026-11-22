@@ -21,10 +21,22 @@ const TTL_DAYS = 90;
  * and every PIN reset in November landed on day 90–105 of the account. Now a
  * visit renews it for another 90 days, at most once a day (anything older than
  * a day gets renewed), so you stay signed in as long as you open the app at
- * least once every three months. The 5-per-15-minutes login limit and the
- * group-wide cap are what protect a PIN, not the token's lifetime.
+ * least once every three months. What protects a PIN is the sign-in budget in
+ * rate-limit.ts (five tries per name per 15 minutes; 30 per 15 minutes and 60
+ * a day across real names), not the token's lifetime.
  */
 const RENEW_WHEN_OLDER_THAN_MS = 86_400_000;
+
+/*
+ * "This browser has signed in as this player before" (v2.3). Set on every
+ * sign-in and renewal, signed with SESSION_SECRET so it cannot be forged, and
+ * kept far longer than a session (browsers cap cookies at about 400 days). The
+ * group-wide sign-in budget exempts it (rate-limit.ts), so a deliberate flood
+ * of wrong PINs cannot keep a regular out on their own phone. One player per
+ * browser: the last one to sign in.
+ */
+const DEVICE_COOKIE = "pp_device";
+const DEVICE_DAYS = 400;
 
 function tokenHash(token: string): string {
   const secret = process.env.SESSION_SECRET;
@@ -53,6 +65,25 @@ function cookieOptions(expires: Date) {
   };
 }
 
+function deviceSignature(playerId: string): string {
+  return tokenHash(`device:${playerId}`);
+}
+
+async function markKnownDevice(playerId: string): Promise<void> {
+  const jar = await cookies();
+  jar.set(DEVICE_COOKIE, `${playerId}.${deviceSignature(playerId)}`,
+    cookieOptions(new Date(Date.now() + DEVICE_DAYS * 86_400_000)));
+}
+
+/** True when this browser has signed in as `playerId` before. */
+export async function isKnownDevice(playerId: string): Promise<boolean> {
+  const value = (await cookies()).get(DEVICE_COOKIE)?.value;
+  if (!value) return false;
+  const dot = value.indexOf(".");
+  if (dot < 0 || value.slice(0, dot) !== playerId) return false;
+  return safeEqual(value.slice(dot + 1), deviceSignature(playerId));
+}
+
 export async function createSession(playerId: string): Promise<void> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + TTL_DAYS * 86_400_000);
@@ -61,6 +92,7 @@ export async function createSession(playerId: string): Promise<void> {
 
   const jar = await cookies();
   jar.set(COOKIE_NAME, token, cookieOptions(expiresAt));
+  await markKnownDevice(playerId);
 }
 
 /** When a token that expires at `expiresAt` should next be renewed. */
@@ -90,6 +122,8 @@ export async function renewSession(): Promise<boolean> {
   if (!updated.length) return false;
 
   jar.set(COOKIE_NAME, token, cookieOptions(expiresAt));
+  // Players signed in before v2.3 get the device mark on their first renewal.
+  await markKnownDevice(me.id);
   return true;
 }
 

@@ -10,8 +10,8 @@ import { RATING, SKILL_PICKER } from "@/lib/rating/constants";
 import { recomputeAll } from "@/lib/rating/service";
 import { hashPin, validatePin, verifyPin } from "./pin";
 import { requireLogin } from "./permissions";
-import { checkGlobalLoginRate, checkLoginRate, recordLoginAttempt } from "./rate-limit";
-import { createSession, destroySession, renewSession, revokeAllSessions } from "./session";
+import { recordLoginAttempt, reserveLoginAttempt } from "./rate-limit";
+import { createSession, destroySession, isKnownDevice, renewSession, revokeAllSessions } from "./session";
 import type { FormState } from "./types";
 import { NAME_TAKEN_KEY, normalizeUsername, validateUsername } from "./username";
 
@@ -160,18 +160,6 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
     return { error: t("err.enterNamePin"), field: "username" };
   }
 
-  const limit = await checkLoginRate(normalized);
-  if (!limit.allowed) {
-    const minutes = limit.retryAfterMinutes ?? 1;
-    return {
-      error: t.plural("err.tooManyAttempts", minutes, { minutes }),
-      field: "pin",
-    };
-  }
-
-  const busy = await checkGlobalLoginRate();
-  if (!busy.allowed) return { error: t("err.signInBusy"), field: "pin" };
-
   const rows = await getDb()
     .select({ id: players.id, pinHash: players.pinHash, active: players.active })
     .from(players)
@@ -180,13 +168,28 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
 
   const player = rows[0];
 
+  /*
+   * Reserve the attempt (recorded as a failure) before checking the PIN, so a
+   * burst of simultaneous requests cannot all slip under the limits. A phone
+   * that has signed in as this player before skips the group-wide budget; see
+   * rate-limit.ts.
+   */
+  const known = player ? await isKnownDevice(player.id) : false;
+  const reserved = await reserveLoginAttempt(normalized, { groupCheck: !known });
+  if (!reserved.ok) {
+    if (reserved.reason === "busy") return { error: t("err.signInBusy"), field: "busy" };
+    const minutes = reserved.retryAfterMinutes;
+    return { error: t.plural("err.tooManyAttempts", minutes, { minutes }), field: "pin" };
+  }
+
   // Hash even when the user doesn't exist, so response time doesn't reveal
   // which names are registered.
   const ok = player
     ? await verifyPin(pin, player.pinHash)
     : await verifyPin(pin, await hashPin("000000")).then(() => false);
 
-  await recordLoginAttempt(normalized, ok && !!player?.active);
+  // The reservation already stands as the failure; a correct PIN clears it.
+  if (ok && player?.active) await recordLoginAttempt(normalized, true);
 
   if (!player || !ok) return { error: t("err.badLogin"), field: "pin" };
   if (!player.active) return { error: t("err.inactive"), field: "username" };
@@ -208,23 +211,22 @@ export async function changePinAction(_prev: FormState, formData: FormData): Pro
   const t = await getT(me.locale);
   const name = normalizeUsername(me.username);
 
-  const limit = await checkLoginRate(name);
-  if (!limit.allowed) {
-    const minutes = limit.retryAfterMinutes ?? 1;
-    return { error: t.plural("err.tooManyAttempts", minutes, { minutes }), field: "currentPin" };
-  }
-  const busy = await checkGlobalLoginRate();
-  if (!busy.allowed) return { error: t("err.signInBusy"), field: "currentPin" };
-
   const next = str(formData, "newPin");
   const valid = validatePin(next);
   if (!valid.ok) return { error: t(valid.error), field: "newPin" };
   if (next !== str(formData, "newPinConfirm")) return { error: t("err.pinMismatch"), field: "newPinConfirm" };
 
+  // Same five-tries limit as signing in, reserved before the check. No group
+  // budget: a signed-in session is not something a guesser has.
+  const reserved = await reserveLoginAttempt(name, { groupCheck: false });
+  if (!reserved.ok) {
+    const minutes = reserved.retryAfterMinutes;
+    return { error: t.plural("err.tooManyAttempts", minutes, { minutes }), field: "currentPin" };
+  }
+
   const db = getDb();
   const [row] = await db.select({ pinHash: players.pinHash }).from(players).where(eq(players.id, me.id)).limit(1);
   if (!row || !(await verifyPin(str(formData, "currentPin"), row.pinHash))) {
-    await recordLoginAttempt(name, false);
     return { error: t("err.currentPinWrong"), field: "currentPin" };
   }
 
