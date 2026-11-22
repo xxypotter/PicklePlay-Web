@@ -30,6 +30,32 @@ highlight the viewer's name, as release v2.3. Branch claude/v2.3 from main.
   local-backups/v2.3-review-snapshot-2026-11-22T17-27-09-081Z.json (no PIN or
   token hashes, no settings; script .scratch/v23-snapshot.mjs); five analysts
   plus independent verifiers ran over it, reading only that file.
+- Released as 4643e0a; /notes served "Version 2.3" 45 s after the push. Home,
+  /login, /notes, /leaderboard 200.
+- Review result (37 findings: 17 confirmed, 20 adjusted, 0 refuted, plus 14
+  items the verifiers added; full JSON in .scratch/v23-data-review.json).
+  Reported to the owner; nothing below has been acted on:
+  - Sign-in: tokens last a fixed 90 days and never slide; all 4 PIN resets
+    since 10-22 landed on day 90–105 of the account. 17 of 67 recent players
+    are signed out by 12-13. Bryant (admin) and zhuqiang have failed attempts
+    and no sign-in since. Players cannot change their own PIN; the login field
+    says "Your name", so people type real names; a forgotten PIN has no hint
+    and has produced duplicate accounts. Only a per-username throttle exists.
+  - Rankings: 6 of 30 listed are there only by a typed DUPR floor — Alex (#3)
+    and King (#23) with 0 games, Shannen (#1) from a back-logged 4-person
+    "Practice". Regulars flicker on and off around 60% because the game-count
+    term decays; membership changes only when the cache is rebuilt. The
+    reliability copy credits mixed partners, but game count decides it
+    (about 27 games over 3–4 sessions).
+  - Data: three closed Mini MLP test sessions (160 scheduled matches) are in
+    production History and block deleting 32 players; "Sunday Round Robin" is
+    dated 08-15 but was played 08-09. Score corrections are not audited.
+    played_at is the draw time, not play time.
+  - Fairness: fixed-partner medal nights left 20 of 52 players idle for both
+    medal rounds with a court free; 5 of 6 fixed nights had a winless pair.
+    Coed nights run as regular allow men-vs-women games (men won 28 of 32 with
+    a 0.176 mean rating edge). 25 of 85 player-sessions were outside the band
+    in the session title. Only HUI can run nights (created 33 of 37).
 
 ## Released: admin PIN reset fix (no version bump) — Claude, 2026-11-07
 
