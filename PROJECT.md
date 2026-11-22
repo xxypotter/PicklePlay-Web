@@ -66,6 +66,11 @@ the code that depends on them, after backup and development validation.
   accepted everywhere — the "too easy to guess" rule is gone (auth/pin.ts
   validatePin); an admin PIN reset clears the player's login attempts and
   reports success or refusal under the row (admin/RosterCard.tsx ResetPinForm).
+- v2.3 (2026-11-22): Matchups marks the viewer by colour instead of "You
+  (name)"; score cards list one player per line (app/s/[id]/MatchCard.tsx
+  Side), so a partner's name is no longer truncated. Filter chip and
+  Standings show the name too; common.youNamed, schedule.filterYou and
+  common.me removed.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
   Matchups has an optional hide-scored filter, combined with player selection.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.

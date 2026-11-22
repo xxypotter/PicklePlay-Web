@@ -62,14 +62,12 @@ export default async function Standings({
 
               <Link
                 href={`/p/${r.username}?from=${encodeURIComponent(backHere)}`}
-                className="min-w-0 flex-1 truncate font-medium"
+                className={`min-w-0 flex-1 truncate ${
+                  r.playerId === meId ? "font-bold text-[var(--accent)]" : "font-medium"
+                }`}
               >
+                {/* Marked by colour and the row tint, not a "me" badge (v2.3). */}
                 {r.username}
-                {r.playerId === meId ? (
-                  <span className="ml-1.5 rounded bg-[var(--accent)] px-1 py-0.5 text-[10px] font-semibold text-white">
-                    {t("common.me")}
-                  </span>
-                ) : null}
               </Link>
 
               <span className="w-12 shrink-0 text-center text-sm tabular-nums">

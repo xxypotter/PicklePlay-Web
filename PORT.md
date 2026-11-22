@@ -885,8 +885,11 @@ being shown a button that refuses them.
   fixed A/B order is how people put numbers in the wrong row. Steppers **and** a
   typeable box: eleven taps to record an 11 is absurd. Scores held as text, not
   numbers — coercing on every keystroke makes the box impossible to clear.
-- **Your own name** in Matchups reads "You (username)" (v1.8), not a bare
-  "You": a screenshot or a phone handed around should still say who it is.
+- **Your own name** in Matchups is the username in the accent colour (v2.3),
+  never replaced by "You": a screenshot or a phone handed around should still
+  say who it is. v1.8 tried "You (username)"; on a phone score card it pushed
+  the partner's name off the row. On the score card each player has a line of
+  their own (avatar + name), so a long name truncates alone.
 - **Matchup filter**: tap two players' avatars to see only the games they share,
   split into "together" and "against". Intersection, not union — "when are we on
   court together" is the actual question.

@@ -96,12 +96,17 @@ export default function Schedule({
                 >
                   <Avatar username={p.username} avatar={p.avatar} size={34} />
                 </span>
+                {/* Your own chip shows your name in bold rather than "You" (v2.3). */}
                 <span
                   className={`w-full truncate px-0.5 text-center text-[10px] ${
-                    on ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"
+                    on
+                      ? "font-semibold text-[var(--accent)]"
+                      : p.id === meId
+                        ? "font-bold"
+                        : "text-[var(--muted)]"
                   }`}
                 >
-                  {p.id === meId ? t("schedule.filterYou") : p.username}
+                  {p.username}
                 </span>
               </button>
             );
@@ -187,9 +192,9 @@ export default function Schedule({
                   }`}
                 >
                   <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center gap-2">
-                    <Team players={m.teamA} meId={meId} picked={picked} t={t} />
+                    <Team players={m.teamA} meId={meId} picked={picked} />
                     <span className="text-xs text-[var(--muted)]">{t("schedule.vs")}</span>
-                    <Team players={m.teamB} meId={meId} picked={picked} t={t} align="right" />
+                    <Team players={m.teamB} meId={meId} picked={picked} align="right" />
                   </div>
 
                   <div className="shrink-0 border-l border-[var(--border)] pl-3 text-right">
@@ -261,13 +266,11 @@ function Team({
   players,
   meId,
   picked,
-  t,
   align = "left",
 }: {
   players: RoundPlayer[];
   meId?: string;
   picked: string[];
-  t: T;
   align?: "left" | "right";
 }) {
   const mirrored = align === "right";
@@ -288,7 +291,8 @@ function Team({
                   : ""
             }`}
           >
-            {p.id === meId ? t("common.youNamed", { name: p.username }) : p.username}
+            {/* Your own name is marked by colour alone (v2.3), not "You (name)". */}
+            {p.username}
           </span>
         </div>
       ))}

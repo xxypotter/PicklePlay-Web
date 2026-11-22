@@ -1,5 +1,36 @@
 # Shared work log
 
+## Released: v2.3 names instead of "You" — Claude, 2026-11-22
+
+Owner request with a player's screenshot (zh-Hans, Sunday women's RR, one
+court): the score card read "你（Jennifer） & R…", so the "You (name)" prefix
+pushed the partner's name off the row. Asked to drop the "you" wording and just
+highlight the viewer's name, as release v2.3. Branch claude/v2.3 from main.
+
+- app/s/[id]/MatchCard.tsx: Side lists one player per line with a 20px avatar;
+  the viewer's username is bold accent, own partner semibold, opponents muted;
+  each name truncates alone. Two lines match the 44px steppers, so the card
+  does not grow. Voided rows use a Names helper with the same highlight. The
+  score box's accessible name stays "A & B".
+- app/s/[id]/Schedule.tsx: read-only rows and the player filter chip show the
+  username (chip bold for the viewer) instead of "You (name)" / "You".
+- app/s/[id]/Standings.tsx: the "me" badge is gone; the row tint stays and
+  the name is bold accent.
+- Strings common.youNamed, schedule.filterYou, common.me removed (three
+  languages); notes.v23.names added; release notes v2.3 (2.2 has no note, so
+  /notes goes 2.1 → 2.3). PORT.md layout note, PORT-v2.3.md, PROJECT.md.
+- Browser (dev, 375px, temporary players dev_JenniferWong and dev_RenaeChenX,
+  one-court live session): cards show both full names with dev_ana in orange;
+  scored, voided, restored; Standings row orange with no badge; after ending
+  the session, dev_ben (zh-Hant) sees read-only rows with dev_ben in orange and
+  the filter chip in bold; no horizontal overflow; no console errors. Fixture
+  session and both players deleted; no orphans.
+- Checks: typecheck, lint, 477 unit tests, build.
+- Data review: sanitized read-only snapshot
+  local-backups/v2.3-review-snapshot-2026-11-22T17-27-09-081Z.json (no PIN or
+  token hashes, no settings; script .scratch/v23-snapshot.mjs); five analysts
+  plus independent verifiers ran over it, reading only that file.
+
 ## Released: admin PIN reset fix (no version bump) — Claude, 2026-11-07
 
 Owner report: ProfWu forgot his PIN; HUI reset it in Admin and the player

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { Fragment, useActionState, useState, useTransition } from "react";
 import Avatar from "@/components/Avatar";
 import type { FormState } from "@/lib/auth/types";
 import { useT } from "@/lib/i18n/client";
@@ -96,13 +96,13 @@ export default function MatchCard({
 
         <div className="mt-2 flex items-center justify-between gap-3 text-sm line-through">
           <span className="min-w-0 flex-1 truncate">
-            {match.teamA.map((p) => (p.id === meId ? t("common.youNamed", { name: p.username }) : p.username)).join(" & ")}
+            <Names players={match.teamA} meId={meId} />
           </span>
           <span className="shrink-0 font-mono tabular-nums">
             {match.scoreA}–{match.scoreB}
           </span>
           <span className="min-w-0 flex-1 truncate text-right">
-            {match.teamB.map((p) => (p.id === meId ? t("common.youNamed", { name: p.username }) : p.username)).join(" & ")}
+            <Names players={match.teamB} meId={meId} />
           </span>
         </div>
 
@@ -224,31 +224,37 @@ function Side({
   highlight: boolean;
   t: T;
 }) {
-  const names = players.map((p) => (p.id === meId ? t("common.youNamed", { name: p.username }) : p.username));
-  const label = t("schedule.teamJoin", { a: names[0] ?? "", b: names[1] ?? "" });
+  // For the score box's accessible name only; what's on screen is the list below.
+  const label = t("schedule.teamJoin", { a: players[0]?.username ?? "", b: players[1]?.username ?? "" });
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="flex shrink-0">
-          {players.map((p, i) => (
-            <span key={p.id} className={i > 0 ? "-ml-2" : ""}>
-              <Avatar
-                username={p.username}
-                avatar={p.avatar}
-                size={24}
-                className="ring-2 ring-[var(--surface)]"
-              />
+      {/*
+        One player per line, each with their own avatar (v2.3). On one line,
+        "You (Jennifer) & R…" lost the partner's name on every phone: the
+        steppers take most of the row, and the "You (…)" wrapper spent the rest.
+        Now each name gets the full width and truncates on its own, and the
+        viewer is marked by colour, the same as the read-only rows in Schedule.
+        Two 20px lines are the height of the 44px steppers, so the card does
+        not grow.
+      */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {players.map((p) => (
+          <div key={p.id} className="flex min-w-0 items-center gap-1.5">
+            <Avatar username={p.username} avatar={p.avatar} size={20} />
+            <span
+              className={`truncate text-sm ${
+                p.id === meId
+                  ? "font-bold text-[var(--accent)]"
+                  : highlight
+                    ? "font-semibold"
+                    : "font-medium text-[var(--muted)]"
+              }`}
+            >
+              {p.username}
             </span>
-          ))}
-        </span>
-        <span
-          className={`truncate text-sm ${
-            highlight ? "font-bold" : "font-medium text-[var(--muted)]"
-          }`}
-        >
-          {label}
-        </span>
+          </div>
+        ))}
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
@@ -269,6 +275,20 @@ function Side({
         <Step label="+" onClick={() => onStep(1)} t={t} />
       </div>
     </div>
+  );
+}
+
+/** "A & B" with the viewer's name in the accent colour, for the one-line voided row. */
+function Names({ players, meId }: { players: RoundPlayer[]; meId?: string }) {
+  return (
+    <>
+      {players.map((p, i) => (
+        <Fragment key={p.id}>
+          {i > 0 ? " & " : null}
+          <span className={p.id === meId ? "font-bold text-[var(--accent)]" : undefined}>{p.username}</span>
+        </Fragment>
+      ))}
+    </>
   );
 }
 
