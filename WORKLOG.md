@@ -53,6 +53,25 @@ Branch claude/v2.3-followup (local rename of claude/v2.4).
   Browser (dev): Rankings card 20% earned for dev_ana and dev_kit (typed 100%,
   0 games) no longer listed; Change PIN refuses a wrong current PIN; login
   shows "Username" and the hint; a 10-day sign-in renewed to 90 on one visit.
+- Released 2026-11-22 as 6245740 (main), in the reviewed order:
+  1. backup local-backups/v2.3b-backup-1795376926673.json (132 players, 37
+     sessions, 819 matches, 2,548 rating events; no PIN/token hashes);
+  2. db:migrate:prod applied 0020 (21 migrations; five columns present);
+  3. push; new login page live 45 s later;
+  4. Rankings backfill (.scratch/v23b-backfill.test.ts, advisory lock
+     72417001, dry run then apply): replay maxDiff 0, 132 rows updated, only
+     the five new columns, rank_hold true for 28;
+  5. deleted the three never-scored test sessions with session.delete audit
+     rows attributed to Jason (160 scheduled matches, 42 rounds, 40 ties, 17
+     teams, 68 signups cascaded); no recompute needed (no completed games);
+  6. verify local-backups/v2.3b-verify-1795377029479.json: all twelve tables
+     unchanged apart from the deleted test sessions and the new columns;
+     evidence filled 132/132.
+  Live: /notes tops at 2.3 with the new lines and no 2.4; Rankings 27 (18
+  Boy, 9 Girl), Shannen/Alex/King gone, 18birdies/Eunice/Jennifer listed.
+- Bryant and zhuqiang: no change made. Their original PINs still work and
+  neither is locked out; if they can't remember them, an admin sets a
+  temporary PIN and they can now change it back to their own under Me.
 
 ## Released: v2.4 coed rule for the regular round robin — Claude, 2026-11-22
 
