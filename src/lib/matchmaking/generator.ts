@@ -18,7 +18,7 @@ import { matchViolates, type Gender } from "./gender";
 export interface GenPlayer {
   id: string;
   rating: number;
-  /** Only the gender-balanced format reads this; absent means unspecified. */
+  /** The two round robins read this (regular since v2.4); absent means unspecified. */
   gender?: Gender;
 }
 
@@ -48,7 +48,7 @@ export interface Weights {
   partner: number;
   opponent: number;
   spread: number;
-  /** Cost of putting two men against two women. Only `gender` sets it. */
+  /** Two men against two women. Any non-zero value makes it a hard rule (see roundCost). */
   gender: number;
 }
 
@@ -69,6 +69,9 @@ export type Format =
  *   unused partnership beat almost anything else, so pairings spread out
  *   naturally. It's greedy, not a perfect combinatorial design: with awkward
  *   player counts a repeat can appear before literally every pair has happened.
+ *   Since v2.4 it also never puts two men against two women when adding a
+ *   round; a violation-free seating always exists, so the cost is at most a
+ *   repeated partnership on a lopsided roster, which this path allows anyway.
  * `balanced` — even teams by rating; the everyday default.
  * `fixed` — a *negative* partner weight makes repeating a partner desirable,
  *   which expresses fixed-partner play through the same machinery.
@@ -83,7 +86,7 @@ export type Format =
  *   on paper but miserable to play.
  */
 export const WEIGHTS: Record<Exclude<Format, "manual" | "custom">, Weights> = {
-  regular: { balance: 0, partner: 50, opponent: 3, spread: 0, gender: 0 },
+  regular: { balance: 0, partner: 50, opponent: 3, spread: 0, gender: 1000 },
   gender: { balance: 20, partner: 50, opponent: 3, spread: 0, gender: 1000 },
   /*
    * Balance has to be worth far more than variety, or it quietly loses.
@@ -272,7 +275,7 @@ export function generateRound(
         ? [...seated].sort((a, b) => b.rating - a.rating)
         : shuffle(seated, random);
     // Any MM-v-FF court can be made mixed without changing who plays/rests.
-    if (format === "gender") for (let i=0;i<order.length;i+=4) {
+    if (format === "gender" || format === "regular") for (let i=0;i<order.length;i+=4) {
       const g=(j:number)=>order[i+j].gender ?? "unspecified";
       if (matchViolates(g(0),g(1),g(2),g(3))) [order[i+1],order[i+2]]=[order[i+2],order[i+1]];
     }

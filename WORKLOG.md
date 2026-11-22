@@ -1,5 +1,38 @@
 # Shared work log
 
+## Released: v2.4 coed rule for the regular round robin — Claude, 2026-11-22
+
+Owner approved the review recommendation: apply the no-men-vs-women rule to
+coed nights run as the regular round robin. Other review items are awaiting
+the owner's choice per item (recommendations being drafted); fixed-partner
+idle pairs and score-correction audit were declined; smaller items passed.
+
+- Evidence (review): men-v-women games in 10 of 11 mixed regular sessions;
+  men won 28 of 32 on a 0.176 mean rating edge.
+- matchmaking/service.ts: genders go to the whole-session planner for both
+  round robins (ratings still only for gender-balanced). Regular keeps the
+  plan even if a violation remains (only the forced case: exactly two women
+  in a full rotation), so partner-once holds; gender-balanced still discards
+  such a plan. generator.ts: WEIGHTS.regular.gender 1000 (hard rule when
+  adding rounds or rebuilding) and the MM-v-FF pre-swap for regular.
+- Measured before shipping (temporary opt-in simulation, deleted): 8–16
+  players, 2–8 women, 12 seeds each. Whole-session violations 1–8.5 per night
+  → 0 (1 in the forced case, as before); partner repeats 0 → 0; most-repeated
+  opponent +0.1–1.2 meetings; pairs never meeting +0–2; time unchanged.
+  3,000 restarts recovered little at 6x time, so 500 stays. Round-by-round:
+  violations → 0, a few extra partner repeats on 2–3 women rosters.
+- Tests: gender.test.ts updated (regular weight) plus four regular-format
+  tests; setup.integration dev-DB test draws a 4M/4F regular night (7 rounds
+  + 1 added): zero MM-v-FF, all 28 partnerships once. Note: sessions.format
+  defaults to 'balanced', so the test sets format 'regular' explicitly; the
+  balanced format still allows MM v FF (unused since August; not in scope).
+- Strings: form.desc.regular and form.desc.gender reworded (gender-balanced
+  is now distinguished by rating balance and by giving up a partnership
+  rather than allowing the forced game); notes.v24.coed; release note v2.4.
+  PORT §4.1 and §4.4, PORT-v2.4.md, PROJECT.md.
+- Browser (dev): create form shows both new descriptions; /notes shows v2.4.
+- Checks: typecheck, lint, 509 tests incl. all dev DB workflows, build.
+
 ## Released: v2.3 names instead of "You" — Claude, 2026-11-22
 
 Owner request with a player's screenshot (zh-Hans, Sunday women's RR, one

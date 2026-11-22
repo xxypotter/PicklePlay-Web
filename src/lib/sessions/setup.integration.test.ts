@@ -9,7 +9,7 @@ import { makeT } from "@/lib/i18n/translate";
 import type { Actor } from "@/lib/auth/policy";
 import { createMlpScheduleAction, saveMlpTeamsAction } from "@/lib/mlp/actions";
 import type { TeamInput } from "@/lib/mlp/rules";
-import { discardRoundAction, generateAllRoundsAction, reopenSessionAction, saveScoreAction, startSessionAction } from "./play-actions";
+import { discardRoundAction, generateAllRoundsAction, generateRoundAction, reopenSessionAction, saveScoreAction, startSessionAction } from "./play-actions";
 import { createSessionAction, setPartnerAction } from "./actions";
 import { updateSessionAction } from "./edit-actions";
 import { loadCopySource } from "./copy-source";
@@ -263,5 +263,37 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v1.7 back to setup, cl
     for (const [k, v] of Object.entries({ title: "Bad invite", startsAt: new Date().toISOString(), courtNames: "1, 2", format: "regular", maxPlayers: "8" })) fd.set(k, v);
     fd.append("invite", ids[2]); fd.append("invite", randomUUID());
     expect(await createSessionAction({}, fd)).toEqual({ error: t("err.inviteUnknown") });
+  }, 60000);
+
+  it("v2.4: a coed regular round robin never puts two men against two women and still partners everyone once", async () => {
+    actor = { id: organizer, role: "admin" };
+    const roster = ids.slice(2, 10);
+    const genderOf = new Map(roster.map((id, i) => [id, i < 4 ? "male" : "female"] as const));
+    try {
+      for (const [id, gender] of genderOf) await db().update(players).set({ gender }).where(eq(players.id, id));
+      // The column defaults to balanced; this test is about the plain round robin.
+      const id = await newSession({ format: "regular" }, roster);
+      await generateAllRoundsAction(id, 7);
+      await generateRoundAction(id);
+      const games = await db().select().from(matches).where(eq(matches.sessionId, id));
+      const robin = await db().select().from(rounds).where(eq(rounds.sessionId, id));
+      expect(robin).toHaveLength(8);
+      const team = (a: string, b: string) => (genderOf.get(a) === genderOf.get(b) ? genderOf.get(a) : "mixed");
+      const indexOf = new Map(robin.map((r) => [r.id, r.index]));
+      const violations = games
+        .filter((g) => {
+          const [ta, tb] = [team(g.a1, g.a2), team(g.b1, g.b2)];
+          return ta !== "mixed" && tb !== "mixed" && ta !== tb;
+        })
+        .map((g) => `round ${indexOf.get(g.roundId!)}: ${team(g.a1, g.a2)} v ${team(g.b1, g.b2)}`);
+      expect(violations).toEqual([]);
+      // The first seven rounds are the whole-session draw: all 28 partnerships once.
+      const firstSeven = new Set(robin.filter((r) => r.index <= 7).map((r) => r.id));
+      const pairs = games.filter((g) => firstSeven.has(g.roundId!)).flatMap((g) => [[g.a1, g.a2], [g.b1, g.b2]].map((p) => [...p].sort().join("|")));
+      expect(new Set(pairs).size).toBe(28);
+      expect(pairs).toHaveLength(28);
+    } finally {
+      await db().update(players).set({ gender: "unspecified" }).where(inArray(players.id, roster));
+    }
   }, 60000);
 });

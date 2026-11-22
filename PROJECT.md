@@ -71,6 +71,10 @@ the code that depends on them, after backup and development validation.
   Side), so a partner's name is no longer truncated. Filter chip and
   Standings show the name too; common.youNamed, schedule.filterYou and
   common.me removed.
+- v2.4 (2026-11-22): the regular round robin keeps two men off two women
+  wherever the partner rotation allows (matchmaking/service.ts passes genders
+  for both round robins; generator.ts WEIGHTS.regular.gender). It stays
+  rating-blind and keeps partner-once; PORT §4.1.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
   Matchups has an optional hide-scored filter, combined with player selection.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.

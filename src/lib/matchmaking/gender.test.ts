@@ -220,7 +220,8 @@ describe("generateRound, gender format", () => {
     // Twenty repeated partnerships, which is what "top priority" has to mean
     // for a search that weighs one thing against another.
     expect(WEIGHTS.gender.gender).toBeGreaterThan(WEIGHTS.gender.partner * 20 - 1);
-    expect(WEIGHTS.regular.gender).toBe(0);
+    // v2.4: the regular round robin keeps two men off two women too.
+    expect(WEIGHTS.regular.gender).toBe(WEIGHTS.gender.gender);
     expect(WEIGHTS.balanced.gender).toBe(0);
   });
 
@@ -293,5 +294,64 @@ describe("generateRound, gender format", () => {
     }
 
     expect(seen.size).toBe(12);
+  });
+});
+
+describe("regular round robin keeps two men off two women (v2.4)", () => {
+  const players = (genders: Gender[]): GenPlayer[] =>
+    genders.map((gender, i) => ({ id: `p${i}`, rating: 3 + (i % 5) * 0.4, gender }));
+
+  it("whole-session draw: zero violations and every partnership exactly once", () => {
+    for (const [m, f] of [[5, 3], [4, 4], [6, 4]] as const) {
+      const n = m + f;
+      const rounds = n === 8 ? 7 : 10;
+      for (let seed = 0; seed < 6; seed++) {
+        const plan = planPerfectSchedule(n, 2, rounds, { random: mulberry(seed), genders: roster(m, f) });
+        expect(plan).not.toBeNull();
+        expect(countViolations(plan!, roster(m, f))).toBe(0);
+        expect(partnerships(plan!).repeated).toBe(0);
+      }
+    }
+  });
+
+  it("whole-session draw: with two women in a full rotation it keeps the rotation and allows only the one forced game", () => {
+    // 8 players, 7 rounds, 2 courts: all 28 partnerships, so the two women
+    // must partner once and can only face two men then.
+    for (let seed = 0; seed < 6; seed++) {
+      const plan = planPerfectSchedule(8, 2, 7, { random: mulberry(seed), genders: roster(6, 2) });
+      expect(plan).not.toBeNull();
+      expect(partnerships(plan!)).toEqual({ distinct: 28, repeated: 0 });
+      expect(countViolations(plan!, roster(6, 2))).toBe(1);
+    }
+  });
+
+  it("adding a round never puts two men against two women", () => {
+    for (const genders of [roster(4, 4), roster(9, 3), roster(6, 2, 2)]) {
+      const byId = new Map(players(genders).map((p) => [p.id, p.gender!]));
+      for (let seed = 0; seed < 20; seed++) {
+        const round = generateRound(players(genders), Math.floor(genders.length / 4), undefined, {
+          format: "regular",
+          random: mulberry(seed),
+        });
+        for (const court of round.courts) {
+          expect(
+            matchViolates(
+              byId.get(court.teamA[0])!,
+              byId.get(court.teamA[1])!,
+              byId.get(court.teamB[0])!,
+              byId.get(court.teamB[1])!,
+            ),
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("stays rating-blind: the regular whole-session draw is not handed ratings", () => {
+    // Same seed and genders, with and without ratings in the options the
+    // service passes for this format (none): identical plans.
+    const a = planPerfectSchedule(10, 2, 10, { random: mulberry(7), genders: roster(5, 5) });
+    const b = planPerfectSchedule(10, 2, 10, { random: mulberry(7), genders: roster(5, 5), ratings: undefined });
+    expect(a).toEqual(b);
   });
 });

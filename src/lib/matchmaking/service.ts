@@ -205,17 +205,20 @@ export async function createAllRounds(
   }
 
   /*
-   * Both round robins want the same whole-session draw. The gender-balanced one
-   * hands the planner a gender per seat as well, which changes only which
-   * grouping of a round's teams it settles on — the partnership decomposition,
-   * and so the promise that you partner everyone once, is identical.
+   * Both round robins want the same whole-session draw, and since v2.4 both
+   * hand the planner a gender per seat. That changes only which grouping of a
+   * round's teams it settles on — the partnership decomposition, and so the
+   * promise that you partner everyone once, is identical. Coed nights run as
+   * the regular round robin had put two men against two women in 10 of 11
+   * mixed sessions, and the men won 28 of 32 such games on a 0.18 rating edge.
    *
    * Only from a clean slate: bolting a solved schedule onto rounds that already
    * exist would ignore the partnerships those rounds already spent.
    */
   const wholeSession = format === "regular" || format === "gender";
-  const genders =
-    format === "gender" ? attending.map((p) => p.gender ?? "unspecified") : undefined;
+  const genders = wholeSession
+    ? attending.map((p) => p.gender ?? "unspecified")
+    : undefined;
 
   // Ratings go in for the gender format only. The regular round robin is
   // deliberately rating-blind, and passing them would quietly change it.
@@ -227,7 +230,15 @@ export async function createAllRounds(
         })
       : null;
 
-  if (!plan || (genders && countViolations(plan, genders) > 0)) {
+  /*
+   * Where the rule and a complete rotation genuinely conflict — two women in a
+   * full round robin must partner once, and then can only face two men — the
+   * two formats choose differently. Gender-balanced gives up that partnership
+   * and draws round by round with the rule hard. The regular round robin keeps
+   * its promise and accepts that one game: the planner has already ranked every
+   * draw by violations first, so what remains is the arithmetic minimum.
+   */
+  if (!plan || (format === "gender" && genders && countViolations(plan, genders) > 0)) {
     for (let i = 0; i < roundCount; i++) await createNextRound(sessionId);
     return { rounds: roundCount, perfect: false, genderViolations: 0 };
   }

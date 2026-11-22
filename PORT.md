@@ -438,6 +438,20 @@ the bug this replaced gave 9 players 34 distinct partnerships instead of 36.
 
 Only from a clean slate. Adding a round mid-session uses the per-round path.
 
+**Two men never face two women where the rotation allows it** (v2.4). The
+planner gets a gender per seat, exactly as for §4.4, but stays rating-blind.
+Coed nights run as a plain round robin had put MM against FF in 10 of 11 mixed
+sessions; the men won 28 of 32 of those games on a mean rating edge of 0.18.
+Partner coverage is unchanged — the rule only chooses who faces whom. Where the
+two genuinely conflict (exactly two women in a full rotation must partner once,
+and then can only face two men) this format keeps the rotation and accepts that
+one game; gender-balanced makes the opposite choice. Measured across 8–16
+players and 2–8 women, MM-v-FF games fall from 1–8.5 per night to 0 (1 in the
+forced case); the cost is opponent variety, the most-repeated opponent pairing
+rising by about half a meeting and up to two pairs never facing. A deeper search
+(3,000 restarts) won back little at six times the time. Adding a round applies
+the rule as a hard constraint, like §4.4.
+
 ### 4.2 Balanced — even team ratings
 
 Per-round randomized-restart hill climbing (200 restarts, pairwise-swap descent)
@@ -555,6 +569,9 @@ exactly the opponent clustering §4.1 exists to prevent. **`BALANCE_WEIGHT = 10`
 
 Pass ratings for this format only. The regular round robin is deliberately
 rating-blind and handing it ratings would quietly turn it into something else.
+Since v2.4 the regular round robin applies the same matchup rule (§4.1); what
+distinguishes this format is the rating balance, and that it gives up a
+partnership rather than allow the one forced MM-v-FF game.
 
 ### 4.5 Custom
 Rounds are still generated (balanced weights), but the organizer expects to
