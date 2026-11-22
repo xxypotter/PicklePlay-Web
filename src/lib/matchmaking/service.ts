@@ -205,7 +205,7 @@ export async function createAllRounds(
   }
 
   /*
-   * Both round robins want the same whole-session draw, and since v2.4 both
+   * Both round robins want the same whole-session draw, and since v2.3 both
    * hand the planner a gender per seat. That changes only which grouping of a
    * round's teams it settles on — the partnership decomposition, and so the
    * promise that you partner everyone once, is identical. Coed nights run as

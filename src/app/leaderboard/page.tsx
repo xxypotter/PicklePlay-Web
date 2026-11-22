@@ -8,12 +8,22 @@ import { getCurrentPlayer } from "@/lib/auth/session";
 import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
 import { careerOf } from "@/lib/profile/queries";
+import { earnedNow, isRanked } from "@/lib/rating/listing";
 import { getT } from "@/lib/i18n/server";
 import type { T } from "@/lib/i18n/translate";
 
 import { titleFor } from "@/lib/i18n/metadata";
 
 export const generateMetadata = titleFor("rank.title");
+
+/**
+ * Lives outside the component because reading the clock is impure, and the
+ * React Compiler is right to refuse it inside a render. This page is rendered
+ * per request, so "now" is the moment it is viewed.
+ */
+function viewedAtMs(): number {
+  return Date.now();
+}
 
 type TabKey = "all" | "male" | "female";
 
@@ -38,6 +48,11 @@ export default async function LeaderboardPage({
         provisional: playerStats.provisional,
         selfDeclared: playerStats.selfDeclared,
         localMatches: playerStats.localMatches,
+        evidencePartners: playerStats.evidencePartners,
+        evidenceTeams: playerStats.evidenceTeams,
+        evidenceVolume: playerStats.evidenceVolume,
+        evidenceAt: playerStats.evidenceAt,
+        rankHold: playerStats.rankHold,
       })
       .from(playerStats)
       .innerJoin(players, eq(players.id, playerStats.playerId))
@@ -72,11 +87,31 @@ export default async function LeaderboardPage({
    * lists ratings that have reached "reliable" (§3.6) and says how many are
    * still on their way, so an absence has an explanation instead of a gap.
    */
-  const rows = listed.filter((r) => !r.provisional && inTab(r));
-  const settling = listed.filter((r) => r.provisional && inTab(r)).length;
+  /*
+   * v2.3: listed by reliability *earned here* (not the typed DUPR floor),
+   * evaluated now rather than at the last rebuild, entering at 60% and staying
+   * until 50%. See rating/listing.ts. A row the recompute has not yet filled
+   * in (evidence_at null, only between a migration and its first recompute)
+   * keeps the v2.1 rule rather than vanishing.
+   */
+  const nowMs = viewedAtMs();
+  const evidence = (r: (typeof all)[number]) => ({
+    partners: r.evidencePartners,
+    teams: r.evidenceTeams,
+    volume: r.evidenceVolume,
+    atMs: r.evidenceAt ? r.evidenceAt.getTime() : null,
+    hold: r.rankHold,
+  });
+  const ranked = (r: (typeof all)[number]) =>
+    r.evidenceAt ? isRanked(evidence(r), nowMs) : !r.provisional;
+
+  const rows = listed.filter((r) => ranked(r) && inTab(r));
+  const settling = listed.filter((r) => !ranked(r) && inTab(r)).length;
   const meRow = me ? all.find((r) => r.id === me.id) : undefined;
   const meOptedOut = !!meRow && meRow.gender === "unspecified";
-  const meSettling = !!meRow && !meOptedOut && meRow.provisional;
+  const meSettling = !!meRow && !meOptedOut && !ranked(meRow);
+  // Floored, so 59.9% never reads as the 60% the table asks for.
+  const meEarned = meRow ? Math.floor(earnedNow(evidence(meRow), nowMs) * 100) : 0;
 
   const base = "/leaderboard";
   // Rankings hangs off both Home and Me, so where back goes depends on which
@@ -118,7 +153,7 @@ export default async function LeaderboardPage({
         {/* Same courtesy for the other absence: say where they stand and how to get in. */}
         {meSettling ? (
           <p className="card mb-3 text-sm text-[var(--muted)]">
-            {t("rank.meSettling", { reliability: Math.round(meRow!.reliability * 100) })}
+            {t("rank.meSettling", { reliability: meEarned })}
           </p>
         ) : null}
 

@@ -411,6 +411,18 @@ export const playerStats = pgTable("player_stats", {
   selfDeclared: boolean("self_declared").notNull().default(true),
   lastPlayedAt: timestamp("last_played_at", { withTimezone: true }),
   recomputedAt: timestamp("recomputed_at", { withTimezone: true }).notNull().defaultNow(),
+  /*
+   * Rankings (v2.3, display only): evidence earned here as decayed totals at
+   * evidence_at (the replay's timeline end), and whether the player was listed
+   * there under the enter-60% / hold-50% rule. rating/listing.ts evaluates
+   * them at view time. evidence_at is null until the first recompute that
+   * knows about them; Rankings falls back to the old rule for such rows.
+   */
+  evidencePartners: doublePrecision("evidence_partners").notNull().default(0),
+  evidenceTeams: doublePrecision("evidence_teams").notNull().default(0),
+  evidenceVolume: doublePrecision("evidence_volume").notNull().default(0),
+  evidenceAt: timestamp("evidence_at", { withTimezone: true }),
+  rankHold: boolean("rank_hold").notNull().default(false),
 });
 
 /**

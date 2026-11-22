@@ -3,14 +3,15 @@
 import { eq, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { players, ratingSeeds } from "@/lib/db/schema";
+import { auditLog, players, ratingSeeds } from "@/lib/db/schema";
 import { getT } from "@/lib/i18n/server";
 import { getInviteCode, normalizeCode } from "@/lib/invite";
 import { RATING, SKILL_PICKER } from "@/lib/rating/constants";
 import { recomputeAll } from "@/lib/rating/service";
 import { hashPin, validatePin, verifyPin } from "./pin";
-import { checkLoginRate, recordLoginAttempt } from "./rate-limit";
-import { createSession, destroySession } from "./session";
+import { requireLogin } from "./permissions";
+import { checkGlobalLoginRate, checkLoginRate, recordLoginAttempt } from "./rate-limit";
+import { createSession, destroySession, renewSession, revokeAllSessions } from "./session";
 import type { FormState } from "./types";
 import { NAME_TAKEN_KEY, normalizeUsername, validateUsername } from "./username";
 
@@ -168,6 +169,9 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
     };
   }
 
+  const busy = await checkGlobalLoginRate();
+  if (!busy.allowed) return { error: t("err.signInBusy"), field: "pin" };
+
   const rows = await getDb()
     .select({ id: players.id, pinHash: players.pinHash, active: players.active })
     .from(players)
@@ -189,6 +193,59 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
 
   await createSession(player.id);
   redirect(safeNext(str(formData, "next")));
+}
+
+/**
+ * Change your own PIN (v2.3). Until now only an admin could set one, so the
+ * temporary PIN an admin chose became permanent.
+ *
+ * The current PIN is required, and a wrong one counts as a failed sign-in
+ * against the same limits as the login form, so this is not a side door for
+ * guessing. Other phones signed in as you are signed out; this one stays in.
+ */
+export async function changePinAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const me = await requireLogin();
+  const t = await getT(me.locale);
+  const name = normalizeUsername(me.username);
+
+  const limit = await checkLoginRate(name);
+  if (!limit.allowed) {
+    const minutes = limit.retryAfterMinutes ?? 1;
+    return { error: t.plural("err.tooManyAttempts", minutes, { minutes }), field: "currentPin" };
+  }
+  const busy = await checkGlobalLoginRate();
+  if (!busy.allowed) return { error: t("err.signInBusy"), field: "currentPin" };
+
+  const next = str(formData, "newPin");
+  const valid = validatePin(next);
+  if (!valid.ok) return { error: t(valid.error), field: "newPin" };
+  if (next !== str(formData, "newPinConfirm")) return { error: t("err.pinMismatch"), field: "newPinConfirm" };
+
+  const db = getDb();
+  const [row] = await db.select({ pinHash: players.pinHash }).from(players).where(eq(players.id, me.id)).limit(1);
+  if (!row || !(await verifyPin(str(formData, "currentPin"), row.pinHash))) {
+    await recordLoginAttempt(name, false);
+    return { error: t("err.currentPinWrong"), field: "currentPin" };
+  }
+
+  await db.update(players).set({ pinHash: await hashPin(next) }).where(eq(players.id, me.id));
+  // Proved who they are: clear any failures, as a successful sign-in does.
+  await recordLoginAttempt(name, true);
+  await revokeAllSessions(me.id);
+  await createSession(me.id);
+  await db.insert(auditLog).values({
+    actorId: me.id,
+    action: "player.change_pin",
+    targetType: "player",
+    targetId: me.id,
+    detail: me.username,
+  });
+  return { ok: t("pin.changed") };
+}
+
+/** Called by SessionRenewer; extends only the caller's own valid sign-in. */
+export async function renewSessionAction(): Promise<void> {
+  await renewSession();
 }
 
 export async function logoutAction(): Promise<void> {

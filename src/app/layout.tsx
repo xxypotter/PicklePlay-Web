@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import BottomNav from "@/components/BottomNav";
+import SessionRenewer from "@/components/SessionRenewer";
 import { canManageSessions } from "@/lib/auth/policy";
 import { getCurrentPlayer } from "@/lib/auth/session";
 import "./globals.css";
@@ -63,6 +64,8 @@ export default async function RootLayout({
           {children}
           {/* Logged out, the bottom bar has nothing to navigate to. */}
           {me ? <BottomNav canCreate={canManageSessions(me.role)} /> : null}
+          {/* Keeps a regular signed in: renews the sign-in at most once a day. */}
+          {me?.renewDue ? <SessionRenewer /> : null}
         </LocaleProvider>
       </body>
     </html>

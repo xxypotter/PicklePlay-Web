@@ -9,7 +9,7 @@
  * (which is proprietary and unpublished). See §5.1 for the behaviors it
  * reproduces and §5.5 for the worked examples the test suite asserts.
  */
-import { RATING, tuningFor, type Tuning } from "./constants";
+import { RANKINGS, RATING, tuningFor, type Tuning } from "./constants";
 
 const DAY_MS = 86_400_000;
 
@@ -78,6 +78,15 @@ export interface PlayerRating {
   /** True until the player has enough local matches to stand on their own. */
   selfDeclared: boolean;
   lastPlayedAt: Date | null;
+  /**
+   * Evidence earned here, as decayed totals at `atMs` (the timeline end), so
+   * Rankings can evaluate earned reliability at any later moment: every term
+   * decays on the same half-life, so the totals scale by one factor. Display
+   * only; nothing in the rating reads these. See rating/listing.ts.
+   */
+  evidence: { partners: number; teams: number; volume: number; atMs: number };
+  /** Listed on Rankings at the timeline end under the enter/hold rule (RANKINGS). */
+  rankHold: boolean;
 }
 
 export interface RatingChange {
@@ -238,6 +247,8 @@ interface State {
   pointsAgainst: number;
   streak: number;
   lastPlayedMs: number | null;
+  /** Rankings hold state (display only); see updateRankHold. */
+  rankHold: boolean;
 }
 
 /**
@@ -254,7 +265,7 @@ export function evidenceWeight(
   return Math.pow(0.5, daysAgo / halfLifeDays);
 }
 
-const decayFactor = (fromMs: number, toMs: number, halfLifeDays: number) =>
+export const decayFactor = (fromMs: number, toMs: number, halfLifeDays: number) =>
   evidenceWeight((toMs - fromMs) / DAY_MS, halfLifeDays);
 
 /** Weighted count of how much *live* evidence we have about a player. */
@@ -323,23 +334,42 @@ function decayedTotal(book: Map<string, Encounter>, nowMs: number): number {
  * A trusted signup declaration acts as a floor rather than an addition: it says
  * "DUPR already established this player", and playing here can only raise it.
  */
-function reliabilityAt(state: State, nowMs: number, tuning: Tuning): number {
-  const partners = waypoint(
-    decayedTotal(state.partners, nowMs),
-    tuning.PARTNERS_AT_60,
-    tuning.PARTNERS_AT_100,
-  );
-  const teams = waypoint(
-    decayedTotal(state.teams, nowMs),
-    tuning.TEAMS_AT_60,
-    tuning.TEAMS_AT_100,
-  );
+/**
+ * Reliability earned here — the three evidence terms, without the typed floor.
+ *
+ * Exported for Rankings (rating/listing.ts), which re-evaluates it at view
+ * time from totals the recompute stores. reliabilityAt below is exactly
+ * max(floor, this), so the rating itself is unchanged by the split.
+ */
+export function earnedFromTotals(
+  partnersTotal: number,
+  teamsTotal: number,
+  volumeTotal: number,
+  tuning: Tuning,
+): number {
+  const partners = waypoint(partnersTotal, tuning.PARTNERS_AT_60, tuning.PARTNERS_AT_100);
+  const teams = waypoint(teamsTotal, tuning.TEAMS_AT_60, tuning.TEAMS_AT_100);
 
   // Absent before v1.2, when reliability was diversity alone.
   const volume =
     tuning.VOLUME_AT_60 === undefined || tuning.VOLUME_AT_100 === undefined
       ? 1
-      : waypoint(halfLifeAt(state, nowMs), tuning.VOLUME_AT_60, tuning.VOLUME_AT_100);
+      : waypoint(volumeTotal, tuning.VOLUME_AT_60, tuning.VOLUME_AT_100);
+
+  return Math.min(partners, teams, volume);
+}
+
+function earnedAt(state: State, nowMs: number, tuning: Tuning): number {
+  return earnedFromTotals(
+    decayedTotal(state.partners, nowMs),
+    decayedTotal(state.teams, nowMs),
+    // Only read when the tuning has volume waypoints; the sum is cheap anyway.
+    halfLifeAt(state, nowMs),
+    tuning,
+  );
+}
+
+function reliabilityAt(state: State, nowMs: number, tuning: Tuning): number {
 
   /*
    * The typed floor fades from the day it was typed (v2.0, epoch-gated so
@@ -351,7 +381,21 @@ function reliabilityAt(state: State, nowMs: number, tuning: Tuning): number {
       ? state.declaredFloor * decayFactor(state.declaredAtMs, nowMs, tuning.DECLARED_FLOOR_HALF_LIFE_DAYS)
       : state.declaredFloor;
 
-  return Math.max(floor, Math.min(partners, teams, volume));
+  return Math.max(floor, earnedAt(state, nowMs, tuning));
+}
+
+/**
+ * The Rankings enter/hold rule, tracked through the replay (display only).
+ *
+ * Earned reliability only rises at a player's own matches and only falls in
+ * between (decay) or at a self re-seed that wipes the books. So checking just
+ * before and just after each of their events sees every crossing: below HOLD
+ * drops the listing, reaching ENTER restores it.
+ */
+function updateRankHold(state: State, before: number, after: number): void {
+  if (before < RANKINGS.HOLD) state.rankHold = false;
+  if (after < RANKINGS.HOLD) state.rankHold = false;
+  if (after >= RANKINGS.ENTER) state.rankHold = true;
 }
 
 const isProvisional = (reliability: number) => reliability < RATING.RELIABILITY_PASS;
@@ -390,6 +434,7 @@ function newState(rating: number): State {
     pointsAgainst: 0,
     streak: 0,
     lastPlayedMs: null,
+    rankHold: false,
   };
 }
 
@@ -411,6 +456,8 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
 
     if (event.kind === "seed") {
       const s = stateFor(event.playerId);
+      const seedTuning = tuningFor(event.at);
+      const earnedBeforeSeed = earnedAt(s, atMs, seedTuning);
       s.rating = clamp(event.rating, RATING.MIN, RATING.MAX);
       s.peak = Math.max(s.peak, s.rating);
 
@@ -459,6 +506,8 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
         s.partners.clear();
         s.teams.clear();
       }
+      // A seed adds no evidence; a self re-seed with no reliability removes it.
+      updateRankHold(s, earnedBeforeSeed, earnedAt(s, atMs, seedTuning));
       continue;
     }
 
@@ -475,6 +524,9 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
 
     // Every delta is computed from the pre-match ratings, then applied — so
     // partner order within a match can never change the outcome.
+    // Display-only bookkeeping for Rankings; read before anything changes.
+    const earnedBefore = st.map((s) => earnedAt(s, atMs, tuning));
+
     const pending = st.map((s, i) => {
       const onTeamA = i < 2;
       const surprise = onTeamA ? surpriseA : -surpriseA;
@@ -551,6 +603,8 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
         reliabilityAtTime: p.reliability,
       });
     });
+
+    st.forEach((s, i) => updateRankHold(s, earnedBefore[i], earnedAt(s, atMs, tuning)));
   }
 
   // Reliability is reported as of the last event in the timeline, so a player
@@ -580,6 +634,17 @@ function runPass(events: TimelineEvent[]): RecomputeResult {
       provisional: isProvisional(reliability),
       selfDeclared: s.localMatches < RATING.SEED_FLOOR_MATCHES,
       lastPlayedAt: s.lastPlayedMs === null ? null : new Date(s.lastPlayedMs),
+      evidence: {
+        partners: decayedTotal(s.partners, endMs),
+        teams: decayedTotal(s.teams, endMs),
+        volume: halfLife,
+        atMs: endMs,
+      },
+      // Decay since their last event may have taken them under the hold line.
+      rankHold:
+        s.rankHold &&
+        earnedFromTotals(decayedTotal(s.partners, endMs), decayedTotal(s.teams, endMs), halfLife, endTuning) >=
+          RANKINGS.HOLD,
     });
   }
 

@@ -5,6 +5,7 @@ import Avatar, { PRESET_COLORS, initialsOf } from "@/components/Avatar";
 import type { FormState } from "@/lib/auth/types";
 import { useT } from "@/lib/i18n/client";
 import { setAvatarAction, setGenderAction } from "@/lib/profile/actions";
+import { changePinAction } from "@/lib/auth/actions";
 import type { T } from "@/lib/i18n/translate";
 
 /**
@@ -208,6 +209,57 @@ export function GenderCard({ gender }: { gender: string }) {
 
       <button type="submit" disabled={pending} className="btn-primary mt-4">
         {pending ? t("common.saving") : t("common.save")}
+      </button>
+    </form>
+  );
+}
+
+/** Change your own PIN (v2.3): current PIN, then the new one twice. */
+export function ChangePinCard() {
+  const t = useT();
+  const [state, action, pending] = useActionState(changePinAction, {} as FormState);
+  const fields = [
+    { name: "currentPin", label: t("pin.current"), autoComplete: "current-password" },
+    { name: "newPin", label: t("pin.new"), autoComplete: "new-password" },
+    { name: "newPinConfirm", label: t("pin.confirm"), autoComplete: "new-password" },
+  ];
+
+  return (
+    <form action={action} className="card mt-3">
+      <h2 className="text-sm text-[var(--muted)]">{t("pin.title")}</h2>
+      <p className="hint">{t("pin.hint")}</p>
+
+      <div className="mt-3 flex flex-col gap-3">
+        {fields.map((f) => (
+          <label key={f.name} className="text-xs text-[var(--muted)]">
+            {f.label}
+            <input
+              name={f.name}
+              className="field mt-1"
+              type="password"
+              inputMode="numeric"
+              pattern="\d{4,6}"
+              minLength={4}
+              maxLength={6}
+              autoComplete={f.autoComplete}
+              required
+            />
+          </label>
+        ))}
+      </div>
+
+      {state.error ? (
+        <p role="alert" className="mt-3 text-sm font-medium text-[var(--danger)]">
+          {state.error}
+        </p>
+      ) : state.ok ? (
+        <p role="status" className="mt-3 text-sm font-medium text-[var(--success)]">
+          {state.ok}
+        </p>
+      ) : null}
+
+      <button type="submit" disabled={pending} className="btn-primary mt-4">
+        {pending ? t("pin.changing") : t("pin.submit")}
       </button>
     </form>
   );

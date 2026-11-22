@@ -220,7 +220,7 @@ describe("generateRound, gender format", () => {
     // Twenty repeated partnerships, which is what "top priority" has to mean
     // for a search that weighs one thing against another.
     expect(WEIGHTS.gender.gender).toBeGreaterThan(WEIGHTS.gender.partner * 20 - 1);
-    // v2.4: the regular round robin keeps two men off two women too.
+    // v2.3: the regular round robin keeps two men off two women too.
     expect(WEIGHTS.regular.gender).toBe(WEIGHTS.gender.gender);
     expect(WEIGHTS.balanced.gender).toBe(0);
   });
@@ -297,7 +297,7 @@ describe("generateRound, gender format", () => {
   });
 });
 
-describe("regular round robin keeps two men off two women (v2.4)", () => {
+describe("regular round robin keeps two men off two women (v2.3)", () => {
   const players = (genders: Gender[]): GenPlayer[] =>
     genders.map((gender, i) => ({ id: `p${i}`, rating: 3 + (i % 5) * 0.4, gender }));
 

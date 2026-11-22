@@ -71,10 +71,18 @@ the code that depends on them, after backup and development validation.
   Side), so a partner's name is no longer truncated. Filter chip and
   Standings show the name too; common.youNamed, schedule.filterYou and
   common.me removed.
-- v2.4 (2026-11-22): the regular round robin keeps two men off two women
+- v2.3, continued (2026-11-22, folded in at the owner's request rather than
+  numbered 2.4): the regular round robin keeps two men off two women
   wherever the partner rotation allows (matchmaking/service.ts passes genders
   for both round robins; generator.ts WEIGHTS.regular.gender). It stays
-  rating-blind and keeps partner-once; PORT §4.1.
+  rating-blind and keeps partner-once; PORT §4.1. Sign-ins slide (auth/
+  session.ts renewSession + components/SessionRenewer.tsx); Change PIN on Me
+  (auth/actions.ts changePinAction); login says "Username" with a forgotten-
+  PIN hint; group-wide failed sign-in cap (auth/rate-limit.ts
+  checkGlobalLoginRate). Rankings list by reliability earned here, evaluated
+  at view time with an enter-60/hold-50 rule (rating/listing.ts; engine
+  outputs evidence totals and rank_hold; player_stats.evidence_*, migration
+  0020). PORT §10 and §auth.
 - Session lifecycle and score writes: src/lib/sessions/. UI: src/app/s/[id]/.
   Matchups has an optional hide-scored filter, combined with player selection.
 - Planners: src/lib/matchmaking/; whole-session plans versus incremental rounds.

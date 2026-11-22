@@ -139,6 +139,11 @@ async function recomputeInto(db: Transaction): Promise<RecomputeSummary> {
     selfDeclared: p.selfDeclared,
     lastPlayedAt: p.lastPlayedAt,
     recomputedAt: new Date(),
+    evidencePartners: p.evidence.partners,
+    evidenceTeams: p.evidence.teams,
+    evidenceVolume: p.evidence.volume,
+    evidenceAt: new Date(p.evidence.atMs),
+    rankHold: p.rankHold,
   }));
 
   await db.delete(playerStats);

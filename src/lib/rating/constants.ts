@@ -461,6 +461,20 @@ export const TUNING_V1_4: Tuning = {
  * Add to the front when you retune. Never edit an entry that has matches
  * behind it.
  */
+/**
+ * Who appears on Rankings (display only — not a tuning, so no epoch).
+ *
+ * Listing reads reliability *earned here* — the lowest of the partner, team
+ * and volume terms — never the typed DUPR floor, and evaluates it at the
+ * moment the page is viewed. A player enters at 60% and, once listed, stays
+ * until earned reliability falls below 50%, so a regular who misses a few
+ * weeks does not flicker off and on between sessions. See PORT.md §10.
+ */
+export const RANKINGS = {
+  ENTER: 0.6,
+  HOLD: 0.5,
+} as const;
+
 export const TUNING_EPOCHS: ReadonlyArray<{ from: Date; tuning: Tuning }> = [
   // v2.0 — declared reliability floors fade (90-day half-life).
   // Last match under v1.4: 2026-10-17T22:07Z.

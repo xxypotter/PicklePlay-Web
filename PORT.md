@@ -438,7 +438,7 @@ the bug this replaced gave 9 players 34 distinct partnerships instead of 36.
 
 Only from a clean slate. Adding a round mid-session uses the per-round path.
 
-**Two men never face two women where the rotation allows it** (v2.4). The
+**Two men never face two women where the rotation allows it** (v2.3). The
 planner gets a gender per seat, exactly as for §4.4, but stays rating-blind.
 Coed nights run as a plain round robin had put MM against FF in 10 of 11 mixed
 sessions; the men won 28 of 32 of those games on a mean rating edge of 0.18.
@@ -569,7 +569,7 @@ exactly the opponent clustering §4.1 exists to prevent. **`BALANCE_WEIGHT = 10`
 
 Pass ratings for this format only. The regular round robin is deliberately
 rating-blind and handing it ratings would quietly turn it into something else.
-Since v2.4 the regular round robin applies the same matchup rule (§4.1); what
+Since v2.3 the regular round robin applies the same matchup rule (§4.1); what
 distinguishes this format is the rating balance, and that it gives up a
 partnership rather than allow the one forced MM-v-FF game.
 
@@ -1019,6 +1019,38 @@ a provisional viewer their own reliability and that 60% is the bar. A self
 re-seed with no reliability still drops a player off the table until they
 have played here again; "Not listed" still keeps them out entirely.
 
+**Earned here, decided when viewed, with a hold** (v2.3). Three problems with
+the v2.1 rule showed up within a month: six of thirty listed players were there
+only by a typed DUPR floor (two with no games here, the #1 from one back-logged
+four-person session); regulars hovered just above 60% and fell off after a few
+weeks without a rated night in their tier; and membership only changed when
+the rating cache was rebuilt, so people vanished in batches when someone else
+scored a game. The rule now:
+
+1. **Earned reliability** decides listing: `min(partners, teams, volume)`, never
+   the typed floor. The floor still seeds the rating and its K; it just doesn't
+   list anyone.
+2. **Evaluated at view time.** The recompute stores each player's three decayed
+   evidence totals as of the timeline end (`player_stats.evidence_*`,
+   `evidence_at`). Every term decays on the same 90-day half-life, so today's
+   totals are those times `0.5^(days since evidence_at / 90)`, run through the
+   same waypoints. No rebuild is needed for the table to age.
+3. **Enter at 60%, hold until 50%** (`RANKINGS.ENTER` / `HOLD`). The replay
+   tracks a `rank_hold` flag per player: earned reliability rises only at their
+   own matches and falls only between them (or at a self re-seed with no
+   reliability, which wipes the books), so checking just before and just after
+   each of their events sees every crossing. After the timeline end it can only
+   decay, so the page only has to check the 50% line.
+
+Display only: ratings and rating events are untouched, and the production
+replay was bit-identical (2,548 events, 132 players). On release day the list
+went from 30 to 27: the six floor-only players left; three regulars between
+50% and 60% (18birdies, Eunice, Jennifer) came back under the hold. The
+"not ranked yet" card shows the viewer's earned reliability, floored so 59.9%
+never reads as 60%. Help text now says what the data shows: about 3–4 rated
+sessions (around 27 games) to reach 60%; game count, not partner variety, is
+the binding term for almost everyone.
+
 ---
 
 ## 11. Localisation
@@ -1048,7 +1080,16 @@ Byte order puts every capital before every lowercase, which files `Zeng` before
 Listed so nothing is assumed, not specified.
 
 1. **Authentication.** Web uses username + 4–6 digit PIN with a group invite
-   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes. Any 4–6
+   code, scrypt-hashed, rate-limited to 5 attempts per 15 minutes per name and
+   30 failures per 15 minutes across all names (v2.3; the group-wide cap pauses
+   every sign-in and writes one `auth.busy` audit row per window). Sign-ins
+   slide (v2.3): a visit more than a day after the last renewal extends the
+   token to a fresh 90 days, through a Server Action, since a Server Component
+   cannot set cookies; only a valid token of an active player is extended.
+   Players change their own PIN on Me with their current PIN (a wrong one
+   counts as a failed sign-in); other devices are signed out. The login field
+   says "Username", and a wrong PIN points to an organizer instead of a new
+   account. Any 4–6
    digits are accepted — the "too easy to guess" rule was dropped on
    2026-11-07 because it kept defeating admin resets; the rate limit is the
    protection. An admin reset also clears the player's failed attempts,

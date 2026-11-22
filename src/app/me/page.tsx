@@ -15,7 +15,7 @@ import { getDb } from "@/lib/db";
 import { players, playerStats } from "@/lib/db/schema";
 import { summariseRecord } from "@/lib/profile/record";
 import { completedMatchesOf } from "@/lib/profile/queries";
-import { AvatarCard, GenderCard } from "./ProfileCards";
+import { AvatarCard, ChangePinCard, GenderCard } from "./ProfileCards";
 
 import { titleFor } from "@/lib/i18n/metadata";
 
@@ -113,6 +113,7 @@ export default async function MePage() {
         <LanguageCard current={locale} />
         <AvatarCard username={me.username} avatar={profile?.avatar ?? null} />
         <GenderCard gender={profile?.gender ?? "unspecified"} />
+        <ChangePinCard />
 
         {/*
           The version sits with Log out rather than in the shortcut grid: it is

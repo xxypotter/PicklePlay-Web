@@ -11,10 +11,18 @@
  */
 import { and, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { loginAttempts } from "@/lib/db/schema";
+import { auditLog, loginAttempts } from "@/lib/db/schema";
 
 const MAX_FAILURES = 5;
 const WINDOW_MINUTES = 15;
+/*
+ * Group-wide cap (v2.3). Since any 4–6 digits is a valid PIN, someone could try
+ * 1111 against every name at five tries each. Real traffic is tiny — eight
+ * failed sign-ins in the whole of November — so thirty failures across all
+ * names in fifteen minutes is never a busy session start; it is someone
+ * guessing, and sign-ins pause until the window clears.
+ */
+const GLOBAL_MAX_FAILURES = 30;
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -48,6 +56,36 @@ export async function checkLoginRate(usernameLower: string): Promise<RateLimitRe
   const minutes = Math.max(1, Math.ceil((unblockAt.getTime() - Date.now()) / 60_000));
 
   return { allowed: false, retryAfterMinutes: minutes };
+}
+
+/**
+ * The group-wide check. When it trips, one audit row per window records it
+ * (actor null: nobody in particular did it) so the owner can see it happened.
+ */
+export async function checkGlobalLoginRate(): Promise<RateLimitResult> {
+  const db = getDb();
+  const since = new Date(Date.now() - WINDOW_MINUTES * 60_000);
+
+  const [{ failures }] = await db
+    .select({ failures: sql<number>`count(*)::int` })
+    .from(loginAttempts)
+    .where(and(eq(loginAttempts.succeeded, false), gte(loginAttempts.attemptedAt, since)));
+
+  if (failures < GLOBAL_MAX_FAILURES) return { allowed: true };
+
+  const logged = await db
+    .select({ id: auditLog.id })
+    .from(auditLog)
+    .where(and(eq(auditLog.action, "auth.busy"), gte(auditLog.createdAt, since)))
+    .limit(1);
+  if (!logged.length) {
+    await db.insert(auditLog).values({
+      actorId: null,
+      action: "auth.busy",
+      detail: JSON.stringify({ failures, windowMinutes: WINDOW_MINUTES }),
+    });
+  }
+  return { allowed: false, retryAfterMinutes: WINDOW_MINUTES };
 }
 
 export async function recordLoginAttempt(

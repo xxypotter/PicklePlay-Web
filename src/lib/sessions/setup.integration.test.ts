@@ -265,7 +265,7 @@ describe.skipIf(process.env.RUN_DEV_INTEGRATION !== "1")("v1.7 back to setup, cl
     expect(await createSessionAction({}, fd)).toEqual({ error: t("err.inviteUnknown") });
   }, 60000);
 
-  it("v2.4: a coed regular round robin never puts two men against two women and still partners everyone once", async () => {
+  it("v2.3: a coed regular round robin never puts two men against two women and still partners everyone once", async () => {
     actor = { id: organizer, role: "admin" };
     const roster = ids.slice(2, 10);
     const genderOf = new Map(roster.map((id, i) => [id, i < 4 ? "male" : "female"] as const));

@@ -18,7 +18,7 @@ import { matchViolates, type Gender } from "./gender";
 export interface GenPlayer {
   id: string;
   rating: number;
-  /** The two round robins read this (regular since v2.4); absent means unspecified. */
+  /** The two round robins read this (regular since v2.3); absent means unspecified. */
   gender?: Gender;
 }
 
@@ -69,7 +69,7 @@ export type Format =
  *   unused partnership beat almost anything else, so pairings spread out
  *   naturally. It's greedy, not a perfect combinatorial design: with awkward
  *   player counts a repeat can appear before literally every pair has happened.
- *   Since v2.4 it also never puts two men against two women when adding a
+ *   Since v2.3 it also never puts two men against two women when adding a
  *   round; a violation-free seating always exists, so the cost is at most a
  *   repeated partnership on a lopsided roster, which this path allows anyway.
  * `balanced` — even teams by rating; the everyday default.

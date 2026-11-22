@@ -51,9 +51,16 @@ export default function LoginForm({ next = "" }: { next?: string }) {
       </div>
 
       {state.error ? (
-        <p role="alert" className="text-sm font-medium text-[var(--danger)]">
-          {state.error}
-        </p>
+        <div>
+          <p role="alert" className="text-sm font-medium text-[var(--danger)]">
+            {state.error}
+          </p>
+          {/*
+            A forgotten PIN used to dead-end here, and people made a second
+            account instead. Say what to do.
+          */}
+          {state.field === "pin" ? <p className="hint">{t("auth.forgotPin")}</p> : null}
+        </div>
       ) : null}
 
       <button type="submit" className="btn-primary" disabled={pending}>
